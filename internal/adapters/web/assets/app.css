@@ -640,6 +640,51 @@ tr:hover td { background: var(--surface-hover); }
 .message strong { font-size: 12px; text-transform: uppercase; color: var(--muted); }
 .message p { margin: 0; font-size: 14px; }
 
+.subtask-tree {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  position: relative;
+  padding-left: 12px;
+}
+.subtask-tree::before {
+  content: "";
+  position: absolute;
+  top: 10px;
+  bottom: 10px;
+  left: 0;
+  width: 2px;
+  background: var(--border);
+  border-radius: 2px;
+}
+.subtask-node {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 14px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  text-decoration: none;
+  color: var(--text);
+  position: relative;
+  transition: background 0.1s;
+}
+.subtask-node::before {
+  content: "";
+  position: absolute;
+  top: 16px;
+  left: -12px;
+  width: 12px;
+  height: 2px;
+  background: var(--border);
+}
+.subtask-node:hover {
+  background: var(--surface-hover);
+}
+.subtask-node strong { font-size: 14px; }
+.subtask-node small { color: var(--muted); font-size: 13px; }
+
 .run {
   padding: 12px 16px;
   background: var(--surface);

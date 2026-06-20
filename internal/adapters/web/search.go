@@ -85,10 +85,14 @@ func (s *Server) handleAPISearch(w http.ResponseWriter, r *http.Request) {
 
 	// Basic commands match
 	commands := []SearchResult{
+		{ID: "cmd_create_task", Type: "Action", Title: "Create Task", URL: "/tasks"},
+		{ID: "cmd_create_agent", Type: "Action", Title: "Create Agent", URL: "/agents/new"},
 		{ID: "cmd_settings", Type: "Command", Title: "Open Settings", URL: "/settings"},
 		{ID: "cmd_dashboard", Type: "Command", Title: "Open Dashboard", URL: "/"},
 		{ID: "cmd_runs", Type: "Command", Title: "Open Runs", URL: "/runs"},
 		{ID: "cmd_activity", Type: "Command", Title: "Open Activity", URL: "/activity"},
+		{ID: "cmd_skills", Type: "Command", Title: "Open Skills", URL: "/skills"},
+		{ID: "cmd_agents", Type: "Command", Title: "Open Agents", URL: "/agents"},
 	}
 
 	for _, cmd := range commands {

@@ -57,7 +57,7 @@ When adding UI, prefer composing these components before introducing new CSS.
 
 Task detail pages should use a `detail-grid`:
 
-- main column: prompt, conversation, subtasks, runs and activity;
+- main column: prompt, conversation, subtask tree, runs and activity;
 - right rail: properties, workflow actions, delegation and danger zone;
 - task comments remain separate from system activity;
 - runs remain separate from comments and link to `/runs/{id}`.

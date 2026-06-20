@@ -46,8 +46,8 @@ templ TaskLive(task taskResponse, messages []domain.Message, runs []domain.Run, 
 		@Messages(messages)
 	</div>
 	<div class="panel">
-		@SectionHeader("Subtasks", "Delegated child tasks linked to this task.")
-		@TaskTable(children, agents, projects)
+		@SectionHeader("Subtask Tree", "Delegated child tasks linked to this task.")
+		@SubtaskTree(children, agents, projects)
 	</div>
 	<div class="panel">
 		@SectionHeader("Runs", "Agent executions are kept separate from task comments.")
@@ -57,6 +57,23 @@ templ TaskLive(task taskResponse, messages []domain.Message, runs []domain.Run, 
 		@SectionHeader("Activity", "Audit trail and status transitions.")
 		@EventTimeline(events)
 	</div>
+}
+
+templ SubtaskTree(children []taskResponse, agents []domain.Agent, projects []domain.Workspace) {
+	if len(children) == 0 {
+		@EmptyState("No subtasks", "Delegated child tasks will appear here.") {}
+	} else {
+		<div class="subtask-tree">
+			for _, child := range children {
+				<a class="subtask-node" href={ templ.URL("/tasks/" + child.ID) }>
+					<span class={ "status " + statusClass(child.Status) }>{ string(child.Status) }</span>
+					<strong>{ child.ID }</strong>
+					<small>{ taskExcerpt(child.Prompt) }</small>
+					<small>{ agentName(agents, child.AgentID) + " · " + projectName(projects, child.ProjectID) }</small>
+				</a>
+			}
+		</div>
+	}
 }
 
 templ Messages(messages []domain.Message) {

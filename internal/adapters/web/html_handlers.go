@@ -288,14 +288,45 @@ func (s *Server) handleWebPostSettingsEnvironment(w http.ResponseWriter, r *http
 }
 
 func (s *Server) handleWebSettingsExport(w http.ResponseWriter, r *http.Request) {
-	settings, err := s.storage.Settings().List(r.Context())
+	ctx := r.Context()
+	settings, err := s.storage.Settings().List(ctx)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+	agents, _ := s.agents.List(ctx)
+	projects, _ := s.projects.List(ctx)
+	skills, _ := s.skills.List(ctx, "")
+	tasks, _ := s.tasks.List(ctx, ports.TaskFilter{})
+
+	runs := make([]domain.Run, 0)
+	messages := make([]domain.Message, 0)
+	events := make([]domain.Event, 0)
+	for _, task := range tasks {
+		if taskRuns, err := s.storage.Runs().ListByTask(ctx, task.ID); err == nil {
+			runs = append(runs, taskRuns...)
+		}
+		if taskMessages, err := s.storage.Messages().ListByTask(ctx, task.ID); err == nil {
+			messages = append(messages, taskMessages...)
+		}
+		if taskEvents, err := s.storage.Events().ListByTask(ctx, task.ID); err == nil {
+			events = append(events, taskEvents...)
+		}
+	}
+
 	w.Header().Set("Content-Type", "application/json")
-	w.Header().Set("Content-Disposition", "attachment; filename=picoclip-settings-export.json")
-	_ = json.NewEncoder(w).Encode(map[string]any{"settings": settings})
+	w.Header().Set("Content-Disposition", "attachment; filename=picoclip-backup.json")
+	_ = json.NewEncoder(w).Encode(map[string]any{
+		"version":  1,
+		"settings": settings,
+		"agents":   agents,
+		"projects": projects,
+		"skills":   skills,
+		"tasks":    tasks,
+		"runs":     runs,
+		"messages": messages,
+		"events":   events,
+	})
 }
 
 func (s *Server) handleWebPostSettingsReset(w http.ResponseWriter, r *http.Request) {
