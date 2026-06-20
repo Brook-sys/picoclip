@@ -46,9 +46,19 @@ npm install
 npx playwright install chromium
 ```
 
+## Seed mock data
+
+Since PicoClip uses an in-memory database by default, you can populate it with realistic mock data (projects, skills, hierarchical agents, tasks, delegations) using the public API:
+
+```sh
+make seed
+```
+
+This runs a standalone script `scripts/seed/main.go` that reads `scripts/seed/scenarios/full.json` and loads it into the running server.
+
 ## templ workflow
 
-The module includes `github.com/a-h/templ`, but there are currently no `.templ` files. The command is still part of the validation workflow so future templ files are generated consistently.
+The project uses `github.com/a-h/templ` for strongly-typed HTML templates.
 
 ```sh
 make templ-generate
@@ -60,7 +70,7 @@ Equivalent raw command:
 templ generate
 ```
 
-Expected current behavior: succeeds and produces no files when no `.templ` files exist.
+Generated `*_templ.go` files are ignored by Git and should be regenerated locally or in CI.
 
 ## Live reload with air
 

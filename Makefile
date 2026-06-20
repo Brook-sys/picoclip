@@ -9,7 +9,7 @@ DEV_BIN := $(TMP_DIR)/$(APP)
 AIR := ./bin/air
 TEMPL := ./bin/templ
 
-.PHONY: help tools templ-generate build build-dev run dev test test-go test-e2e test-e2e-headed vet fmt lint check clean kill-8080
+.PHONY: help tools templ-generate build build-dev run dev seed test test-go test-e2e test-e2e-headed vet fmt lint check clean kill-8080
 
 help:
 	@printf '%s\n' \
@@ -19,6 +19,7 @@ help:
 	  '  make templ-generate Run templ generate (safe when no .templ files exist)' \
 	  '  make run            Run app with go run' \
 	  '  make dev            Run app with air live reload' \
+	  '  make seed           Load demo data through the public API' \
 	  '  make build          Build ./picoclip' \
 	  '  make test-go        Run Go tests' \
 	  '  make test-e2e       Run Playwright E2E tests' \
@@ -56,6 +57,9 @@ run:
 
 dev:
 	BIND=$(BIND) PORT=$(PORT) $(AIR) -c .air.toml
+
+seed:
+	go run scripts/seed/main.go -base-url $(BASE_URL) -scenario scripts/seed/scenarios/full.json
 
 test-go:
 	go test ./...

@@ -1,0 +1,123 @@
+{
+  "projects": [
+    {
+      "ref_id": "p_core",
+      "name": "PicoClip Core",
+      "description": "Backend engine, APIs and core domain."
+    },
+    {
+      "ref_id": "p_web",
+      "name": "PicoClip Web",
+      "description": "Frontend Templ+HTMX and web adapters."
+    }
+  ],
+  "skills": [
+    {
+      "ref_id": "sk_review",
+      "name": "Code Reviewer",
+      "description": "Strict code review guidelines",
+      "instructions": "- Always check for Go idiomatic code\n- Reject tight coupling\n- Enforce small structs"
+    },
+    {
+      "ref_id": "sk_term",
+      "name": "Terminal Expert",
+      "description": "Bash commands and OS navigation",
+      "instructions": "- Always verify current directory before writing files\n- Do not run rm -rf /\n- Prefer make commands if available"
+    }
+  ],
+  "agents": [
+    {
+      "ref_id": "a_alice",
+      "name": "Alice",
+      "title": "Lead Coordinator",
+      "type": "noop",
+      "description": "Orchestrates the entire team.",
+      "system_prompt": "You are the manager. Distribute tasks and review results.",
+      "tags": ["admin", "coordinator"],
+      "capability": "administrator",
+      "permission_preset": "administrator",
+      "skill_refs": []
+    },
+    {
+      "ref_id": "a_bob",
+      "project_ref": "p_core",
+      "reports_to_ref": "a_alice",
+      "name": "Bob",
+      "title": "Backend Worker",
+      "type": "crush",
+      "description": "Focused on the backend Go codebase.",
+      "tags": ["backend", "go"],
+      "capability": "operator",
+      "permission_preset": "operator",
+      "skill_refs": ["sk_term", "sk_review"]
+    },
+    {
+      "ref_id": "a_charlie",
+      "project_ref": "p_web",
+      "reports_to_ref": "a_alice",
+      "name": "Charlie",
+      "title": "Frontend Worker",
+      "type": "noop",
+      "description": "Writes Templ and CSS.",
+      "tags": ["frontend", "ui"],
+      "capability": "worker",
+      "permission_preset": "executor",
+      "skill_refs": []
+    }
+  ],
+  "tasks": [
+    {
+      "ref_id": "t_setup",
+      "project_ref": "p_core",
+      "agent_ref": "a_alice",
+      "prompt": "Initial setup of the repository structure",
+      "status": "done",
+      "status_comment": "Directories created successfully.",
+      "messages": [
+        {
+          "role": "user",
+          "body": "Please create the basic Go layout."
+        },
+        {
+          "role": "agent",
+          "body": "Done. Created cmd/, internal/ and pkg/."
+        }
+      ]
+    },
+    {
+      "ref_id": "t_migrate",
+      "project_ref": "p_core",
+      "agent_ref": "a_bob",
+      "prompt": "Migrate memory db to SQLite",
+      "status": "in_progress",
+      "messages": [
+        {
+          "role": "user",
+          "body": "Start with the AgentRepo."
+        }
+      ]
+    },
+    {
+      "ref_id": "t_review_ui",
+      "project_ref": "p_web",
+      "agent_ref": "a_alice",
+      "prompt": "Review the new dashboard UI",
+      "status": "in_progress",
+      "delegations": [
+        {
+          "ref_id": "t_delegated_ui",
+          "to_agent_ref": "a_charlie",
+          "prompt": "Implement the missing dashboard CSS classes"
+        }
+      ]
+    },
+    {
+      "ref_id": "t_publish",
+      "project_ref": "p_core",
+      "agent_ref": "a_bob",
+      "prompt": "Publish v0.2.0 binary to GitHub Releases",
+      "status": "blocked",
+      "status_comment": "Missing GITHUB_TOKEN in env."
+    }
+  ]
+}
