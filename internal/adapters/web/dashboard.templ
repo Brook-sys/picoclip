@@ -61,6 +61,18 @@ templ DashboardPage(view DashboardView, agents []domain.Agent, projects []domain
 			</div>
 
 			<div class="stack">
+				if view.Stats.ActiveAgents == 0 || view.Stats.OpenTasks == 0 {
+					<div class="card">
+						<h2>Getting Started</h2>
+						<p class="muted">Finish the basic setup to start orchestrating work.</p>
+						<div class="stack-sm">
+							<a class="button secondary" href="/agents/new">Create your first agent</a>
+							<a class="button secondary" href="/tasks">Create a task</a>
+							<a class="button secondary" href="/settings#adapters">Configure Crush driver</a>
+						</div>
+					</div>
+				}
+
 				<div class="card">
 					<h2>System Health</h2>
 					@PropertyList() {

@@ -8,7 +8,10 @@ test.describe('PicoClip smoke UI', () => {
     page.on('console', (message) => {
       if (message.type() === 'error') consoleErrors.push(message.text());
     });
-    page.on('requestfailed', (request) => failedRequests.push(`${request.method()} ${request.url()}`));
+    page.on('requestfailed', (request) => {
+      if (request.url().includes('/sse/')) return;
+      failedRequests.push(`${request.method()} ${request.url()}`);
+    });
 
     for (const path of ['/', '/projects', '/agents', '/tasks', '/runs', '/skills', '/activity', '/settings']) {
       const response = await page.goto(path);

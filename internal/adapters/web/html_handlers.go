@@ -342,50 +342,16 @@ func (s *Server) handleWebSettingsImport(w http.ResponseWriter, r *http.Request)
 	}
 	defer file.Close()
 
-	var payload struct {
-		Settings map[string]string  `json:"settings"`
-		Agents   []domain.Agent     `json:"agents"`
-		Projects []domain.Workspace `json:"projects"`
-		Skills   []domain.Skill     `json:"skills"`
-		Tasks    []domain.Task      `json:"tasks"`
-		Runs     []domain.Run       `json:"runs"`
-		Messages []domain.Message   `json:"messages"`
-		Events   []domain.Event     `json:"events"`
-	}
+	var payload ports.BackupData
 	if err := json.NewDecoder(file).Decode(&payload); err != nil {
 		http.Error(w, "invalid backup format: "+err.Error(), http.StatusBadRequest)
 		return
 	}
 
 	ctx := r.Context()
-	if err := s.storage.ResetAllData(ctx); err != nil {
-		http.Error(w, "failed to reset storage: "+err.Error(), http.StatusInternalServerError)
+	if err := s.storage.RestoreAllData(ctx, payload); err != nil {
+		http.Error(w, "failed to restore storage: "+err.Error(), http.StatusInternalServerError)
 		return
-	}
-
-	for k, v := range payload.Settings {
-		_ = s.storage.Settings().Set(ctx, k, v)
-	}
-	for _, a := range payload.Agents {
-		_ = s.storage.Agents().Create(ctx, a)
-	}
-	for _, p := range payload.Projects {
-		_ = s.storage.Workspaces().Create(ctx, p)
-	}
-	for _, sk := range payload.Skills {
-		_ = s.storage.Skills().Create(ctx, sk)
-	}
-	for _, t := range payload.Tasks {
-		_ = s.storage.Tasks().Create(ctx, t)
-	}
-	for _, r := range payload.Runs {
-		_ = s.storage.Runs().Create(ctx, r)
-	}
-	for _, m := range payload.Messages {
-		_ = s.storage.Messages().Create(ctx, m)
-	}
-	for _, e := range payload.Events {
-		_ = s.storage.Events().Create(ctx, e)
 	}
 
 	w.Header().Set("HX-Redirect", "/")

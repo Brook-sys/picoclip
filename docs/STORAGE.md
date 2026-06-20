@@ -126,7 +126,7 @@ The memory adapter remains useful as a behavior reference and fallback.
 Full database dumps and restorations are available under the Settings > Danger Zone.
 
 - **Export Backup**: Downloads all core tables and settings as a consolidated JSON payload.
-- **Restore Backup**: Overwrites the current database from a JSON payload (resets all rows and streams the JSON array elements back into storage).
+- **Restore Backup**: Overwrites the current database from a JSON payload using a storage-level restore operation. SQLite restores run inside a single transaction, so partial restores are rolled back on error.
 
 ## Built-in skills
 

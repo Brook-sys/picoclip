@@ -1,0 +1,85 @@
+package sqlite
+
+import (
+	"context"
+	"encoding/json"
+
+	"picoclip/internal/core/ports"
+)
+
+func (s *Storage) RestoreAllData(ctx context.Context, data ports.BackupData) error {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	if _, err := tx.ExecContext(ctx, `
+		DELETE FROM messages;
+		DELETE FROM events;
+		DELETE FROM runs;
+		DELETE FROM tasks;
+		DELETE FROM skills;
+		DELETE FROM agents;
+		DELETE FROM workspaces;
+		DELETE FROM settings;
+	`); err != nil {
+		return err
+	}
+
+	for k, v := range data.Settings {
+		if _, err := tx.ExecContext(ctx, `INSERT INTO settings (key, value, updated_at) VALUES (?, ?, datetime('now'))`, k, v); err != nil {
+			return err
+		}
+	}
+	for _, x := range data.Workspaces {
+		if _, err := tx.ExecContext(ctx, `INSERT INTO workspaces (id, name, description, root_path, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)`, x.ID, x.Name, x.Description, x.RootPath, x.CreatedAt, x.UpdatedAt); err != nil {
+			return err
+		}
+	}
+	for _, x := range data.Agents {
+		tags, _ := json.Marshal(x.Tags)
+		permissions, _ := json.Marshal(x.Permissions)
+		skillIDs, _ := json.Marshal(x.SkillIDs)
+		config, _ := json.Marshal(x.Config)
+		env, _ := json.Marshal(x.Env)
+		extraArgs, _ := json.Marshal(x.ExtraArgs)
+		if _, err := tx.ExecContext(ctx, `INSERT INTO agents (id, project_id, name, title, reports_to_id, tags, type, description, system_prompt, instruction_file, enabled, capability, permissions, skill_ids, config, env, extra_args, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, x.ID, x.ProjectID, x.Name, x.Title, x.ReportsToID, string(tags), string(x.Type), x.Description, x.SystemPrompt, x.InstructionFile, x.Enabled, string(x.Capability), string(permissions), string(skillIDs), string(config), string(env), string(extraArgs), x.CreatedAt, x.UpdatedAt); err != nil {
+			return err
+		}
+	}
+	for _, x := range data.Skills {
+		metadata, _ := json.Marshal(x.Metadata)
+		files, _ := json.Marshal(x.Files)
+		defaultFiles, _ := json.Marshal(x.DefaultFiles)
+		agentIDs, _ := json.Marshal(x.AgentIDs)
+		allowedAgentTypes, _ := json.Marshal(x.AllowedAgentTypes)
+		allowedPermissions, _ := json.Marshal(x.AllowedPermissions)
+		if _, err := tx.ExecContext(ctx, `INSERT INTO skills (id, project_id, name, slug, description, license, compatibility, allowed_tools, metadata, instructions, default_instructions, files, default_files, kind, builtin_key, permission, agent_ids, allowed_agent_types, allowed_permissions, source, version, enabled, is_modified, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, x.ID, x.ProjectID, x.Name, x.Slug, x.Description, x.License, x.Compatibility, x.AllowedTools, string(metadata), x.Instructions, x.DefaultInstructions, string(files), string(defaultFiles), string(x.Kind), x.BuiltinKey, string(x.Permission), string(agentIDs), string(allowedAgentTypes), string(allowedPermissions), x.Source, x.Version, x.Enabled, x.IsModified, x.CreatedAt, x.UpdatedAt); err != nil {
+			return err
+		}
+	}
+	for _, x := range data.Tasks {
+		if _, err := tx.ExecContext(ctx, `INSERT INTO tasks (id, parent_id, workspace_id, agent_id, title, prompt, status, priority, attempts, max_attempts, needs_run, checkout_run_id, checked_out_by_agent_id, cancel_reason, created_at, updated_at, started_at, finished_at, completed_at, cancelled_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, x.ID, x.ParentID, x.WorkspaceID, x.AgentID, x.Title, x.Prompt, string(x.Status), x.Priority, x.Attempts, x.MaxAttempts, x.NeedsRun, x.CheckoutRunID, x.CheckedOutByAgentID, x.CancelReason, x.CreatedAt, x.UpdatedAt, x.StartedAt, x.FinishedAt, x.CompletedAt, x.CancelledAt); err != nil {
+			return err
+		}
+	}
+	for _, x := range data.Runs {
+		if _, err := tx.ExecContext(ctx, `INSERT INTO runs (id, task_id, agent_id, driver_type, status, attempt, input, output, error, started_at, finished_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, x.ID, x.TaskID, x.AgentID, x.DriverType, string(x.Status), x.Attempt, x.Input, x.Output, x.Error, x.StartedAt, x.FinishedAt); err != nil {
+			return err
+		}
+	}
+	for _, x := range data.Messages {
+		if _, err := tx.ExecContext(ctx, `INSERT INTO messages (id, task_id, from_id, to_id, role, body, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)`, x.ID, x.TaskID, x.FromID, x.ToID, string(x.Role), x.Body, x.CreatedAt); err != nil {
+			return err
+		}
+	}
+	for _, x := range data.Events {
+		dataJSON, _ := json.Marshal(x.Data)
+		if _, err := tx.ExecContext(ctx, `INSERT INTO events (id, type, task_id, agent_id, run_id, message, data, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`, x.ID, string(x.Type), x.TaskID, x.AgentID, x.RunID, x.Message, string(dataJSON), x.CreatedAt); err != nil {
+			return err
+		}
+	}
+
+	return tx.Commit()
+}

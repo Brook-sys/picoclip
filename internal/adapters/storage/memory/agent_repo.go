@@ -66,6 +66,45 @@ func (s *Storage) ResetAllData(ctx context.Context) error {
 	return nil
 }
 
+func (s *Storage) RestoreAllData(ctx context.Context, data ports.BackupData) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.agents = make(map[string]domain.Agent)
+	s.tasks = make(map[string]domain.Task)
+	s.runs = make(map[string]domain.Run)
+	s.events = make(map[string]domain.Event)
+	s.messages = make(map[string]domain.Message)
+	s.skills = make(map[string]domain.Skill)
+	s.workspaces = make(map[string]domain.Workspace)
+	s.settings = make(map[string]string)
+
+	for k, v := range data.Settings {
+		s.settings[k] = v
+	}
+	for _, x := range data.Agents {
+		s.agents[x.ID] = x
+	}
+	for _, x := range data.Workspaces {
+		s.workspaces[x.ID] = x
+	}
+	for _, x := range data.Skills {
+		s.skills[x.ID] = x
+	}
+	for _, x := range data.Tasks {
+		s.tasks[x.ID] = x
+	}
+	for _, x := range data.Runs {
+		s.runs[x.ID] = x
+	}
+	for _, x := range data.Messages {
+		s.messages[x.ID] = x
+	}
+	for _, x := range data.Events {
+		s.events[x.ID] = x
+	}
+	return nil
+}
+
 func (r settingsRepository) Get(ctx context.Context, key string) (string, error) {
 	r.storage.mu.RLock()
 	defer r.storage.mu.RUnlock()
