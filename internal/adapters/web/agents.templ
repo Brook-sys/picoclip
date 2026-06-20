@@ -8,7 +8,8 @@ templ AgentsPage(agents []domain.Agent, projects []domain.Workspace, tasks []tas
 			<div class="filter-row">
 				@TagFilterLinks(agents)
 			</div>
-			<table>
+			<div class="table-wrapper">
+				<table>
 				<thead>
 					<tr>
 						<th>Agente</th>
@@ -37,7 +38,8 @@ templ AgentsPage(agents []domain.Agent, projects []domain.Workspace, tasks []tas
 						</tr>
 					}
 				</tbody>
-			</table>
+				</table>
+			</div>
 		</section>
 		@AgentQuickModal("agent-quick-modal", agents)
 	}

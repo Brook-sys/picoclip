@@ -1,0 +1,65 @@
+package web
+
+templ Card() {
+	<div class="card">
+		{ children... }
+	</div>
+}
+
+templ SectionHeader(title string, description string) {
+	<div class="section-header">
+		<div>
+			<h2>{ title }</h2>
+			if description != "" {
+				<p class="muted">{ description }</p>
+			}
+		</div>
+		<div class="actions">
+			{ children... }
+		</div>
+	</div>
+}
+
+templ PropertyList() {
+	<dl class="property-list">
+		{ children... }
+	</dl>
+}
+
+templ PropertyItem(label string, value string) {
+	<div>
+		<dt>{ label }</dt>
+		<dd>{ value }</dd>
+	</div>
+}
+
+templ PropertyItemHTML(label string) {
+	<div>
+		<dt>{ label }</dt>
+		<dd>{ children... }</dd>
+	</div>
+}
+
+templ FormField(name string, label string, helpText string) {
+	<div class="form-field">
+		if label != "" {
+			<label for={ name }>{ label }</label>
+		}
+		{ children... }
+		if helpText != "" {
+			<p class="help-text">{ helpText }</p>
+		}
+	</div>
+}
+
+templ Badge(text string, variant string) {
+	<span class={ "badge", templ.KV("badge-" + variant, variant != "") }>{ text }</span>
+}
+
+templ EmptyState(title string, message string) {
+	<div class="empty-state">
+		<strong>{ title }</strong>
+		<p>{ message }</p>
+		{ children... }
+	</div>
+}

@@ -5,7 +5,8 @@ import "picoclip/internal/core/domain"
 templ SkillsPage(skills []domain.Skill, projects []domain.Workspace, agents []domain.Agent) {
 	@PageShell("skills", "Skills", "Pacotes de contexto e instrução atribuíveis aos agentes.", skillsAction()) {
 		<section class="panel">
-			<table>
+			<div class="table-wrapper">
+				<table>
 				<thead>
 					<tr>
 						<th>Skill</th>
@@ -29,7 +30,8 @@ templ SkillsPage(skills []domain.Skill, projects []domain.Workspace, agents []do
 						</tr>
 					}
 				</tbody>
-			</table>
+				</table>
+			</div>
 		</section>
 		@SkillModal("skill-create-modal", projects)
 	}

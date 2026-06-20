@@ -8,7 +8,8 @@ import (
 )
 
 templ TaskTable(tasks []taskResponse, agents []domain.Agent, projects []domain.Workspace) {
-	<table>
+	<div class="table-wrapper">
+		<table>
 		<thead>
 			<tr>
 				<th>Task</th>
@@ -35,7 +36,8 @@ templ TaskTable(tasks []taskResponse, agents []domain.Agent, projects []domain.W
 				</tr>
 			}
 		</tbody>
-	</table>
+		</table>
+	</div>
 }
 
 templ TaskLive(task taskResponse, messages []domain.Message, runs []domain.Run, events []domain.Event, children []taskResponse, agents []domain.Agent, projects []domain.Workspace) {

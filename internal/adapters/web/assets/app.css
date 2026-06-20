@@ -172,7 +172,8 @@ td small {
 }
 
 .metric-card,
-.panel {
+.panel,
+.card {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 14px;
@@ -221,7 +222,8 @@ p { margin-top: 0; }
   gap: 14px;
 }
 
-.panel {
+.panel,
+.card {
   padding: 16px;
   overflow: hidden;
 }
@@ -306,10 +308,17 @@ textarea {
 
 textarea { min-height: 110px; resize: vertical; }
 
+.table-wrapper {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
 table {
   width: 100%;
   border-collapse: collapse;
   font-size: 14px;
+  min-width: 600px;
 }
 
 th,
@@ -635,8 +644,12 @@ body.modal-open { overflow: hidden; }
     height: auto;
     border-right: 0;
     border-bottom: 1px solid var(--border);
+    gap: 14px;
   }
-  .sidebar nav { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .sidebar nav { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .sidebar-footer { margin-top: 0; }
+  .brand { grid-template-columns: auto 1fr; align-items: baseline; column-gap: 8px; }
+  .brand small { font-size: 12px; }
   .main { padding: 20px 16px 36px; }
   .content-grid,
   .detail-grid,
@@ -646,15 +659,12 @@ body.modal-open { overflow: hidden; }
 }
 
 @media (max-width: 680px) {
-  .sidebar nav { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  table,
-  thead,
-  tbody,
-  tr,
-  th,
-  td { display: block; }
-  thead { display: none; }
-  tr { border-bottom: 1px solid var(--border); padding: 8px 0; }
-  td { border-bottom: 0; padding: 7px 0; }
+  .sidebar nav { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .page-header h1 { font-size: 30px; }
+  .panel, .card { padding: 14px; }
+  .table-wrapper {
+    margin-inline: -14px;
+    padding-inline: 14px;
+  }
   dl { grid-template-columns: 1fr; }
 }
