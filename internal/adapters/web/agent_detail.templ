@@ -1,93 +1,93 @@
 package web
 
-import "fmt"
 import "picoclip/internal/core/domain"
 import "strings"
 
 templ AgentDetailPage(agent domain.Agent, agents []domain.Agent, tasks []taskResponse, projects []domain.Workspace, runs []domain.Run, skills []domain.Skill) {
 	@PageShell("agents", agent.Name, agent.Description, agentDetailAction()) {
-		<section class="detail-grid">
+		@Tabs() {
+			@TabLink("Overview", "#overview", true)
+			@TabLink("Tasks", "#tasks", false)
+			@TabLink("Runs", "#runs", false)
+			@TabLink("Configuration", "#configuration", false)
+			@TabLink("Permissions", "#permissions", false)
+		}
+		<section class="content-grid">
 			<div class="main-column">
-				<div class="panel">
-					<h2>Editar agente</h2>
-					<form hx-post={ "/agents/" + agent.ID + "/edit" } data-success="Agente atualizado." hx-target="body" hx-swap="outerHTML" class="stacked">
+				<div id="overview" class="card">
+					@SectionHeader("Overview", "Agent identity and profile.")
+					<dl>
+						<dt>ID</dt>
+						<dd><code>{ agent.ID }</code></dd>
+						<dt>Title</dt>
+						<dd>{ agent.Title }</dd>
+						<dt>Reports to</dt>
+						<dd>{ agentName(agents, agent.ReportsToID) }</dd>
+						<dt>Driver</dt>
+						<dd>{ string(agent.Type) }</dd>
+						<dt>Tags</dt>
+						<dd>@TagChips(agentDisplayTags(agent, projects))</dd>
+					</dl>
+				</div>
+				<div id="tasks" class="card">
+					@SectionHeader("Assigned Tasks", "Current and historical work assigned to this agent.")
+					@TaskTable(tasks, []domain.Agent{agent}, projects)
+				</div>
+				<div id="runs" class="card">
+					@SectionHeader("Run History", "Execution history, logs and raw agent output.")
+					@Runs(runs)
+				</div>
+				<div id="configuration" class="card">
+					@SectionHeader("Configuration", "Adapter, environment and prompt settings.")
+					<form hx-post={ "/agents/" + agent.ID + "/edit" } data-success="Agent configuration saved." hx-target="body" hx-swap="outerHTML" class="stacked">
 						<input name="name" value={ agent.Name } required/>
-						<input name="title" value={ agent.Title } placeholder="Título / Cargo"/>
+						<input name="title" value={ agent.Title } placeholder="Job title / role"/>
 						<select name="reports_to_id">
-							<option value="">Responde a ninguém</option>
+							<option value="">Reports to no one</option>
 							for _, optionAgent := range agents {
 								if optionAgent.ID != agent.ID {
 									<option value={ optionAgent.ID } selected?={ optionAgent.ID == agent.ReportsToID }>{ optionAgent.Name + " — " + optionAgent.Title }</option>
 								}
 							}
 						</select>
-						<textarea name="description" placeholder="Papel e responsabilidades">{ agent.Description }</textarea>
+						<textarea name="description" placeholder="Description and responsibilities">{ agent.Description }</textarea>
 						<label>Tags</label>
-						<textarea name="tags" placeholder="backend&#10;review&#10;Proj:Meu Projeto">{ strings.Join(agent.Tags, "\n") }</textarea>
+						<textarea name="tags" placeholder="backend&#10;review&#10;Proj:MyProject">{ strings.Join(agent.Tags, "\n") }</textarea>
 						<label>Agent instruction file</label>
 						<input name="instruction_file" value={ agent.InstructionFile } placeholder="/absolute/path/AGENTS.md" title="Absolute path to a markdown file (e.g. AGENTS.md) that defines this agent's behavior. Injected into the system prompt at runtime."/>
-						<textarea name="system_prompt" placeholder="Prompt custom opcional do agente">{ agent.SystemPrompt }</textarea>
-						<h3>Adaptador / Driver</h3>
-						<textarea name="extra_args" placeholder="Extra args, um por linha&#10;--foo&#10;--bar=value">{ strings.Join(agent.ExtraArgs, "\n") }</textarea>
-						<textarea name="config" placeholder="Configuração (key=value por linha)">{ mapToLines(agent.Config) }</textarea>
-						<textarea name="env" placeholder="Variáveis de ambiente (key=value por linha)">{ mapToLines(agent.Env) }</textarea>
-						<button type="submit">Salvar alterações</button>
+						<textarea name="system_prompt" placeholder="Optional custom agent prompt">{ agent.SystemPrompt }</textarea>
+						<h3>Adapter parameters</h3>
+						<textarea name="extra_args" placeholder="Extra args, one per line&#10;--foo&#10;--bar=value">{ strings.Join(agent.ExtraArgs, "\n") }</textarea>
+						<textarea name="config" placeholder="Adapter config (key=value per line)">{ mapToLines(agent.Config) }</textarea>
+						<textarea name="env" placeholder="Environment variables (key=value per line)">{ mapToLines(agent.Env) }</textarea>
+						<button type="submit">Save configuration</button>
 					</form>
-				</div>
-				<div class="panel">
-					<h2>Tasks atribuídas</h2>
-					@TaskTable(tasks, []domain.Agent{agent}, projects)
-				</div>
-				<div class="panel">
-					<h2>Runs recentes</h2>
-					@Runs(runs)
 				</div>
 			</div>
 			<aside class="side-column">
-				<div class="panel">
-					<h2>Perfil</h2>
-					<dl>
-						<dt>ID</dt>
-						<dd><code>{ agent.ID }</code></dd>
-						<dt>Título</dt>
-						<dd>{ agent.Title }</dd>
-						<dt>Responde a</dt>
-						<dd>{ agentName(agents, agent.ReportsToID) }</dd>
-						<dt>Driver</dt>
-						<dd>{ string(agent.Type) }</dd>
-						<dt>Tags</dt>
-						<dd>@TagChips(agentDisplayTags(agent, projects))</dd>
-						<dt>Instruction file</dt>
-						<dd><code>{ agent.InstructionFile }</code></dd>
-						<dt>Extra args</dt>
-						<dd>{ fmt.Sprintf("%d", len(agent.ExtraArgs)) }</dd>
-						<dt>Permissões</dt>
-						<dd>{ fmt.Sprintf("%d", len(agent.Permissions)) }</dd>
-					</dl>
-				</div>
-				<div class="panel">
-					<h2>Perfil rápido</h2>
-					<form hx-post={ "/agents/" + agent.ID + "/permissions" } hx-target="body" hx-swap="outerHTML" class="stacked" data-success="Perfil aplicado.">
+				<div id="permissions" class="card">
+					<h2>Permissions Preset</h2>
+					<form hx-post={ "/agents/" + agent.ID + "/permissions" } hx-target="body" hx-swap="outerHTML" class="stacked" data-success="Permissions applied.">
 						<select name="permission_preset">@templ.Raw(permissionPresetOptionsHTML(agent.Permissions))</select>
-						<button type="submit">Aplicar perfil</button>
+						<button type="submit">Apply preset</button>
 					</form>
 				</div>
-				<div class="panel">
+				<div class="card">
 					<details>
-						<summary class="advanced-summary">Modo avançado: permissões manuais</summary>
+						<summary class="advanced-summary">Advanced manual permissions</summary>
 						<form hx-post={ "/agents/" + agent.ID + "/permissions" } hx-target="body" hx-swap="outerHTML" class="stacked permission-list compact-permissions">
 							@templ.Raw(permissionCheckboxesHTML(agent.Permissions))
-							<button type="submit">Salvar permissões</button>
+							<button type="submit">Save permissions</button>
 						</form>
 					</details>
 				</div>
-				<div class="panel">
-					<h2>Skills manuais</h2>
+				<div class="card">
+					<h2>Manual Skills</h2>
 					@templ.Raw(agentSkillFormHTML(agent.ID, skills, agent.SkillIDs))
 				</div>
-				<div class="panel">
-					<form hx-post={ "/agents/" + agent.ID + "/delete" } hx-confirm="Excluir este agente? Essa ação não pode ser desfeita." data-success="Agente excluído." hx-target="body" hx-swap="outerHTML">
-						<button class="danger" type="submit">Excluir agente</button>
+				<div class="card">
+					<form hx-post={ "/agents/" + agent.ID + "/delete" } hx-confirm="Delete this agent? This cannot be undone." data-success="Agent deleted." hx-target="body" hx-swap="outerHTML">
+						<button class="danger" type="submit">Delete agent</button>
 					</form>
 				</div>
 			</aside>

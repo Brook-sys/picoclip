@@ -63,3 +63,24 @@ templ EmptyState(title string, message string) {
 		{ children... }
 	</div>
 }
+
+templ Tabs() {
+	<nav class="tabs" aria-label="Sections">
+		{ children... }
+	</nav>
+}
+
+templ TabLink(label string, href string, active bool) {
+	<a class={ "tab", templ.KV("active", active) } href={ templ.URL(href) }>{ label }</a>
+}
+
+templ EntityRow(kind string, title string, description string, href string) {
+	<a class="entity-row" href={ templ.URL(href) }>
+		<span class="entity-row-icon">{ kind }</span>
+		<span class="entity-row-content">
+			<strong>{ title }</strong>
+			<small>{ description }</small>
+		</span>
+		<span class="entity-row-arrow">→</span>
+	</a>
+}

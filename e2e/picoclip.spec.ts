@@ -47,14 +47,14 @@ test.describe('PicoClip smoke UI', () => {
 
     await page.getByRole('row').filter({ hasText: taskPrompt }).getByRole('link', { name: /^tsk_/ }).click();
     await expect(page.locator('#task-live')).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Acordar agente' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Wake agent' })).toBeVisible();
     await page.waitForTimeout(3500);
-    await expect(page.getByRole('button', { name: 'Acordar agente' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Wake agent' })).toBeVisible();
     await expect(page.locator('#task-live')).toBeVisible();
 
     const commentBody = `Please revise with more detail ${Date.now()}.`;
-    await page.getByPlaceholder('Adicionar contexto ou comando').fill(commentBody);
-    await page.getByRole('button', { name: 'Enviar mensagem' }).click();
+    await page.getByPlaceholder('Add comment or command...').fill(commentBody);
+    await page.getByRole('button', { name: 'Post comment' }).click();
     await expect(page.locator('#task-live article.message').filter({ hasText: commentBody })).toBeVisible();
 
     expect(consoleErrors).toEqual([]);

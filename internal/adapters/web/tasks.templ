@@ -42,19 +42,19 @@ templ TaskTable(tasks []taskResponse, agents []domain.Agent, projects []domain.W
 
 templ TaskLive(task taskResponse, messages []domain.Message, runs []domain.Run, events []domain.Event, children []taskResponse, agents []domain.Agent, projects []domain.Workspace) {
 	<div class="panel">
-		<h2>Mensagens</h2>
+		@SectionHeader("Conversation", "Comments and intentional messages left on this task.")
 		@Messages(messages)
 	</div>
 	<div class="panel">
-		<h2>Subtasks</h2>
+		@SectionHeader("Subtasks", "Delegated child tasks linked to this task.")
 		@TaskTable(children, agents, projects)
 	</div>
 	<div class="panel">
-		<h2>Runs</h2>
+		@SectionHeader("Runs", "Agent executions are kept separate from task comments.")
 		@Runs(runs)
 	</div>
 	<div class="panel">
-		<h2>Timeline</h2>
+		@SectionHeader("Activity", "Audit trail and status transitions.")
 		@EventTimeline(events)
 	</div>
 }

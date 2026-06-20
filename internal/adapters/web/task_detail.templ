@@ -4,7 +4,7 @@ import "picoclip/internal/core/domain"
 import "fmt"
 
 templ TaskDetailPage(task taskResponse, rawTask domain.Task, agents []domain.Agent, projects []domain.Workspace, messages []domain.Message, runs []domain.Run, events []domain.Event, children []taskResponse) {
-	@PageShell("tasks", task.ID, "Task detail: conversa, execução, subtarefas e auditoria.", taskDetailAction()) {
+	@PageShell("tasks", taskExcerpt(task.Prompt), "Task detail: conversation, subtasks, runs and activity.", taskDetailAction()) {
 		<section class="detail-grid">
 			<div class="main-column">
 				<div class="panel">
@@ -25,56 +25,58 @@ templ TaskDetailPage(task taskResponse, rawTask domain.Task, agents []domain.Age
 					@TaskLive(task, messages, runs, events, children, agents, projects)
 				</div>
 				<div class="panel">
-					<h2>Responder</h2>
+					@SectionHeader("Post Comment", "Add context, answer questions, or intervene.")
 					<form hx-post={ "/tasks/" + task.ID + "/messages" } hx-target="#task-live" hx-swap="innerHTML" class="stacked">
 						<input name="role" value="user" type="hidden"/>
-						<textarea name="body" placeholder="Adicionar contexto ou comando"></textarea>
-						<button type="submit">Enviar mensagem</button>
+						<textarea name="body" placeholder="Add comment or command..."></textarea>
+						<button type="submit">Post comment</button>
 					</form>
 				</div>
 			</div>
 			<aside class="side-column">
 				<div class="panel">
-					<h2>Propriedades</h2>
+					<h2>Properties</h2>
 					<dl>
-						<dt>Agente</dt>
+						<dt>Task ID</dt>
+						<dd><code>{ task.ID }</code></dd>
+						<dt>Assignee</dt>
 						<dd>{ agentName(agents, task.AgentID) }</dd>
-						<dt>Projeto</dt>
+						<dt>Workspace</dt>
 						<dd>{ projectName(projects, task.ProjectID) }</dd>
 						<dt>Parent</dt>
 						<dd>{ task.ParentID }</dd>
-						<dt>Tentativas</dt>
+						<dt>Attempts</dt>
 						<dd>{ fmt.Sprintf("%d/%d", rawTask.Attempts, rawTask.MaxAttempts) }</dd>
-						<dt>Criada</dt>
+						<dt>Created</dt>
 						<dd>{ task.CreatedAt }</dd>
-						<dt>Atualizada</dt>
+						<dt>Updated</dt>
 						<dd>{ task.UpdatedAt }</dd>
 					</dl>
 				</div>
 				<div class="panel">
-					<h2>Status</h2>
-					<form hx-post={ "/tasks/" + task.ID + "/status" } hx-target="body" hx-swap="outerHTML" data-success="Status atualizado." class="stacked">
+					<h2>Workflow</h2>
+					<form hx-post={ "/tasks/" + task.ID + "/status" } hx-target="body" hx-swap="outerHTML" data-success="Status updated." class="stacked">
 						@TaskStatusSelect(task.Status)
-						<textarea name="comment" placeholder="Comentário obrigatório para done/blocked"></textarea>
-						<button type="submit">Atualizar status</button>
+						<textarea name="comment" placeholder="Required comment when transitioning to done/blocked..."></textarea>
+						<button type="submit">Update status</button>
 					</form>
-					<form hx-post={ "/tasks/" + task.ID + "/wake" } hx-target="body" hx-swap="outerHTML" data-success="Agente acordado." class="stacked">
-						<button type="submit">Acordar agente</button>
+					<form hx-post={ "/tasks/" + task.ID + "/wake" } hx-target="body" hx-swap="outerHTML" data-success="Agent triggered." class="stacked">
+						<button type="submit">Wake agent</button>
 					</form>
 				</div>
 				<div class="panel">
-					<h2>Delegar</h2>
+					<h2>Delegate</h2>
 					<form hx-post={ "/tasks/" + task.ID + "/delegate" } hx-target="body" hx-swap="outerHTML" class="stacked">
 						@AgentSelect(agents, "")
-						<textarea name="prompt" placeholder="Instrução da subtarefa"></textarea>
-						<button type="submit">Delegar</button>
+						<textarea name="prompt" placeholder="Subtask goal..."></textarea>
+						<button type="submit">Create child task</button>
 					</form>
 				</div>
 				<div class="panel">
-					<h2>Controle</h2>
-					<form hx-post={ "/tasks/" + task.ID + "/cancel" } hx-confirm="Cancelar esta task?" data-success="Task cancelada." hx-target="body" hx-swap="outerHTML" class="stacked">
-						<input name="reason" placeholder="Motivo"/>
-						<button class="danger" type="submit">Cancelar task</button>
+					<h2>Danger Zone</h2>
+					<form hx-post={ "/tasks/" + task.ID + "/cancel" } hx-confirm="Are you sure you want to cancel this task?" data-success="Task cancelled." hx-target="body" hx-swap="outerHTML" class="stacked">
+						<input name="reason" placeholder="Reason for cancellation..."/>
+						<button class="danger" type="submit">Cancel task</button>
 					</form>
 				</div>
 			</aside>

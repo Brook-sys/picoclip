@@ -15,6 +15,7 @@ tmp/
 .air/
 *.swp
 *.log
+.playwright-mcp/
 
 # Node / Playwright
 node_modules/
