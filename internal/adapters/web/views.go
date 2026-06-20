@@ -7,8 +7,6 @@ import (
 	"io"
 	"strings"
 
-	"github.com/a-h/templ"
-
 	"picoclip/internal/core/domain"
 	"picoclip/internal/core/services"
 )
@@ -345,32 +343,6 @@ func agentSelectHTML(agents []domain.Agent, selected string) string {
 	var b strings.Builder
 	renderAgentPicker(&b, agents, "agent_id", selected, "Buscar agente...")
 	return b.String()
-}
-
-type agentNewView struct {
-	projects []domain.Workspace
-	agents   []domain.Agent
-	skills   []domain.Skill
-}
-
-func AgentNewView(projects []domain.Workspace, agents []domain.Agent, skills []domain.Skill) templ.Component {
-	return agentNewView{projects: projects, agents: agents, skills: skills}
-}
-
-func (v agentNewView) Render(ctx context.Context, w io.Writer) error {
-	return AgentNewPage(v.projects, v.agents, v.skills).Render(ctx, w)
-}
-
-type settingsAdaptersView struct {
-	settings map[string]map[string]string
-}
-
-func SettingsAdaptersView(settings map[string]map[string]string) templ.Component {
-	return settingsAdaptersView{settings: settings}
-}
-
-func (v settingsAdaptersView) Render(ctx context.Context, w io.Writer) error {
-	return SettingsAdaptersPage(v.settings).Render(ctx, w)
 }
 
 func countTasks(tasks []taskResponse) (pending, running, succeeded, failed int) {

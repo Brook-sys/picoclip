@@ -26,6 +26,7 @@ help:
 	  '  make kill-8080      Kill process bound to port 8080'
 
 tools:
+	mkdir -p bin
 	go install github.com/a-h/templ/cmd/templ@v0.3.1020
 	go install github.com/air-verse/air@latest
 	printf '%s\n' '#!/bin/sh' 'exec "$$(go env GOPATH)/bin/templ" "$$@"' > bin/templ
