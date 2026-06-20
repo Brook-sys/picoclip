@@ -10,7 +10,14 @@ templ TaskDetailPage(task taskResponse, rawTask domain.Task, agents []domain.Age
 				<div class="panel">
 					<div class="section-header">
 						<h2>Prompt</h2>
-						<span class={ "status " + statusClass(task.Status) }>{ string(task.Status) }</span>
+						<div class="header-badges">
+							if task.CheckoutRunID != "" && task.Status != domain.TaskStatusDone && task.Status != domain.TaskStatusCancelled {
+								<span class="status pulse">Agent running</span>
+							} else if task.Status != domain.TaskStatusDone && task.Status != domain.TaskStatusCancelled && task.Status != domain.TaskStatusBlocked {
+								<span class="status status-todo">Agent sleeping</span>
+							}
+							<span class={ "status " + statusClass(task.Status) }>{ string(task.Status) }</span>
+						</div>
 					</div>
 					<p class="prompt">{ task.Prompt }</p>
 				</div>

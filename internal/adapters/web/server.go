@@ -79,6 +79,7 @@ func (s *Server) Mount(mux *http.ServeMux) {
 	mux.HandleFunc("GET /agents/{id}", s.handleWebAgentDetail)
 	mux.HandleFunc("GET /tasks", s.handleWebTasks)
 	mux.HandleFunc("GET /tasks/{id}", s.handleWebTaskDetail)
+	mux.HandleFunc("GET /runs/{id}", s.handleWebRunDetail)
 	mux.HandleFunc("GET /skills", s.handleWebSkills)
 	mux.HandleFunc("GET /skills/{id}", s.handleWebSkillDetail)
 	mux.HandleFunc("GET /activity", s.handleWebActivity)
@@ -385,17 +386,18 @@ func (s *Server) handleDelegateTask(w http.ResponseWriter, r *http.Request) {
 }
 
 type taskResponse struct {
-	ID           string            `json:"id"`
-	ParentID     string            `json:"parent_id,omitempty"`
-	ProjectID    string            `json:"project_id,omitempty"`
-	AgentID      string            `json:"agent_id"`
-	Status       domain.TaskStatus `json:"status"`
-	Message      string            `json:"message"`
-	Prompt       string            `json:"prompt"`
-	Response     string            `json:"response"`
-	CancelReason string            `json:"cancel_reason,omitempty"`
-	CreatedAt    string            `json:"created_at"`
-	UpdatedAt    string            `json:"updated_at"`
+	ID            string            `json:"id"`
+	ParentID      string            `json:"parent_id,omitempty"`
+	ProjectID     string            `json:"project_id,omitempty"`
+	AgentID       string            `json:"agent_id"`
+	Status        domain.TaskStatus `json:"status"`
+	Message       string            `json:"message"`
+	Prompt        string            `json:"prompt"`
+	Response      string            `json:"response"`
+	CancelReason  string            `json:"cancel_reason,omitempty"`
+	CheckoutRunID string            `json:"checkout_run_id,omitempty"`
+	CreatedAt     string            `json:"created_at"`
+	UpdatedAt     string            `json:"updated_at"`
 }
 
 func (s *Server) taskResponse(r *http.Request, task domain.Task) taskResponse {
@@ -409,17 +411,18 @@ func (s *Server) taskResponse(r *http.Request, task domain.Task) taskResponse {
 		}
 	}
 	return taskResponse{
-		ID:           task.ID,
-		ParentID:     task.ParentID,
-		ProjectID:    task.WorkspaceID,
-		AgentID:      task.AgentID,
-		Message:      task.Prompt,
-		Prompt:       task.Prompt,
-		Response:     response,
-		Status:       task.Status,
-		CancelReason: task.CancelReason,
-		CreatedAt:    task.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
-		UpdatedAt:    task.UpdatedAt.Format("2006-01-02T15:04:05Z07:00"),
+		ID:            task.ID,
+		ParentID:      task.ParentID,
+		ProjectID:     task.WorkspaceID,
+		AgentID:       task.AgentID,
+		Message:       task.Prompt,
+		Prompt:        task.Prompt,
+		Response:      response,
+		Status:        task.Status,
+		CancelReason:  task.CancelReason,
+		CheckoutRunID: task.CheckoutRunID,
+		CreatedAt:     task.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
+		UpdatedAt:     task.UpdatedAt.Format("2006-01-02T15:04:05Z07:00"),
 	}
 }
 

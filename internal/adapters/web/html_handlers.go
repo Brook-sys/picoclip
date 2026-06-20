@@ -9,6 +9,27 @@ import (
 	"picoclip/internal/core/services"
 )
 
+func (s *Server) handleWebRunDetail(w http.ResponseWriter, r *http.Request) {
+	run, err := s.storage.Runs().Get(r.Context(), r.PathValue("id"))
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusNotFound)
+		return
+	}
+	task, err := s.tasks.Get(r.Context(), run.TaskID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusNotFound)
+		return
+	}
+	agent, err := s.agents.Get(r.Context(), run.AgentID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusNotFound)
+		return
+	}
+	if err := RunDetailPage(run, s.taskResponse(r, task), agent).Render(r.Context(), w); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
+}
+
 func (s *Server) handleWebDashboard(w http.ResponseWriter, r *http.Request) {
 	agents, tasks, projects, skills, ok := s.loadWebState(w, r)
 	if !ok {

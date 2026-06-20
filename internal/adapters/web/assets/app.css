@@ -363,6 +363,34 @@ code {
 .status-cancelled,
 .status-canceled { color: var(--bad); background: var(--bad-bg); }
 
+.header-badges {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.pulse {
+  color: var(--good);
+  background: var(--good-bg);
+  animation: pulseBadge 1.6s ease-in-out infinite;
+}
+
+.log-viewer {
+  max-height: 70vh;
+  overflow: auto;
+  white-space: pre-wrap;
+}
+
+.error-log {
+  color: var(--bad);
+}
+
+@keyframes pulseBadge {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.58; }
+}
+
 .filter-row {
   display: flex;
   flex-wrap: wrap;

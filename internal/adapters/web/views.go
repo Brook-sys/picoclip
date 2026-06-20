@@ -403,6 +403,19 @@ func statusClass(status domain.TaskStatus) string {
 	return "status-" + strings.ReplaceAll(string(status), "_", "-")
 }
 
+func runStatusClass(status domain.RunStatus) string {
+	switch status {
+	case domain.RunStatusRunning:
+		return "status-in-progress"
+	case domain.RunStatusSucceeded:
+		return "status-done"
+	case domain.RunStatusFailed, domain.RunStatusTimeout, domain.RunStatusCanceled:
+		return "status-blocked"
+	default:
+		return "status-todo"
+	}
+}
+
 func taskStatusTerminal(status domain.TaskStatus) bool {
 	return status == domain.TaskStatusDone || status == domain.TaskStatusCancelled
 }

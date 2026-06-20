@@ -39,12 +39,6 @@ templ TaskTable(tasks []taskResponse, agents []domain.Agent, projects []domain.W
 }
 
 templ TaskLive(task taskResponse, messages []domain.Message, runs []domain.Run, events []domain.Event, children []taskResponse, agents []domain.Agent, projects []domain.Workspace) {
-	if task.Response != "" {
-		<div class="panel">
-			<h2>Output</h2>
-			<pre>{ task.Response }</pre>
-		</div>
-	}
 	<div class="panel">
 		<h2>Mensagens</h2>
 		@Messages(messages)
@@ -84,15 +78,15 @@ templ Runs(runs []domain.Run) {
 		for _, run := range runs {
 			<article class="run">
 				<div class="section-header">
-					<strong>{ run.ID }</strong>
-					<span class={ "status " + statusClass(domain.TaskStatus(run.Status)) }>{ string(run.Status) }</span>
+					<strong><a href={ templ.URL("/runs/" + run.ID) }>{ run.ID }</a></strong>
+					<span class={ "status " + runStatusClass(run.Status) }>{ string(run.Status) }</span>
 				</div>
 				<small>{ fmt.Sprintf("attempt %d · %s", run.Attempt, run.StartedAt.Format("2006-01-02 15:04:05")) }</small>
 				if run.Output != "" {
-					<pre>{ run.Output }</pre>
+					<p class="muted">Console output disponível no detalhe do run.</p>
 				}
 				if run.Error != "" {
-					<pre>{ run.Error }</pre>
+					<p class="muted">Erro disponível no detalhe do run.</p>
 				}
 			</article>
 		}
