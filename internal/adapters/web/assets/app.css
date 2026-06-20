@@ -767,6 +767,17 @@ tr:hover td { background: var(--surface-hover); }
 pre { background: var(--pre-bg); color: var(--pre-text); padding: 16px; border-radius: var(--radius-md); overflow: auto; }
 code { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 13px; }
 
+[data-density="compact"] .main { padding: 18px 24px 40px; }
+[data-density="compact"] .card,
+[data-density="compact"] .panel,
+[data-density="compact"] .metric-card { padding: 12px; }
+[data-density="compact"] th,
+[data-density="compact"] td { padding: 8px 10px; }
+[data-density="compact"] .entity-row { padding: 8px 10px; }
+[data-density="compact"] input,
+[data-density="compact"] select,
+[data-density="compact"] textarea { padding: 6px 10px; }
+
 @media (max-width: 980px) {
   .app-shell { grid-template-columns: 1fr; }
   .sidebar { height: auto; position: relative; border-right: none; border-bottom: 1px solid var(--border); padding: 16px 20px; }

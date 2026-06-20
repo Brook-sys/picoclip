@@ -219,6 +219,7 @@ func (s *Server) handleWebPostSettingsGeneral(w http.ResponseWriter, r *http.Req
 	}
 	view, _ := s.loadSettingsView(r)
 	view.General.Theme = r.FormValue("theme")
+	view.General.Density = r.FormValue("density")
 	view.General.LogLevel = r.FormValue("log_level")
 	view.General.MaxTaskRetries = r.FormValue("max_task_retries")
 
@@ -247,6 +248,24 @@ func (s *Server) handleWebPostSettingsAdapters(w http.ResponseWriter, r *http.Re
 	}
 	s.storage.Settings().Set(r.Context(), "adapters", encodeSettingsValue(view.Adapters))
 	s.handleWebSettings(w, r)
+}
+
+func (s *Server) handleWebPostSettingsAdaptersTest(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	adapter := r.FormValue("adapter")
+	if adapter == "" {
+		adapter = "crush"
+	}
+	view, _ := s.loadSettingsView(r)
+	settings := view.Adapters[adapter]
+	if adapter == "crush" && strings.TrimSpace(settings["binary_path"]) == "" {
+		http.Error(w, "crush binary path is not configured", http.StatusBadRequest)
+		return
+	}
+	w.WriteHeader(http.StatusOK)
 }
 
 func (s *Server) handleWebPostSettingsEnvironment(w http.ResponseWriter, r *http.Request) {

@@ -8,70 +8,82 @@ templ SkillDetailPage(skill domain.Skill, projects []domain.Workspace, agents []
 		<section class="detail-grid">
 			<div class="main-column">
 				<div class="panel">
-					<h2>Edição</h2>
-					<form hx-post={ "/skills/" + skill.ID + "/edit" } data-success="Skill atualizada." hx-target="body" hx-swap="outerHTML" class="stacked">
-						<input name="name" value={ skill.Name } required/>
-						<input name="description" value={ skill.Description }/>
-						<textarea name="instructions" required>{ skill.Instructions }</textarea>
-						<label class="check-row">
-							<input type="checkbox" name="enabled" checked?={ skill.Enabled }/>
+					@SectionHeader("Editor", "Modify the skill prompt and instructions.") {}
+					<form hx-post={ "/skills/" + skill.ID + "/edit" } data-success="Skill updated." hx-target="body" hx-swap="outerHTML" class="stacked">
+						@FormField("name", "Name", "") {
+							<input name="name" value={ skill.Name } required/>
+						}
+						@FormField("description", "Description", "") {
+							<input name="description" value={ skill.Description }/>
+						}
+						@FormField("instructions", "Instructions (SKILL.md)", "The main markdown document describing the skill.") {
+							<textarea name="instructions" required style="min-height: 280px; font-family: monospace;">{ skill.Instructions }</textarea>
+						}
+						<label class="check-row" style="display: flex; gap: 8px; align-items: flex-start; margin-top: 8px;">
+							<input type="checkbox" name="enabled" checked?={ skill.Enabled } style="width: auto; margin-top: 4px;"/>
 							<span>
-								<strong>Habilitada</strong>
-								<small>Agentes podem carregar esta skill</small>
+								<strong style="display: block;">Enabled</strong>
+								<small class="muted">Agents can load and execute this skill</small>
 							</span>
 						</label>
-						<button type="submit">Salvar alterações</button>
+						<button type="submit" style="margin-top: 8px;">Save Changes</button>
 					</form>
 				</div>
+				
 				<div class="panel">
-					<h2>Arquivos</h2>
+					@SectionHeader("Files", "Auxiliary scripts and context files.") {}
 					if len(skill.Files) == 0 {
-						<p class="empty">Nenhum arquivo.</p>
+						@EmptyState("No files attached", "This skill uses only the main instructions.") {}
 					}
 					for _, file := range skill.Files {
-						<article class="file-block">
-							<strong>{ file.Path }</strong>
-							<pre>{ file.Content }</pre>
-						</article>
+						<div class="card" style="margin-bottom: 16px;">
+							<div class="card-header">
+								<strong>{ file.Path }</strong>
+							</div>
+							<pre><code>{ file.Content }</code></pre>
+						</div>
 					}
 				</div>
 			</div>
+			
 			<aside class="side-column">
 				<div class="panel">
-					<h2>Propriedades</h2>
-					<dl>
-						<dt>ID</dt>
-						<dd><code>{ skill.ID }</code></dd>
-						<dt>Slug</dt>
-						<dd>{ skill.Slug }</dd>
-						<dt>Tipo</dt>
-						<dd>{ string(skill.Kind) }</dd>
-						<dt>Permissão</dt>
-						<dd>{ string(skill.Permission) }</dd>
-						<dt>Projeto</dt>
-						<dd>{ projectName(projects, skill.ProjectID) }</dd>
-						<dt>Modificada</dt>
-						<dd>{ fmt.Sprintf("%t", skill.IsModified) }</dd>
-						<dt>Agentes usando</dt>
-						<dd>{ fmt.Sprintf("%d", countAgentsUsingSkill(agents, skill.ID)) }</dd>
-					</dl>
+					<h2>Properties</h2>
+					@PropertyList() {
+						@PropertyItem("ID", skill.ID)
+						@PropertyItem("Slug", skill.Slug)
+						@PropertyItem("Kind", string(skill.Kind))
+						if skill.Permission != "" {
+							@PropertyItem("Permission", string(skill.Permission))
+						}
+						@PropertyItemHTML("Project") {
+							{ projectName(projects, skill.ProjectID) }
+						}
+						@PropertyItem("Modified", fmt.Sprintf("%t", skill.IsModified))
+						@PropertyItem("Active Agents", fmt.Sprintf("%d", countAgentsUsingSkill(agents, skill.ID)))
+					}
 				</div>
+				
 				<div class="panel">
-					<h2>Agentes autorizados</h2>
+					<h2>Agent Assignment</h2>
 					@SkillAgentForm(skill, agents)
 				</div>
-				if skill.Kind == domain.SkillKindBuiltin {
-					<div class="panel">
-						<form hx-post={ "/skills/" + skill.ID + "/reset" } hx-confirm="Resetar esta skill para o padrão? Alterações locais serão perdidas." data-success="Skill resetada para o padrão." hx-target="body" hx-swap="outerHTML">
-							<button type="submit">Resetar skill padrão</button>
-						</form>
-					</div>
-				}
-				if skill.Kind == domain.SkillKindCustom {
-					<div class="panel">
-						<form hx-post={ "/skills/" + skill.ID + "/delete" } hx-confirm="Excluir esta skill? Essa ação não pode ser desfeita." data-success="Skill excluída." hx-target="body" hx-swap="outerHTML">
-							<button class="danger" type="submit">Excluir skill</button>
-						</form>
+				
+				if skill.Kind == domain.SkillKindBuiltin || skill.Kind == domain.SkillKindCustom {
+					<div class="panel border-danger">
+						<h2 class="text-danger">Danger Zone</h2>
+						if skill.Kind == domain.SkillKindBuiltin {
+							<p class="muted">Restore the original instructions for this built-in skill.</p>
+							<form hx-post={ "/skills/" + skill.ID + "/reset" } hx-confirm="Reset this skill? All local modifications will be lost." data-success="Skill restored to default." hx-target="body" hx-swap="outerHTML" class="stacked">
+								<button class="button button-danger" type="submit">Factory Reset Skill</button>
+							</form>
+						}
+						if skill.Kind == domain.SkillKindCustom {
+							<p class="muted">Permanently delete this custom skill.</p>
+							<form hx-post={ "/skills/" + skill.ID + "/delete" } hx-confirm="Delete this skill? This action cannot be undone." data-success="Skill deleted." hx-target="body" hx-swap="outerHTML" class="stacked">
+								<button class="button button-danger" type="submit">Delete Skill</button>
+							</form>
+						}
 					</div>
 				}
 			</aside>
@@ -80,24 +92,26 @@ templ SkillDetailPage(skill domain.Skill, projects []domain.Workspace, agents []
 }
 
 templ skillDetailAction() {
-	<a class="button secondary" href="/skills">Voltar</a>
+	<a class="button secondary" href="/skills">Back to skills</a>
 }
 
 templ SkillAgentForm(skill domain.Skill, agents []domain.Agent) {
-	<form hx-post={ "/skills/" + skill.ID + "/agents" } data-success="Agentes da skill atualizados." hx-target="body" hx-swap="outerHTML" class="stacked permission-list">
+	<form hx-post={ "/skills/" + skill.ID + "/agents" } data-success="Skill assignments updated." hx-target="body" hx-swap="outerHTML" class="stacked">
 		if len(agents) == 0 {
-			<p class="empty">Nenhum agente criado.</p>
+			<p class="empty">No agents available.</p>
 		}
-		for _, agent := range agents {
-			<label class="check-row">
-				<input type="checkbox" name="agent_ids" value={ agent.ID } checked?={ skillAgentChecked(skill, agent) } disabled?={ skillAgentDisabled(skill, agent) }/>
-				<span>
-					<strong>{ agent.Name }</strong>
-					<small>{ string(agent.Type) + " · " + fmt.Sprintf("%d", len(agent.Permissions)) + " permissões" + skillAgentInheritedText(skill, agent) }</small>
-				</span>
-			</label>
-		}
-		<button type="submit">Salvar agentes</button>
+		<div style="display: flex; flex-direction: column; gap: 8px;">
+			for _, agent := range agents {
+				<label class="check-row" style="display: flex; gap: 8px; align-items: flex-start;">
+					<input type="checkbox" name="agent_ids" value={ agent.ID } checked?={ skillAgentChecked(skill, agent) } disabled?={ skillAgentDisabled(skill, agent) } style="width: auto; margin-top: 4px;"/>
+					<span>
+						<strong style="display: block;">{ agent.Name }</strong>
+						<small class="muted">{ string(agent.Type) + " · " + fmt.Sprintf("%d", len(agent.Permissions)) + " permissions" + skillAgentInheritedText(skill, agent) }</small>
+					</span>
+				</label>
+			}
+		</div>
+		<button type="submit" style="margin-top: 8px;">Save Assignments</button>
 	</form>
 }
 
@@ -111,10 +125,10 @@ func skillAgentDisabled(skill domain.Skill, agent domain.Agent) bool {
 
 func skillAgentInheritedText(skill domain.Skill, agent domain.Agent) string {
 	if agentHasSkill(agent, skill.ID) {
-		return " 🔒 Atribuída no agente"
+		return " 🔒 Assigned in agent"
 	}
 	if skillAllowedForAgent(skill, agent) && !skillHasAgent(skill, agent.ID) {
-		return " 🔒 Herdada por tipo/permissão"
+		return " 🔒 Inherited"
 	}
 	return ""
 }

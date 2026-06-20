@@ -15,6 +15,7 @@ type SettingsView struct {
 
 type GeneralSettings struct {
 	Theme          string
+	Density        string
 	LogLevel       string
 	MaxTaskRetries string
 }
@@ -31,7 +32,7 @@ type SettingsStats struct {
 
 func defaultSettingsView() SettingsView {
 	return SettingsView{
-		General: GeneralSettings{Theme: "system", LogLevel: "info", MaxTaskRetries: "3"},
+		General: GeneralSettings{Theme: "system", Density: "comfortable", LogLevel: "info", MaxTaskRetries: "3"},
 		Adapters: map[string]map[string]string{
 			"crush": {"binary_path": "", "default_args": "", "timeout": "30m", "cwd_strategy": "project"},
 			"noop":  {"timeout": "1m"},

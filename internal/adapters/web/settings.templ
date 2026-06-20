@@ -38,6 +38,12 @@ templ SettingsPage(view SettingsView) {
 							<option value="dark" selected?={ view.General.Theme == "dark" }>Dark</option>
 						</select>
 						
+						<label>Interface Density</label>
+						<select name="density">
+							<option value="comfortable" selected?={ view.General.Density == "comfortable" }>Comfortable</option>
+							<option value="compact" selected?={ view.General.Density == "compact" }>Compact</option>
+						</select>
+						
 						<label>System Log Level</label>
 						<select name="log_level">
 							<option value="debug" selected?={ view.General.LogLevel == "debug" }>Debug</option>
@@ -62,7 +68,7 @@ templ SettingsPage(view SettingsView) {
 						</div>
 						<div class="card">
 							<strong>Density</strong>
-							<p class="muted">Comfortable spacing is enabled. Compact density is planned.</p>
+							<p class="muted">Current: { view.General.Density }. Change it in General Settings.</p>
 						</div>
 					</div>
 				</div>
@@ -94,6 +100,10 @@ templ SettingsPage(view SettingsView) {
 							<option value="current" selected?={ adapterSetting(view.Adapters, "crush", "cwd_strategy") == "current" }>Current Directory</option>
 						</select>
 						<button type="submit">Save Crush</button>
+					</form>
+					<form hx-post="/settings/adapters/test" hx-target="body" hx-swap="none" data-success="Adapter configuration looks valid." class="stacked" style="margin-top: 12px;">
+						<input type="hidden" name="adapter" value="crush"/>
+						<button class="button secondary" type="submit">Test Crush Configuration</button>
 					</form>
 				</div>
 				
