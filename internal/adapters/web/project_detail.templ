@@ -1,0 +1,67 @@
+package web
+
+import "picoclip/internal/core/domain"
+import "fmt"
+
+templ ProjectDetailPage(project domain.Workspace, agents []domain.Agent, tasks []taskResponse, skills []domain.Skill, events []domain.Event) {
+	@PageShell("projects", project.Name, project.Description, projectDetailAction()) {
+		<section class="detail-grid">
+			<div class="main-column">
+				<div class="panel">
+					<div class="section-header">
+						<h2>Tasks do projeto</h2>
+					</div>
+					@TaskTable(tasks, agents, []domain.Workspace{project})
+				</div>
+				<div class="panel">
+					<h2>Atividade</h2>
+					@EventTimeline(events)
+				</div>
+			</div>
+			<aside class="side-column">
+				<div class="panel">
+					<h2>Workspace</h2>
+					<dl>
+						<dt>ID</dt>
+						<dd><code>{ project.ID }</code></dd>
+						<dt>Path</dt>
+						<dd><code>{ project.RootPath }</code></dd>
+						<dt>Agentes globais</dt>
+						<dd>{ fmt.Sprintf("%d", len(agents)) }</dd>
+						<dt>Skills</dt>
+						<dd>{ fmt.Sprintf("%d", len(skills)) }</dd>
+					</dl>
+				</div>
+				<div class="panel">
+					<h2>Nova task</h2>
+					<button class="button" type="button" data-open-modal="project-task-modal">Criar task</button>
+					<p class="muted">Agentes são globais. Tags como <code>Proj:{ project.Name }</code> ajudam a identificar relação, mas não restringem acesso.</p>
+				</div>
+				<div class="panel">
+					<h2>Agentes disponíveis</h2>
+					@ProjectAgents(project, agents)
+				</div>
+			</aside>
+		</section>
+		@TaskModal("project-task-modal", project.ID, []domain.Workspace{project}, agents)
+	}
+}
+
+templ projectDetailAction() {
+	<a class="button secondary" href="/projects">Voltar</a>
+}
+
+templ ProjectAgents(project domain.Workspace, agents []domain.Agent) {
+	<div class="agent-related-list">
+		for _, agent := range agents {
+			<article class="agent-mini-card">
+				if hasTag(agent.Tags, "Proj:" + project.Name) {
+					<span class="badge">Relacionado</span>
+				}
+				<strong><a href={ templ.URL("/agents/" + agent.ID) }>{ agent.Name }</a></strong>
+				<small>{ agent.Title }</small>
+				<div>@TagChips(agent.Tags)</div>
+			</article>
+		}
+	</div>
+}

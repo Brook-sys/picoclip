@@ -1,0 +1,41 @@
+package web
+
+import (
+	"picoclip/internal/core/domain"
+)
+
+templ DashboardPage(agents []domain.Agent, tasks []taskResponse, projects []domain.Workspace, skills []domain.Skill, events []domain.Event) {
+	@PageShell("dashboard", "Dashboard", "Control plane local para agentes, workspaces e execução.", dashboardAction()) {
+		@DashboardBody(agents, tasks, projects, skills, events)
+	}
+}
+
+templ dashboardAction() {
+	<a class="button" href="/tasks">Nova task</a>
+}
+
+templ DashboardBody(agents []domain.Agent, tasks []taskResponse, projects []domain.Workspace, skills []domain.Skill, events []domain.Event) {
+	{{ pending, running, succeeded, failed := countTasks(tasks) }}
+	<section class="metrics">
+		<div class="metric-card"><span>{ len(projects) }</span><p>Projetos</p></div>
+		<div class="metric-card"><span>{ len(agents) }</span><p>Agentes</p></div>
+		<div class="metric-card"><span>{ len(tasks) }</span><p>Tasks</p></div>
+		<div class="metric-card"><span>{ len(skills) }</span><p>Skills</p></div>
+	</section>
+	<section class="metrics compact">
+		<div class="metric-card warn"><span>{ pending }</span><p>Pendentes</p></div>
+		<div class="metric-card info"><span>{ running }</span><p>Rodando</p></div>
+		<div class="metric-card good"><span>{ succeeded }</span><p>Concluídas</p></div>
+		<div class="metric-card bad"><span>{ failed }</span><p>Atenção</p></div>
+	</section>
+	<section class="content-grid">
+		<div class="panel">
+			<div class="section-header"><h2>Trabalho recente</h2><a href="/tasks">Ver tasks</a></div>
+			@TaskTable(limitTasks(tasks, 6), agents, projects)
+		</div>
+		<div class="panel">
+			<div class="section-header"><h2>Atividade</h2><a href="/activity">Ver tudo</a></div>
+			@EventTimeline(limitEvents(events, 8))
+		</div>
+	</section>
+}

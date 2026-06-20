@@ -1,0 +1,11 @@
+package web
+
+import "picoclip/internal/core/domain"
+
+templ ActivityPage(events []domain.Event) {
+	@PageShell("activity", "Atividade", "Histórico global de eventos, execuções e ações humanas.", nil) {
+		<section class="panel">
+			@EventTimeline(events)
+		</section>
+	}
+}

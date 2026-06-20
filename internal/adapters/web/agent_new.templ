@@ -1,0 +1,93 @@
+package web
+
+import "picoclip/internal/core/domain"
+
+templ AgentNewPage(projects []domain.Workspace, agents []domain.Agent, skills []domain.Skill) {
+	@PageShell("agents", "Novo agente", "Criação de agente com hierarquia, skills, instruções e adapter.", agentNewAction()) {
+		<form method="post" action="/agents" class="detail-grid">
+			<div class="main-column">
+				<div class="panel">
+					<h2>Identidade</h2>
+					<div class="stacked">
+						<input name="name" placeholder="Nome do agente" required/>
+						<input name="title" placeholder="Título / Cargo"/>
+						<select name="reports_to_id">
+							<option value="">Responde a ninguém</option>
+							for _, agent := range agents {
+								<option value={ agent.ID }>{ agent.Name + " — " + agent.Title }</option>
+							}
+						</select>
+						<textarea name="description" placeholder="Papel e responsabilidades"></textarea>
+						<label>Tags</label>
+						<textarea name="tags" placeholder="backend&#10;review&#10;Proj:Meu Projeto"></textarea>
+						<div class="tag-suggestions">
+							@ProjectTagSuggestions(projects)
+						</div>
+					</div>
+				</div>
+				<div class="panel">
+					<h2>Instruções</h2>
+					<div class="stacked">
+						<label>Agent instruction file</label>
+						<input name="instruction_file" placeholder="/absolute/path/AGENTS.md" title="Absolute path to a markdown file (e.g. AGENTS.md) that defines this agent's behavior. Injected into the system prompt at runtime."/>
+						<textarea name="system_prompt" placeholder="Prompt custom opcional do agente"></textarea>
+					</div>
+				</div>
+				<div class="panel">
+					<h2>Skills</h2>
+					<div class="permission-list">
+						@NewAgentSkills(skills)
+					</div>
+				</div>
+				<div class="panel">
+					<h2>Adaptador / Driver</h2>
+					<div class="stacked">
+						<select name="type">
+							<option value="crush">Crush (Padrão)</option>
+							<option value="noop">Noop</option>
+						</select>
+						<textarea name="extra_args" placeholder="Extra args, um por linha&#10;--foo&#10;--bar=value"></textarea>
+						<textarea name="config" placeholder="Configuração (key=value por linha)"></textarea>
+						<textarea name="env" placeholder="Variáveis de ambiente (key=value por linha)"></textarea>
+					</div>
+				</div>
+			</div>
+			<aside class="side-column">
+				<div class="panel">
+					<h2>Perfil de permissões</h2>
+					<div class="stacked">
+						<select name="permission_preset">@templ.Raw(permissionPresetOptionsHTML(nil))</select>
+						<button type="submit" class="primary">Criar agente</button>
+					</div>
+				</div>
+			</aside>
+		</form>
+	}
+}
+
+templ agentNewAction() {
+	<a class="button secondary" href="/agents">Cancelar</a>
+}
+
+templ ProjectTagSuggestions(projects []domain.Workspace) {
+	if len(projects) > 0 {
+		<small>Tags sugeridas: </small>
+		for _, project := range projects {
+			<span class="chip">{ "Proj:" + project.Name }</span>
+		}
+	}
+}
+
+templ NewAgentSkills(skills []domain.Skill) {
+	for _, skill := range skills {
+		if skill.Permission == "" {
+			<label class="check-row">
+				<input type="checkbox" name="skill_ids" value={ skill.ID }/>
+				<span>
+					<strong>{ skill.Name }</strong>
+					<small>{ skill.Description }</small>
+				</span>
+			</label>
+		}
+	}
+}

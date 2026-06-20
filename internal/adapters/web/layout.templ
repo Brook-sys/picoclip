@@ -1,0 +1,115 @@
+package web
+
+templ PageShell(active string, title string, subtitle string, action templ.Component) {
+	<!DOCTYPE html>
+	<html lang="pt-BR">
+		<head>
+			<meta charset="UTF-8"/>
+			<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+			<title>PicoClip — { title }</title>
+			<script>
+				(function(){var mode=localStorage.getItem('picoclip.theme')||'system';var dark=window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches;var resolved=mode==='system'?(dark?'dark':'light'):mode;document.documentElement.dataset.theme=resolved;document.documentElement.dataset.themeMode=mode;})();
+			</script>
+			<script src="/assets/htmx.min.js"></script>
+			<link rel="stylesheet" href="/assets/app.css"/>
+		</head>
+		<body>
+			<div class="app-shell">
+				<aside class="sidebar">
+					<a class="brand" href="/">
+						<span>PicoClip</span>
+						<small>agent control plane</small>
+					</a>
+					<nav>
+						<a class={ templ.KV("active", active == "dashboard") } href="/">Dashboard</a>
+						<a class={ templ.KV("active", active == "projects") } href="/projects">Projects</a>
+						<a class={ templ.KV("active", active == "agents") } href="/agents">Agents</a>
+						<a class={ templ.KV("active", active == "tasks") } href="/tasks">Tasks</a>
+						<a class={ templ.KV("active", active == "skills") } href="/skills">Skills</a>
+						<a class={ templ.KV("active", active == "activity") } href="/activity">Activity</a>
+						<a class={ templ.KV("active", active == "settings") } href="/settings/adapters">Settings</a>
+					</nav>
+					<div class="sidebar-footer">
+						<label for="theme-select">Tema</label>
+						<select id="theme-select" class="theme-select" aria-label="Tema">
+							<option value="system">Sistema</option>
+							<option value="light">Claro</option>
+							<option value="dark">Escuro</option>
+						</select>
+					</div>
+				</aside>
+				<main class="main">
+					<header class="page-header">
+						<div>
+							<p class="eyebrow">{ active }</p>
+							<h1>{ title }</h1>
+							<p>{ subtitle }</p>
+						</div>
+						<div class="page-action">
+							if action != nil {
+								@action
+							}
+						</div>
+					</header>
+					{ children... }
+					<div id="toast-root" class="toast-root" aria-live="polite"></div>
+					<script>
+						(function(){
+							function resolveTheme(mode){ var dark=window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches; return mode==='system'?(dark?'dark':'light'):mode; }
+							function applyTheme(mode){ localStorage.setItem('picoclip.theme', mode); document.documentElement.dataset.themeMode=mode; document.documentElement.dataset.theme=resolveTheme(mode); var select=document.getElementById('theme-select'); if(select) select.value=mode; }
+							function toast(message, type){
+								var root = document.getElementById('toast-root');
+								if(!root) return;
+								var el = document.createElement('div');
+								el.className = 'toast ' + (type || 'success');
+								el.textContent = message;
+								root.appendChild(el);
+								setTimeout(function(){ el.classList.add('show'); }, 10);
+								setTimeout(function(){ el.classList.remove('show'); setTimeout(function(){ el.remove(); }, 180); }, 2600);
+							}
+							window.picoclipToast = toast;
+							window.picoclipApplyTheme = applyTheme;
+							applyTheme(localStorage.getItem('picoclip.theme') || 'system');
+							var select = document.getElementById('theme-select');
+							if(select){ select.addEventListener('change', function(){ applyTheme(select.value); toast('Tema atualizado.', 'success'); }); }
+							if(window.matchMedia){ window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', function(){ if((localStorage.getItem('picoclip.theme')||'system')==='system') applyTheme('system'); }); }
+							function syncModalState(){ document.body.classList.toggle('modal-open', !!document.querySelector('.modal-backdrop:not([hidden])')); }
+							function openModal(id){ var modal=document.querySelector('[data-modal="'+id+'"]'); if(modal){ modal.hidden=false; syncModalState(); var focus=modal.querySelector('input, textarea, select, button'); if(focus) focus.focus(); } }
+							function closeModal(id){ var modal=document.querySelector('[data-modal="'+id+'"]'); if(modal){ modal.hidden=true; syncModalState(); } }
+							document.body.addEventListener('click', function(evt){
+								var open = evt.target.closest('[data-open-modal]');
+								if(open) openModal(open.dataset.openModal);
+								var close = evt.target.closest('[data-close-modal]');
+								if(close) closeModal(close.dataset.closeModal);
+								if(evt.target.classList && evt.target.classList.contains('modal-backdrop')){ evt.target.hidden=true; syncModalState(); }
+								var option = evt.target.closest('[data-agent-option]');
+								if(option){ var picker=option.closest('[data-agent-picker]'); picker.querySelector('[data-agent-value]').value=option.dataset.agentId; picker.querySelector('.agent-search').value=option.querySelector('strong').textContent; picker.querySelectorAll('[data-agent-option]').forEach(function(x){x.classList.remove('selected')}); option.classList.add('selected'); }
+							});
+							document.body.addEventListener('input', function(evt){
+								if(evt.target.classList && evt.target.classList.contains('agent-search')){ var q=evt.target.value.toLowerCase(); var picker=evt.target.closest('[data-agent-picker]'); picker.querySelectorAll('[data-agent-option]').forEach(function(option){ option.hidden = q && option.dataset.agentSearch.indexOf(q) === -1; }); }
+							});
+							document.addEventListener('keydown', function(evt){ if(evt.key==='Escape'){ document.querySelectorAll('.modal-backdrop').forEach(function(m){m.hidden=true}); syncModalState(); } });
+							document.body.addEventListener('htmx:beforeRequest', function(evt){
+								var verb = (evt.detail.requestConfig && evt.detail.requestConfig.verb || '').toUpperCase();
+								if(verb === 'GET' && document.body.classList.contains('modal-open')){ evt.preventDefault(); return; }
+								var form = evt.target;
+								var button = form && form.querySelector ? form.querySelector('button[type="submit"]') : null;
+								if(button){ button.dataset.originalText = button.textContent; button.textContent = button.dataset.loadingText || 'Salvando...'; button.disabled = true; }
+								if(form && form.classList) form.classList.add('is-loading');
+							});
+							document.body.addEventListener('htmx:afterRequest', function(evt){
+								var method = (evt.detail.requestConfig && evt.detail.requestConfig.verb || '').toUpperCase();
+								var successful = evt.detail.successful;
+								var form = evt.target;
+								var button = form && form.querySelector ? form.querySelector('button[type="submit"]') : null;
+								if(button){ button.disabled = false; button.textContent = button.dataset.originalText || button.textContent; }
+								if(form && form.classList) form.classList.remove('is-loading');
+								if(method && method !== 'GET') toast(successful ? (form.dataset.success || 'Alteração salva com sucesso.') : 'Falha ao salvar alteração.', successful ? 'success' : 'error');
+							});
+						})();
+					</script>
+				</main>
+			</div>
+		</body>
+	</html>
+}

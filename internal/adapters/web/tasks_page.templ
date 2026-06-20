@@ -1,0 +1,26 @@
+package web
+
+import "picoclip/internal/core/domain"
+
+templ TasksPage(tasks []taskResponse, agents []domain.Agent, projects []domain.Workspace) {
+	@PageShell("tasks", "Tasks", "Fila de trabalho, execução e delegação entre agentes.", tasksAction()) {
+		<section class="panel">
+			<div class="filter-row">
+				<a href="/tasks">Todas</a>
+				<a href="/tasks?status=todo">To-do</a>
+				<a href="/tasks?status=in_progress">In progress</a>
+				<a href="/tasks?status=in_review">In review</a>
+				<a href="/tasks?status=blocked">Blocked</a>
+				<a href="/tasks?status=done">Done</a>
+			</div>
+			<div hx-get="/partials/tasks" hx-trigger="every 2s" hx-swap="innerHTML">
+				@TaskTable(tasks, agents, projects)
+			</div>
+		</section>
+		@TaskModal("task-create-modal", "", projects, agents)
+	}
+}
+
+templ tasksAction() {
+	<button class="button" type="button" data-open-modal="task-create-modal">Nova task</button>
+}

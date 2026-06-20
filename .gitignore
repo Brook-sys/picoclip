@@ -1,0 +1,26 @@
+# OS / Editor
+.DS_Store
+.idea/
+.vscode/
+
+# Build and Binaries
+/picoclip
+/bin/
+
+# Templ generated code
+*_templ.go
+
+# Temp files
+tmp/
+.air/
+*.swp
+
+# Node / Playwright
+node_modules/
+playwright-report/
+test-results/
+
+# PicoClip specific
+/.crush/
+/workspaces/*
+!/workspaces/.gitkeep

@@ -1,0 +1,51 @@
+package web
+
+import (
+	"picoclip/internal/core/domain"
+)
+
+templ ProjectsPage(projects []domain.Workspace, agents []domain.Agent, tasks []taskResponse, skills []domain.Skill) {
+	@PageShell("projects", "Projetos", "Workspaces isolados com agentes, tasks e skills próprias.", projectsAction()) {
+		<section class="panel">
+			<table>
+				<thead>
+					<tr>
+						<th>Projeto</th>
+						<th>Agentes</th>
+						<th>Tasks</th>
+						<th>Skills</th>
+						<th>Path</th>
+					</tr>
+				</thead>
+				<tbody>
+					for _, project := range projects {
+						<tr>
+							<td>
+								<a class="primary-link" href={ templ.URL("/projects/" + project.ID) }>{ project.Name }</a>
+								<small>{ project.Description }</small>
+							</td>
+							<td>{ countAgentsForProject(agents, project.ID) }</td>
+							<td>{ countTasksForProject(tasks, project.ID) }</td>
+							<td>{ countSkillsForProject(skills, project.ID) }</td>
+							<td><code>{ project.RootPath }</code></td>
+						</tr>
+					}
+					if len(projects) == 0 {
+						<tr><td colspan="5" class="empty">Nenhum projeto criado.</td></tr>
+					}
+				</tbody>
+			</table>
+		</section>
+	}
+}
+
+templ projectsAction() {
+	<details class="action-menu">
+		<summary>Novo projeto</summary>
+		<form hx-post="/projects" hx-target="body" hx-swap="outerHTML" class="popover-form">
+			<input name="name" placeholder="Nome" required/>
+			<textarea name="description" placeholder="Descrição"></textarea>
+			<button type="submit">Criar</button>
+		</form>
+	</details>
+}

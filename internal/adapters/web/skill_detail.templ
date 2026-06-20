@@ -1,0 +1,120 @@
+package web
+
+import "picoclip/internal/core/domain"
+import "fmt"
+
+templ SkillDetailPage(skill domain.Skill, projects []domain.Workspace, agents []domain.Agent) {
+	@PageShell("skills", skill.Name, skill.Description, skillDetailAction()) {
+		<section class="detail-grid">
+			<div class="main-column">
+				<div class="panel">
+					<h2>Edição</h2>
+					<form hx-post={ "/skills/" + skill.ID + "/edit" } data-success="Skill atualizada." hx-target="body" hx-swap="outerHTML" class="stacked">
+						<input name="name" value={ skill.Name } required/>
+						<input name="description" value={ skill.Description }/>
+						<textarea name="instructions" required>{ skill.Instructions }</textarea>
+						<label class="check-row">
+							<input type="checkbox" name="enabled" checked?={ skill.Enabled }/>
+							<span>
+								<strong>Habilitada</strong>
+								<small>Agentes podem carregar esta skill</small>
+							</span>
+						</label>
+						<button type="submit">Salvar alterações</button>
+					</form>
+				</div>
+				<div class="panel">
+					<h2>Arquivos</h2>
+					if len(skill.Files) == 0 {
+						<p class="empty">Nenhum arquivo.</p>
+					}
+					for _, file := range skill.Files {
+						<article class="file-block">
+							<strong>{ file.Path }</strong>
+							<pre>{ file.Content }</pre>
+						</article>
+					}
+				</div>
+			</div>
+			<aside class="side-column">
+				<div class="panel">
+					<h2>Propriedades</h2>
+					<dl>
+						<dt>ID</dt>
+						<dd><code>{ skill.ID }</code></dd>
+						<dt>Slug</dt>
+						<dd>{ skill.Slug }</dd>
+						<dt>Tipo</dt>
+						<dd>{ string(skill.Kind) }</dd>
+						<dt>Permissão</dt>
+						<dd>{ string(skill.Permission) }</dd>
+						<dt>Projeto</dt>
+						<dd>{ projectName(projects, skill.ProjectID) }</dd>
+						<dt>Modificada</dt>
+						<dd>{ fmt.Sprintf("%t", skill.IsModified) }</dd>
+						<dt>Agentes usando</dt>
+						<dd>{ fmt.Sprintf("%d", countAgentsUsingSkill(agents, skill.ID)) }</dd>
+					</dl>
+				</div>
+				<div class="panel">
+					<h2>Agentes autorizados</h2>
+					@SkillAgentForm(skill, agents)
+				</div>
+				if skill.Kind == domain.SkillKindBuiltin {
+					<div class="panel">
+						<form hx-post={ "/skills/" + skill.ID + "/reset" } hx-confirm="Resetar esta skill para o padrão? Alterações locais serão perdidas." data-success="Skill resetada para o padrão." hx-target="body" hx-swap="outerHTML">
+							<button type="submit">Resetar skill padrão</button>
+						</form>
+					</div>
+				}
+				if skill.Kind == domain.SkillKindCustom {
+					<div class="panel">
+						<form hx-post={ "/skills/" + skill.ID + "/delete" } hx-confirm="Excluir esta skill? Essa ação não pode ser desfeita." data-success="Skill excluída." hx-target="body" hx-swap="outerHTML">
+							<button class="danger" type="submit">Excluir skill</button>
+						</form>
+					</div>
+				}
+			</aside>
+		</section>
+	}
+}
+
+templ skillDetailAction() {
+	<a class="button secondary" href="/skills">Voltar</a>
+}
+
+templ SkillAgentForm(skill domain.Skill, agents []domain.Agent) {
+	<form hx-post={ "/skills/" + skill.ID + "/agents" } data-success="Agentes da skill atualizados." hx-target="body" hx-swap="outerHTML" class="stacked permission-list">
+		if len(agents) == 0 {
+			<p class="empty">Nenhum agente criado.</p>
+		}
+		for _, agent := range agents {
+			<label class="check-row">
+				<input type="checkbox" name="agent_ids" value={ agent.ID } checked?={ skillAgentChecked(skill, agent) } disabled?={ skillAgentDisabled(skill, agent) }/>
+				<span>
+					<strong>{ agent.Name }</strong>
+					<small>{ string(agent.Type) + " · " + fmt.Sprintf("%d", len(agent.Permissions)) + " permissões" + skillAgentInheritedText(skill, agent) }</small>
+				</span>
+			</label>
+		}
+		<button type="submit">Salvar agentes</button>
+	</form>
+}
+
+func skillAgentChecked(skill domain.Skill, agent domain.Agent) bool {
+	return skillHasAgent(skill, agent.ID) || agentHasSkill(agent, skill.ID) || skillAllowedForAgent(skill, agent)
+}
+
+func skillAgentDisabled(skill domain.Skill, agent domain.Agent) bool {
+	return agentHasSkill(agent, skill.ID) || (skillAllowedForAgent(skill, agent) && !skillHasAgent(skill, agent.ID))
+}
+
+func skillAgentInheritedText(skill domain.Skill, agent domain.Agent) string {
+	if agentHasSkill(agent, skill.ID) {
+		return " 🔒 Atribuída no agente"
+	}
+	if skillAllowedForAgent(skill, agent) && !skillHasAgent(skill, agent.ID) {
+		return " 🔒 Herdada por tipo/permissão"
+	}
+	return ""
+}

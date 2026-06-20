@@ -1,0 +1,113 @@
+package web
+
+import (
+	"strings"
+
+	"picoclip/internal/core/domain"
+	"picoclip/internal/core/services"
+)
+
+templ AgentQuickModal(id string, agents []domain.Agent) {
+	<div class="modal-backdrop" data-modal={ id } hidden>
+		<div class="modal-card">
+			<button class="modal-close" type="button" data-close-modal={ id }>×</button>
+			<h2>Novo agente</h2>
+			<form method="post" action="/agents" class="stacked">
+				<input name="name" placeholder="Nome" required/>
+				<input name="title" placeholder="Título / Cargo"/>
+				@AgentPicker(agents, "reports_to_id", "", "Responde a...")
+				<textarea name="tags" placeholder="Tags, uma por linha"></textarea>
+				<select name="type">
+					<option value="crush">Crush</option>
+					<option value="noop">Noop</option>
+				</select>
+				<select name="permission_preset">
+					@PermissionPresetOptions(nil)
+				</select>
+				<button type="submit">Criar agente</button>
+				<a class="button secondary" href="/agents/new">Configuração avançada</a>
+			</form>
+		</div>
+	</div>
+}
+
+templ TaskModal(id string, projectID string, projects []domain.Workspace, agents []domain.Agent) {
+	<div class="modal-backdrop" data-modal={ id } hidden>
+		<div class="modal-card">
+			<button class="modal-close" type="button" data-close-modal={ id }>×</button>
+			<h2>Nova task</h2>
+			<form hx-post="/tasks" hx-target="body" hx-swap="outerHTML" data-success="Task criada." class="stacked">
+				if projectID != "" {
+					<input type="hidden" name="project_id" value={ projectID }/>
+					<p class="muted">Task vinculada ao projeto.</p>
+				} else {
+					@ProjectSelect(projects, "Sem projeto", "")
+				}
+				@AgentPicker(agents, "agent_id", "", "Buscar agente por nome, cargo ou tag...")
+				<textarea name="prompt" placeholder="Objetivo, contexto e critérios de aceite" required></textarea>
+				<button type="submit">Criar task</button>
+			</form>
+		</div>
+	</div>
+}
+
+templ SkillModal(id string, projects []domain.Workspace) {
+	<div class="modal-backdrop" data-modal={ id } hidden>
+		<div class="modal-card">
+			<button class="modal-close" type="button" data-close-modal={ id }>×</button>
+			<h2>Nova skill</h2>
+			<p class="muted">Skills seguem o formato Agent Skills: instruções principais e arquivos opcionais.</p>
+			<form hx-post="/skills" hx-target="body" hx-swap="outerHTML" data-success="Skill criada." class="stacked">
+				@ProjectSelect(projects, "Global", "")
+				<input name="name" placeholder="Nome" required/>
+				<input name="description" placeholder="Descrição"/>
+				<textarea name="instructions" placeholder="Instruções principais" required></textarea>
+				<input name="file_path" placeholder="Arquivo opcional"/>
+				<textarea name="file_content" placeholder="Conteúdo do arquivo opcional"></textarea>
+				<button type="submit">Criar skill</button>
+			</form>
+		</div>
+	</div>
+}
+
+templ AgentPicker(agents []domain.Agent, fieldName string, selectedID string, placeholder string) {
+	<div class="agent-picker" data-agent-picker>
+		<input class="agent-search" type="search" placeholder={ placeholder } autocomplete="off"/>
+		<input type="hidden" name={ fieldName } value={ selectedID } data-agent-value/>
+		<div class="agent-options">
+			for _, agent := range agents {
+				<button type="button" class={ agentOptionClass(agent.ID, selectedID) } data-agent-option data-agent-id={ agent.ID } data-agent-search={ agentSearchText(agent) }>
+					<strong>{ agent.Name }</strong>
+					<small>{ agent.Title } · { string(agent.Type) }</small>
+					<span>@TagChips(agent.Tags)</span>
+				</button>
+			}
+		</div>
+	</div>
+}
+
+templ ProjectSelect(projects []domain.Workspace, emptyLabel string, selected string) {
+	<select name="project_id">
+		<option value="">{ emptyLabel }</option>
+		for _, project := range projects {
+			<option value={ project.ID } selected?={ project.ID == selected }>{ project.Name }</option>
+		}
+	</select>
+}
+
+templ PermissionPresetOptions(selected []domain.AgentPermission) {
+	for _, preset := range services.PermissionPresets() {
+		<option value={ preset.ID } selected?={ preset.ID == matchingPermissionPreset(selected) }>{ preset.Name + " — " + preset.Description }</option>
+	}
+}
+
+func agentOptionClass(agentID string, selectedID string) string {
+	if agentID == selectedID {
+		return "agent-option selected"
+	}
+	return "agent-option"
+}
+
+func agentSearchText(agent domain.Agent) string {
+	return strings.ToLower(strings.Join([]string{agent.Name, agent.Title, agent.Description, string(agent.Type), strings.Join(agent.Tags, " ")}, " "))
+}

@@ -1,0 +1,40 @@
+package web
+
+import "picoclip/internal/core/domain"
+
+templ SkillsPage(skills []domain.Skill, projects []domain.Workspace, agents []domain.Agent) {
+	@PageShell("skills", "Skills", "Pacotes de contexto e instrução atribuíveis aos agentes.", skillsAction()) {
+		<section class="panel">
+			<table>
+				<thead>
+					<tr>
+						<th>Skill</th>
+						<th>Tipo</th>
+						<th>Escopo</th>
+						<th>Arquivos</th>
+						<th>Agentes</th>
+					</tr>
+				</thead>
+				<tbody>
+					for _, skill := range skills {
+						<tr>
+							<td>
+								<a class="primary-link" href={ templ.URL("/skills/" + skill.ID) }>{ skill.Name }</a>
+								<small>{ skill.Description }</small>
+							</td>
+							<td><span class="badge">{ string(skill.Kind) }</span></td>
+							<td>{ projectName(projects, skill.ProjectID) }</td>
+							<td>{ len(skill.Files) }</td>
+							<td>{ countSkillAgents(skill, agents) }</td>
+						</tr>
+					}
+				</tbody>
+			</table>
+		</section>
+		@SkillModal("skill-create-modal", projects)
+	}
+}
+
+templ skillsAction() {
+	<button class="button" type="button" data-open-modal="skill-create-modal">Nova skill</button>
+}

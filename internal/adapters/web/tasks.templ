@@ -1,0 +1,136 @@
+package web
+
+import (
+	"fmt"
+	"strings"
+
+	"picoclip/internal/core/domain"
+)
+
+templ TaskTable(tasks []taskResponse, agents []domain.Agent, projects []domain.Workspace) {
+	<table>
+		<thead>
+			<tr>
+				<th>Task</th>
+				<th>Status</th>
+				<th>Agente</th>
+				<th>Projeto</th>
+				<th>Atualizada</th>
+			</tr>
+		</thead>
+		<tbody>
+			if len(tasks) == 0 {
+				<tr><td colspan="5" class="empty">Nenhuma task.</td></tr>
+			}
+			for _, task := range tasks {
+				<tr>
+					<td>
+						<a class="primary-link" href={ templ.URL("/tasks/" + task.ID) }>{ task.ID }</a>
+						<small>{ taskExcerpt(task.Prompt) }</small>
+					</td>
+					<td><span class={ "status " + statusClass(task.Status) }>{ string(task.Status) }</span></td>
+					<td>{ agentName(agents, task.AgentID) }</td>
+					<td>{ projectName(projects, task.ProjectID) }</td>
+					<td>{ task.UpdatedAt }</td>
+				</tr>
+			}
+		</tbody>
+	</table>
+}
+
+templ TaskLive(task taskResponse, messages []domain.Message, runs []domain.Run, events []domain.Event, children []taskResponse, agents []domain.Agent, projects []domain.Workspace) {
+	if task.Response != "" {
+		<div class="panel">
+			<h2>Output</h2>
+			<pre>{ task.Response }</pre>
+		</div>
+	}
+	<div class="panel">
+		<h2>Mensagens</h2>
+		@Messages(messages)
+	</div>
+	<div class="panel">
+		<h2>Subtasks</h2>
+		@TaskTable(children, agents, projects)
+	</div>
+	<div class="panel">
+		<h2>Runs</h2>
+		@Runs(runs)
+	</div>
+	<div class="panel">
+		<h2>Timeline</h2>
+		@EventTimeline(events)
+	</div>
+}
+
+templ Messages(messages []domain.Message) {
+	if len(messages) == 0 {
+		<p class="empty">Nenhuma mensagem.</p>
+	}
+	for _, message := range messages {
+		<article class="message">
+			<strong>{ string(message.Role) }</strong>
+			<p>{ message.Body }</p>
+			<small>{ message.CreatedAt.Format("2006-01-02 15:04:05") }</small>
+		</article>
+	}
+}
+
+templ Runs(runs []domain.Run) {
+	<div class="run-list">
+		if len(runs) == 0 {
+			<p class="empty">Nenhum run.</p>
+		}
+		for _, run := range runs {
+			<article class="run">
+				<div class="section-header">
+					<strong>{ run.ID }</strong>
+					<span class={ "status " + statusClass(domain.TaskStatus(run.Status)) }>{ string(run.Status) }</span>
+				</div>
+				<small>{ fmt.Sprintf("attempt %d · %s", run.Attempt, run.StartedAt.Format("2006-01-02 15:04:05")) }</small>
+				if run.Output != "" {
+					<pre>{ run.Output }</pre>
+				}
+				if run.Error != "" {
+					<pre>{ run.Error }</pre>
+				}
+			</article>
+		}
+	</div>
+}
+
+templ EventTimeline(events []domain.Event) {
+	<div class="timeline">
+		if len(events) == 0 {
+			<p class="empty">Nenhum evento.</p>
+		}
+		for _, event := range events {
+			<article>
+				<span></span>
+				<div>
+					<strong>{ string(event.Type) }</strong>
+					<p>{ event.Message }</p>
+					<small>{ event.CreatedAt.Format("2006-01-02 15:04:05") }</small>
+				</div>
+			</article>
+		}
+	</div>
+}
+
+templ TagChips(tags []string) {
+	for _, tag := range tags {
+		<span class="tag">{ tag }</span>
+	}
+}
+
+templ TagChipsHTML(tags []string) {
+	@TagChips(tags)
+}
+
+func taskExcerpt(prompt string) string {
+	prompt = strings.TrimSpace(prompt)
+	if len(prompt) > 120 {
+		return prompt[:120] + "..."
+	}
+	return prompt
+}

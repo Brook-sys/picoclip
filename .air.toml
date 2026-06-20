@@ -1,0 +1,28 @@
+root = "."
+tmp_dir = "tmp"
+
+[build]
+cmd = "make build-dev"
+bin = "./tmp/picoclip"
+full_bin = "BIND=${BIND:-0.0.0.0} PORT=${PORT:-8080} ./tmp/picoclip"
+include_ext = ["go", "templ", "css", "html", "js"]
+exclude_dir = ["tmp", "workspaces", ".crush", "node_modules", "e2e/test-results", "e2e/playwright-report"]
+include_dir = ["cmd", "internal", "docs"]
+exclude_regex = ["_test.go"]
+stop_on_error = true
+send_interrupt = true
+kill_delay = "500ms"
+rerun = false
+rerun_delay = 500
+
+[log]
+time = true
+
+[color]
+main = "magenta"
+watcher = "cyan"
+build = "yellow"
+runner = "green"
+
+[misc]
+clean_on_exit = true

@@ -1,0 +1,35 @@
+package web
+
+templ SettingsAdaptersPage(settings map[string]map[string]string) {
+	@PageShell("settings", "Settings", "Configurações globais de adaptadores e variáveis de ambiente.", nil) {
+		<section class="detail-grid">
+			<div class="main-column">
+				<div class="panel">
+					<h2>Crush Driver</h2>
+					<form hx-post="/settings/adapters" hx-target="body" hx-swap="outerHTML" data-success="Configuração salva." class="stacked">
+						<input type="hidden" name="adapter" value="crush"/>
+						<label>Binary Path</label>
+						<input name="binary_path" value={ adapterSetting(settings, "crush", "binary_path") } placeholder="$HOME/crush/crush"/>
+						<label>Default Args</label>
+						<input name="default_args" value={ adapterSetting(settings, "crush", "default_args") }/>
+						<label>Timeout</label>
+						<input name="timeout" value={ adapterSetting(settings, "crush", "timeout") }/>
+						<label>CWD Strategy</label>
+						<select name="cwd_strategy">
+							<option value="project" selected?={ adapterSetting(settings, "crush", "cwd_strategy") == "project" }>Raiz do Projeto</option>
+							<option value="current" selected?={ adapterSetting(settings, "crush", "cwd_strategy") == "current" }>Diretório Atual</option>
+						</select>
+						<button type="submit">Salvar Crush</button>
+					</form>
+				</div>
+			</div>
+		</section>
+	}
+}
+
+func adapterSetting(settings map[string]map[string]string, adapter string, key string) string {
+	if settings == nil || settings[adapter] == nil {
+		return ""
+	}
+	return settings[adapter][key]
+}

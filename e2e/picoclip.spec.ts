@@ -1,0 +1,100 @@
+import { expect, test } from '@playwright/test';
+
+test.describe('PicoClip smoke UI', () => {
+  test('loads primary pages without console or HTTP errors', async ({ page }) => {
+    const consoleErrors: string[] = [];
+    const failedRequests: string[] = [];
+
+    page.on('console', (message) => {
+      if (message.type() === 'error') consoleErrors.push(message.text());
+    });
+    page.on('requestfailed', (request) => failedRequests.push(`${request.method()} ${request.url()}`));
+
+    for (const path of ['/', '/projects', '/agents', '/tasks', '/skills', '/activity', '/settings/adapters']) {
+      const response = await page.goto(path);
+      expect(response?.ok(), `${path} should return 2xx`).toBeTruthy();
+      await expect(page.locator('main')).toBeVisible();
+    }
+
+    expect(consoleErrors).toEqual([]);
+    expect(failedRequests).toEqual([]);
+  });
+
+  test('creates agent and task, keeps task detail stable during htmx polling', async ({ page }) => {
+    const consoleErrors: string[] = [];
+    page.on('console', (message) => {
+      if (message.type() === 'error') consoleErrors.push(message.text());
+    });
+
+    const agentName = `E2E Agent ${Date.now()}`;
+
+    await page.goto('/agents');
+    await page.getByRole('button', { name: 'Novo agente' }).click();
+    await page.locator('[data-modal="agent-quick-modal"]').getByPlaceholder('Nome').fill(agentName);
+    await page.locator('[data-modal="agent-quick-modal"] select[name="type"]').selectOption('noop');
+    await page.locator('[data-modal="agent-quick-modal"]').getByRole('button', { name: 'Criar agente' }).click();
+    await expect(page.getByRole('heading', { name: agentName })).toBeVisible();
+
+    await page.goto('/tasks');
+    await page.getByRole('button', { name: 'Nova task' }).click();
+    const taskModal = page.locator('[data-modal="task-create-modal"]');
+    await taskModal.locator('.agent-search').fill(agentName);
+    await taskModal.locator('[data-agent-option]').first().click();
+    const taskPrompt = `Validate task detail polling stability ${Date.now()}`;
+    await taskModal.getByPlaceholder('Objetivo, contexto e critérios de aceite').fill(taskPrompt);
+    await taskModal.getByRole('button', { name: 'Criar task' }).click();
+    await expect(page.getByText(taskPrompt).first()).toBeVisible();
+
+    await page.getByRole('row').filter({ hasText: taskPrompt }).getByRole('link', { name: /^tsk_/ }).click();
+    await expect(page.locator('#task-live')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Acordar agente' })).toBeVisible();
+    await page.waitForTimeout(3500);
+    await expect(page.getByRole('button', { name: 'Acordar agente' })).toBeVisible();
+    await expect(page.locator('#task-live')).toBeVisible();
+
+    const commentBody = `Please revise with more detail ${Date.now()}.`;
+    await page.getByPlaceholder('Adicionar contexto ou comando').fill(commentBody);
+    await page.getByRole('button', { name: 'Enviar mensagem' }).click();
+    await expect(page.locator('#task-live article.message').filter({ hasText: commentBody })).toBeVisible();
+
+    expect(consoleErrors).toEqual([]);
+  });
+
+  test('agent API exposes Paperclip-like task workflow', async ({ request }) => {
+    const agentResponse = await request.post('/api/agents', {
+      data: { name: `API Agent ${Date.now()}`, type: 'noop' },
+    });
+    expect(agentResponse.ok()).toBeTruthy();
+    const agent = await agentResponse.json();
+
+    const taskResponse = await request.post('/agent-api/tasks', {
+      data: { assignee_agent_id: agent.id, prompt: 'API lifecycle task' },
+    });
+    expect(taskResponse.ok()).toBeTruthy();
+    const task = await taskResponse.json();
+    expect(task.status).toBe('todo');
+
+    const checkoutResponse = await request.post(`/agent-api/tasks/${task.id}/checkout`, {
+      data: { agent_id: agent.id, expected_statuses: ['todo'] },
+    });
+    expect(checkoutResponse.ok()).toBeTruthy();
+    expect((await checkoutResponse.json()).status).toBe('in_progress');
+
+    const blockedResponse = await request.patch(`/agent-api/tasks/${task.id}`, {
+      data: { agent_id: agent.id, status: 'blocked', comment: 'Blocked for E2E validation.' },
+    });
+    expect(blockedResponse.ok()).toBeTruthy();
+    expect((await blockedResponse.json()).status).toBe('blocked');
+
+    const commentResponse = await request.post(`/agent-api/tasks/${task.id}/comments`, {
+      data: { role: 'user', body: 'Unblocked, continue.' },
+    });
+    expect(commentResponse.ok()).toBeTruthy();
+
+    const detailResponse = await request.get(`/agent-api/tasks/${task.id}`);
+    expect(detailResponse.ok()).toBeTruthy();
+    const detail = await detailResponse.json();
+    expect(detail.task.status).toBe('todo');
+    expect(detail.messages.some((message: { body: string }) => message.body === 'Unblocked, continue.')).toBeTruthy();
+  });
+});

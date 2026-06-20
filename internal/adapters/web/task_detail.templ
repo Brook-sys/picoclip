@@ -1,0 +1,101 @@
+package web
+
+import "picoclip/internal/core/domain"
+import "fmt"
+
+templ TaskDetailPage(task taskResponse, rawTask domain.Task, agents []domain.Agent, projects []domain.Workspace, messages []domain.Message, runs []domain.Run, events []domain.Event, children []taskResponse) {
+	@PageShell("tasks", task.ID, "Task detail: conversa, execução, subtarefas e auditoria.", taskDetailAction()) {
+		<section class="detail-grid">
+			<div class="main-column">
+				<div class="panel">
+					<div class="section-header">
+						<h2>Prompt</h2>
+						<span class={ "status " + statusClass(task.Status) }>{ string(task.Status) }</span>
+					</div>
+					<p class="prompt">{ task.Prompt }</p>
+				</div>
+				<div id="task-live" hx-get={ "/partials/tasks/" + task.ID } hx-trigger="every 3s" hx-swap="innerHTML">
+					@TaskLive(task, messages, runs, events, children, agents, projects)
+				</div>
+				<div class="panel">
+					<h2>Responder</h2>
+					<form hx-post={ "/tasks/" + task.ID + "/messages" } hx-target="#task-live" hx-swap="innerHTML" class="stacked">
+						<input name="role" value="user" type="hidden"/>
+						<textarea name="body" placeholder="Adicionar contexto ou comando"></textarea>
+						<button type="submit">Enviar mensagem</button>
+					</form>
+				</div>
+			</div>
+			<aside class="side-column">
+				<div class="panel">
+					<h2>Propriedades</h2>
+					<dl>
+						<dt>Agente</dt>
+						<dd>{ agentName(agents, task.AgentID) }</dd>
+						<dt>Projeto</dt>
+						<dd>{ projectName(projects, task.ProjectID) }</dd>
+						<dt>Parent</dt>
+						<dd>{ task.ParentID }</dd>
+						<dt>Tentativas</dt>
+						<dd>{ fmt.Sprintf("%d/%d", rawTask.Attempts, rawTask.MaxAttempts) }</dd>
+						<dt>Criada</dt>
+						<dd>{ task.CreatedAt }</dd>
+						<dt>Atualizada</dt>
+						<dd>{ task.UpdatedAt }</dd>
+					</dl>
+				</div>
+				<div class="panel">
+					<h2>Status</h2>
+					<form hx-post={ "/tasks/" + task.ID + "/status" } hx-target="body" hx-swap="outerHTML" data-success="Status atualizado." class="stacked">
+						@TaskStatusSelect(task.Status)
+						<textarea name="comment" placeholder="Comentário obrigatório para done/blocked"></textarea>
+						<button type="submit">Atualizar status</button>
+					</form>
+					<form hx-post={ "/tasks/" + task.ID + "/wake" } hx-target="body" hx-swap="outerHTML" data-success="Agente acordado." class="stacked">
+						<button type="submit">Acordar agente</button>
+					</form>
+				</div>
+				<div class="panel">
+					<h2>Delegar</h2>
+					<form hx-post={ "/tasks/" + task.ID + "/delegate" } hx-target="body" hx-swap="outerHTML" class="stacked">
+						@AgentSelect(agents, "")
+						<textarea name="prompt" placeholder="Instrução da subtarefa"></textarea>
+						<button type="submit">Delegar</button>
+					</form>
+				</div>
+				<div class="panel">
+					<h2>Controle</h2>
+					<form hx-post={ "/tasks/" + task.ID + "/cancel" } hx-confirm="Cancelar esta task?" data-success="Task cancelada." hx-target="body" hx-swap="outerHTML" class="stacked">
+						<input name="reason" placeholder="Motivo"/>
+						<button class="danger" type="submit">Cancelar task</button>
+					</form>
+				</div>
+			</aside>
+		</section>
+	}
+}
+
+templ taskDetailAction() {
+	<a class="button secondary" href="/tasks">Voltar</a>
+}
+
+templ TaskStatusSelect(selected domain.TaskStatus) {
+	<select name="status">
+		for _, status := range taskStatuses() {
+			<option value={ string(status) } selected?={ status == selected }>{ string(status) }</option>
+		}
+	</select>
+}
+
+templ AgentSelect(agents []domain.Agent, selected string) {
+	<select name="agent_id">
+		<option value="">Selecione agente</option>
+		for _, agent := range agents {
+			<option value={ agent.ID } selected?={ agent.ID == selected }>{ agent.Name + " — " + agent.Title }</option>
+		}
+	</select>
+}
+
+func taskStatuses() []domain.TaskStatus {
+	return []domain.TaskStatus{domain.TaskStatusBacklog, domain.TaskStatusTodo, domain.TaskStatusInProgress, domain.TaskStatusInReview, domain.TaskStatusBlocked, domain.TaskStatusDone, domain.TaskStatusCancelled}
+}
