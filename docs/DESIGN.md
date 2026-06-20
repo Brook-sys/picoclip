@@ -89,6 +89,15 @@ Use:
 - `EntityRow` for compact linked lists.
 - `PropertyList` for detail rails.
 
+## Command Palette
+
+The shell includes a lightweight command palette:
+
+- open with `Ctrl+K` / `Cmd+K`;
+- search tasks, agents, projects, skills and quick commands;
+- results are powered by `/api/search`;
+- use Enter to navigate to the selected result.
+
 ## Interaction Patterns
 
 - Use HTMX for form submissions and partial refreshes.

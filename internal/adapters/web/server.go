@@ -44,6 +44,7 @@ func (s *Server) Mount(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/projects", s.handleGetProjects)
 	mux.HandleFunc("POST /api/projects", s.handleCreateProject)
 	mux.HandleFunc("GET /api/capabilities", s.handleGetCapabilities)
+	mux.HandleFunc("GET /api/search", s.handleAPISearch)
 	mux.HandleFunc("GET /agent-api/docs", s.handleAgentDocs)
 	mux.HandleFunc("GET /agent-api/me", s.handleAgentMe)
 	mux.HandleFunc("GET /agent-api/agents", s.handleGetAgents)

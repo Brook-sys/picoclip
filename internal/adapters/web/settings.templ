@@ -8,6 +8,8 @@ templ SettingsPage(view SettingsView) {
 			<aside class="side-column">
 				<nav class="side-nav">
 					<a class="nav-link" href="#general">General</a>
+					<a class="nav-link" href="#appearance">Appearance</a>
+					<a class="nav-link" href="#storage">Storage</a>
 					<a class="nav-link" href="#adapters">Adapters</a>
 					<a class="nav-link" href="#environment">Environment</a>
 					<a class="nav-link text-danger" href="#danger-zone">Danger Zone</a>
@@ -48,6 +50,31 @@ templ SettingsPage(view SettingsView) {
 						
 						<button type="submit">Save General</button>
 					</form>
+				</div>
+				
+				<div id="appearance" class="panel">
+					<h2>Appearance</h2>
+					<p class="muted">Visual defaults and interaction density.</p>
+					<div class="grid-cols-2">
+						<div class="card">
+							<strong>Current theme</strong>
+							<p class="muted">Controlled by the sidebar selector and saved locally in the browser.</p>
+						</div>
+						<div class="card">
+							<strong>Density</strong>
+							<p class="muted">Comfortable spacing is enabled. Compact density is planned.</p>
+						</div>
+					</div>
+				</div>
+				
+				<div id="storage" class="panel">
+					<h2>Storage</h2>
+					<p class="muted">Database and file management.</p>
+					@PropertyList() {
+						@PropertyItem("Driver", "SQLite (modernc.org/sqlite)")
+						@PropertyItem("Database Path", "data/picoclip.db")
+						@PropertyItem("Migrations", "Version 2 applied")
+					}
 				</div>
 				
 				<div id="adapters" class="panel">

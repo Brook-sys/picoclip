@@ -60,6 +60,16 @@ test.describe('PicoClip smoke UI', () => {
     expect(consoleErrors).toEqual([]);
   });
 
+  test('command palette searches and navigates', async ({ page }) => {
+    await page.goto('/');
+    await page.keyboard.press(process.platform === 'darwin' ? 'Meta+K' : 'Control+K');
+    await expect(page.getByPlaceholder('Type a command or search...')).toBeVisible();
+    await page.getByPlaceholder('Type a command or search...').fill('open settings');
+    await expect(page.locator('.command-item').filter({ hasText: 'Open Settings' })).toBeVisible();
+    await page.keyboard.press('Enter');
+    await expect(page).toHaveURL('/settings');
+  });
+
   test('agent API exposes Paperclip-like task workflow', async ({ request }) => {
     const agentResponse = await request.post('/api/agents', {
       data: { name: `API Agent ${Date.now()}`, type: 'noop' },

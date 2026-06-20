@@ -62,6 +62,7 @@ templ PageShell(active string, title string, subtitle string, action templ.Compo
 						</div>
 					</header>
 					{ children... }
+					@CommandPalette()
 					<div id="toast-root" class="toast-root" aria-live="polite"></div>
 					<script>
 						(function(){
@@ -116,6 +117,27 @@ templ PageShell(active string, title string, subtitle string, action templ.Compo
 								if(form && form.classList) form.classList.remove('is-loading');
 								if(method && method !== 'GET') toast(successful ? (form.dataset.success || 'Alteração salva com sucesso.') : 'Falha ao salvar alteração.', successful ? 'success' : 'error');
 							});
+
+							var palette = document.getElementById('command-palette-backdrop');
+							var commandInput = document.getElementById('command-input');
+							var commandResults = document.getElementById('command-results');
+							var commandIndex = -1;
+							var commandItems = [];
+							function openCommandPalette(){ if(!palette || !commandInput) return; palette.style.display='flex'; commandInput.value=''; commandResults.innerHTML='<div class="command-empty">Start typing to search tasks, agents, projects and commands.</div>'; commandIndex=-1; commandItems=[]; setTimeout(function(){commandInput.focus()}, 20); }
+							function closeCommandPalette(){ if(!palette) return; palette.style.display='none'; }
+							function renderCommandResults(items){ commandItems=items||[]; commandIndex=commandItems.length?0:-1; if(!commandResults) return; if(!commandItems.length){ commandResults.innerHTML='<div class="command-empty">No results found.</div>'; return; } commandResults.innerHTML=commandItems.map(function(item, i){ return '<a class="command-item '+(i===commandIndex?'active':'')+'" href="'+item.url+'"><span class="badge">'+item.type+'</span><strong>'+item.title+'</strong><small>'+((item.extra||item.id)||'')+'</small></a>'; }).join(''); }
+							function refreshCommandActive(){ if(!commandResults) return; commandResults.querySelectorAll('.command-item').forEach(function(el, i){ el.classList.toggle('active', i===commandIndex); if(i===commandIndex) el.scrollIntoView({block:'nearest'}); }); }
+							var searchTimer;
+							if(commandInput){ commandInput.addEventListener('input', function(){ clearTimeout(searchTimer); var q=commandInput.value.trim(); if(!q){ commandResults.innerHTML='<div class="command-empty">Start typing to search tasks, agents, projects and commands.</div>'; return; } searchTimer=setTimeout(function(){ fetch('/api/search?q='+encodeURIComponent(q)).then(function(r){return r.json()}).then(renderCommandResults).catch(function(){ commandResults.innerHTML='<div class="command-empty">Search failed.</div>'; }); }, 120); }); }
+							document.addEventListener('keydown', function(evt){
+								if((evt.metaKey || evt.ctrlKey) && evt.key.toLowerCase()==='k'){ evt.preventDefault(); openCommandPalette(); return; }
+								if(!palette || palette.style.display !== 'flex') return;
+								if(evt.key==='Escape'){ evt.preventDefault(); closeCommandPalette(); }
+								if(evt.key==='ArrowDown' && commandItems.length){ evt.preventDefault(); commandIndex=(commandIndex+1)%commandItems.length; refreshCommandActive(); }
+								if(evt.key==='ArrowUp' && commandItems.length){ evt.preventDefault(); commandIndex=(commandIndex-1+commandItems.length)%commandItems.length; refreshCommandActive(); }
+								if(evt.key==='Enter' && commandIndex>=0 && commandItems[commandIndex]){ evt.preventDefault(); window.location.href=commandItems[commandIndex].url; }
+							});
+							if(palette){ palette.addEventListener('click', function(evt){ if(evt.target===palette) closeCommandPalette(); }); }
 						})();
 					</script>
 				</main>
