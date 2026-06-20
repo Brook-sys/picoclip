@@ -96,7 +96,7 @@ templ SettingsPage(view SettingsView) {
 }
 
 templ ResetModal(id string) {
-	<div class="modal-backdrop" data-modal={ id } hidden>
+	<div class="modal-backdrop" data-modal={ id } hidden style="display: none;">
 		<div class="modal-card border-danger">
 			<button class="modal-close" type="button" data-close-modal={ id }>×</button>
 			<h2 class="text-danger">Reset All Data</h2>

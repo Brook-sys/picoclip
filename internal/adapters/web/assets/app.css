@@ -583,6 +583,10 @@ tr:hover td { background: var(--surface-hover); }
 .empty-state strong { display: block; margin-bottom: 4px; }
 .empty-state p { margin-bottom: 0; color: var(--muted); }
 
+.modal-backdrop[hidden] {
+  display: none !important;
+}
+
 .modal-backdrop {
   position: fixed;
   inset: 0;

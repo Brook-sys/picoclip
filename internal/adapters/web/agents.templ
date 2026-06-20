@@ -3,41 +3,50 @@ package web
 import "picoclip/internal/core/domain"
 
 templ AgentsPage(agents []domain.Agent, projects []domain.Workspace, tasks []taskResponse) {
-	@PageShell("agents", "Agentes", "Funcionários locais com perfis de permissão, skills e trabalho atribuído.", agentsAction()) {
+	@PageShell("agents", "Agents", "Local workers with drivers, skills, permissions and assigned workload.", agentsAction()) {
 		<section class="panel">
-			<div class="filter-row">
+			@SectionHeader("Agent Workforce", "Monitor available agents and their task load.") {}
+			<div class="stack-sm" style="margin-bottom: 16px;">
 				@TagFilterLinks(agents)
 			</div>
 			<div class="table-wrapper">
 				<table>
-				<thead>
-					<tr>
-						<th>Agente</th>
-						<th>Título</th>
-						<th>Tags</th>
-						<th>Driver</th>
-						<th>Permissões</th>
-						<th>Tasks</th>
-					</tr>
-				</thead>
-				<tbody>
-					if len(agents) == 0 {
-						<tr><td colspan="6" class="empty">Nenhum agente criado.</td></tr>
-					}
-					for _, agent := range agents {
+					<thead>
 						<tr>
-							<td>
-								<a class="primary-link" href={ templ.URL("/agents/" + agent.ID) }>{ agent.Name }</a>
-								<small>{ agent.Description }</small>
-							</td>
-							<td>{ agent.Title }</td>
-							<td>@TagChips(agentDisplayTags(agent, projects))</td>
-							<td>{ string(agent.Type) }</td>
-							<td><span class="badge">{ len(agent.Permissions) }</span></td>
-							<td>{ countTasksForAgent(tasks, agent.ID) }</td>
+							<th>Agent</th>
+							<th>Status</th>
+							<th>Role</th>
+							<th>Tags</th>
+							<th>Driver</th>
+							<th>Permissions</th>
+							<th>Tasks</th>
 						</tr>
-					}
-				</tbody>
+					</thead>
+					<tbody>
+						if len(agents) == 0 {
+							<tr><td colspan="7" class="empty">No agents created yet.</td></tr>
+						}
+						for _, agent := range agents {
+							<tr>
+								<td>
+									<a class="primary-link" href={ templ.URL("/agents/" + agent.ID) }>{ agent.Name }</a>
+									<small>{ agent.Description }</small>
+								</td>
+								<td>
+									if agent.Enabled {
+										@Badge("enabled", "good")
+									} else {
+										@Badge("disabled", "bad")
+									}
+								</td>
+								<td>{ agent.Title }</td>
+								<td>@TagChips(agentDisplayTags(agent, projects))</td>
+								<td>{ string(agent.Type) }</td>
+								<td><span class="badge">{ len(agent.Permissions) }</span></td>
+								<td>{ countTasksForAgent(tasks, agent.ID) }</td>
+							</tr>
+						}
+					</tbody>
 				</table>
 			</div>
 		</section>

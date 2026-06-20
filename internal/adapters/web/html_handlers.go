@@ -68,12 +68,16 @@ func (s *Server) handleWebRunDetail(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleWebDashboard(w http.ResponseWriter, r *http.Request) {
-	agents, tasks, projects, skills, ok := s.loadWebState(w, r)
+	agents, _, projects, _, ok := s.loadWebState(w, r)
 	if !ok {
 		return
 	}
-	events, _ := s.storage.Events().ListRecent(r.Context(), 12)
-	if err := DashboardPage(agents, tasks, projects, skills, events).Render(r.Context(), w); err != nil {
+	view, err := loadDashboardView(r.Context(), s, r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if err := DashboardPage(view, agents, projects).Render(r.Context(), w); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
 }
@@ -301,7 +305,7 @@ func (s *Server) handleWebTasks(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	if err := TasksPage(s.taskResponses(r, tasks), agents, projects).Render(r.Context(), w); err != nil {
+	if err := TasksPage(s.taskResponses(r, tasks), agents, projects, r.URL.Query().Get("status")).Render(r.Context(), w); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
 }

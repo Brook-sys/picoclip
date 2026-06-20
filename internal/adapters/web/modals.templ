@@ -8,7 +8,7 @@ import (
 )
 
 templ AgentQuickModal(id string, agents []domain.Agent) {
-	<div class="modal-backdrop" data-modal={ id } hidden>
+	<div class="modal-backdrop" data-modal={ id } hidden style="display: none;">
 		<div class="modal-card">
 			<button class="modal-close" type="button" data-close-modal={ id }>×</button>
 			<h2>Novo agente</h2>
@@ -32,7 +32,7 @@ templ AgentQuickModal(id string, agents []domain.Agent) {
 }
 
 templ TaskModal(id string, projectID string, projects []domain.Workspace, agents []domain.Agent) {
-	<div class="modal-backdrop" data-modal={ id } hidden>
+	<div class="modal-backdrop" data-modal={ id } hidden style="display: none;">
 		<div class="modal-card">
 			<button class="modal-close" type="button" data-close-modal={ id }>×</button>
 			<h2>Nova task</h2>
@@ -52,7 +52,7 @@ templ TaskModal(id string, projectID string, projects []domain.Workspace, agents
 }
 
 templ SkillModal(id string, projects []domain.Workspace) {
-	<div class="modal-backdrop" data-modal={ id } hidden>
+	<div class="modal-backdrop" data-modal={ id } hidden style="display: none;">
 		<div class="modal-card">
 			<button class="modal-close" type="button" data-close-modal={ id }>×</button>
 			<h2>Nova skill</h2>

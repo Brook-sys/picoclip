@@ -2,21 +2,26 @@ package web
 
 import "picoclip/internal/core/domain"
 
-templ TasksPage(tasks []taskResponse, agents []domain.Agent, projects []domain.Workspace) {
-	@PageShell("tasks", "Tasks", "Fila de trabalho, execução e delegação entre agentes.", tasksAction()) {
-		<section class="panel">
-			<div class="filter-row">
-				<a href="/tasks">Todas</a>
-				<a href="/tasks?status=todo">To-do</a>
-				<a href="/tasks?status=in_progress">In progress</a>
-				<a href="/tasks?status=in_review">In review</a>
-				<a href="/tasks?status=blocked">Blocked</a>
-				<a href="/tasks?status=done">Done</a>
-			</div>
-			<div hx-get="/partials/tasks" hx-trigger="every 2s" hx-swap="innerHTML">
-				@TaskTable(tasks, agents, projects)
-			</div>
-		</section>
+templ TasksPage(tasks []taskResponse, agents []domain.Agent, projects []domain.Workspace, activeTab string) {
+	@PageShell("tasks", "Tasks", "Issue-style queue for work, delegation, review and agent execution.", tasksAction()) {
+		<div class="stack">
+			@Tabs() {
+				@TabLink("All", "/tasks", activeTab == "" || activeTab == "all")
+				@TabLink("Todo", "/tasks?status=todo", activeTab == "todo")
+				@TabLink("In Progress", "/tasks?status=in_progress", activeTab == "in_progress")
+				@TabLink("Review", "/tasks?status=in_review", activeTab == "in_review")
+				@TabLink("Blocked", "/tasks?status=blocked", activeTab == "blocked")
+				@TabLink("Done", "/tasks?status=done", activeTab == "done")
+			}
+			<section class="panel">
+				@SectionHeader("Task Queue", "Filter and inspect all known work items.") {
+					<a class="button secondary" href="/runs">View runs</a>
+				}
+				<div hx-get="/partials/tasks" hx-trigger="every 2s" hx-swap="innerHTML">
+					@TaskTable(tasks, agents, projects)
+				</div>
+			</section>
+		</div>
 		@TaskModal("task-create-modal", "", projects, agents)
 	}
 }

@@ -1,41 +1,88 @@
 package web
 
 import (
+	"strconv"
+
 	"picoclip/internal/core/domain"
 )
 
-templ DashboardPage(agents []domain.Agent, tasks []taskResponse, projects []domain.Workspace, skills []domain.Skill, events []domain.Event) {
-	@PageShell("dashboard", "Dashboard", "Control plane local para agentes, workspaces e execução.", dashboardAction()) {
-		@DashboardBody(agents, tasks, projects, skills, events)
+templ DashboardPage(view DashboardView, agents []domain.Agent, projects []domain.Workspace) {
+	@PageShell("dashboard", "Dashboard", "System health and operational overview.", dashboardAction()) {
+		<section class="metrics">
+			<div class="metric-card"><span>{ strconv.Itoa(view.Stats.OpenTasks) }</span><p>Open Tasks</p></div>
+			<div class="metric-card info"><span>{ strconv.Itoa(view.Stats.RunningRuns) }</span><p>Active Runs</p></div>
+			<div class="metric-card warn"><span>{ strconv.Itoa(view.Stats.BlockedTasks) }</span><p>Blocked Tasks</p></div>
+			<div class="metric-card bad"><span>{ strconv.Itoa(view.Stats.FailedRuns) }</span><p>Failed Runs</p></div>
+		</section>
+
+		<section class="content-grid">
+			<div class="stack">
+				if len(view.NeedsAttention) > 0 {
+					<div class="panel border-danger">
+						<div class="section-header">
+							<h2 class="text-danger">Needs Attention</h2>
+						</div>
+						@TaskTable(view.NeedsAttention, agents, projects)
+					</div>
+				}
+				
+				<div class="panel">
+					<div class="section-header">
+						<h2>Currently Running</h2>
+						<a href="/runs">View all runs</a>
+					</div>
+					if len(view.CurrentlyRunning) > 0 {
+						<div class="table-wrapper">
+							<table>
+								<thead>
+									<tr>
+										<th>Run</th>
+										<th>Agent</th>
+										<th>Driver</th>
+										<th>Started</th>
+									</tr>
+								</thead>
+								<tbody>
+									for _, run := range view.CurrentlyRunning {
+										<tr>
+											<td><a class="primary-link" href={ templ.URL("/runs/" + run.ID) }>{ run.ID }</a></td>
+											<td><span class="badge">{ run.AgentID }</span></td>
+											<td>{ run.DriverType }</td>
+											<td><span class="status status-running pulse">running</span></td>
+										</tr>
+									}
+								</tbody>
+							</table>
+						</div>
+					} else {
+						@EmptyState("No active runs", "Agents are currently idle.") {}
+					}
+				</div>
+			</div>
+
+			<div class="stack">
+				<div class="card">
+					<h2>System Health</h2>
+					@PropertyList() {
+						@PropertyItem("Storage", view.SystemHealth.StorageDriver)
+						@PropertyItem("Agents Status", strconv.Itoa(view.SystemHealth.AgentsRunning) + " running / " + strconv.Itoa(view.SystemHealth.AgentsIdle) + " idle")
+						@PropertyItem("Last Event", view.SystemHealth.LastEventTime)
+					}
+				</div>
+
+				<div class="card">
+					<div class="section-header">
+						<h2>Recent Activity</h2>
+						<a href="/activity">View all</a>
+					</div>
+					@EventTimeline(view.RecentActivity)
+				</div>
+			</div>
+		</section>
 	}
 }
 
 templ dashboardAction() {
-	<a class="button" href="/tasks">Nova task</a>
+	<a class="button" href="/tasks">New Task</a>
 }
 
-templ DashboardBody(agents []domain.Agent, tasks []taskResponse, projects []domain.Workspace, skills []domain.Skill, events []domain.Event) {
-	{{ pending, running, succeeded, failed := countTasks(tasks) }}
-	<section class="metrics">
-		<div class="metric-card"><span>{ len(projects) }</span><p>Projetos</p></div>
-		<div class="metric-card"><span>{ len(agents) }</span><p>Agentes</p></div>
-		<div class="metric-card"><span>{ len(tasks) }</span><p>Tasks</p></div>
-		<div class="metric-card"><span>{ len(skills) }</span><p>Skills</p></div>
-	</section>
-	<section class="metrics compact">
-		<div class="metric-card warn"><span>{ pending }</span><p>Pendentes</p></div>
-		<div class="metric-card info"><span>{ running }</span><p>Rodando</p></div>
-		<div class="metric-card good"><span>{ succeeded }</span><p>Concluídas</p></div>
-		<div class="metric-card bad"><span>{ failed }</span><p>Atenção</p></div>
-	</section>
-	<section class="content-grid">
-		<div class="panel">
-			<div class="section-header"><h2>Trabalho recente</h2><a href="/tasks">Ver tasks</a></div>
-			@TaskTable(limitTasks(tasks, 6), agents, projects)
-		</div>
-		<div class="panel">
-			<div class="section-header"><h2>Atividade</h2><a href="/activity">Ver tudo</a></div>
-			@EventTimeline(limitEvents(events, 8))
-		</div>
-	</section>
-}

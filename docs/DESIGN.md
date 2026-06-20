@@ -53,6 +53,15 @@ Defined in `internal/adapters/web/ui.templ`:
 
 When adding UI, prefer composing these components before introducing new CSS.
 
+## Dashboard Pattern
+
+The dashboard should behave like an operational command center:
+
+- top row: open work, running runs, blocked work and failed executions;
+- left column: work that needs attention and active runs;
+- right column: system health and recent activity;
+- avoid hiding critical failures below the fold.
+
 ## Data Display
 
 Use:
