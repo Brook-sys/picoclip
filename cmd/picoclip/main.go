@@ -77,7 +77,7 @@ func main() {
 	_, _ = workspaceService.EnsureDefault(ctx)
 	skillService := services.NewSkillService(storage, clock, idGen)
 	_ = skillService.InstallBuiltins(ctx)
-	server := web.NewServer(agentService, taskService, skillService, workspaceService, storage)
+	server := web.NewServer(agentService, taskService, skillService, workspaceService, storage, bus)
 
 	mux := http.NewServeMux()
 	server.Mount(mux)

@@ -62,6 +62,10 @@ Task detail pages should use a `detail-grid`:
 - task comments remain separate from system activity;
 - runs remain separate from comments and link to `/runs/{id}`.
 
+## Live Observability
+
+Activity now supports Server-Sent Events through `/sse/activity`. The Activity page keeps a standard server-rendered initial timeline and progressively enhances it with live events when `EventSource` is available.
+
 ## Runs Pattern
 
 Runs are first-class observability records:

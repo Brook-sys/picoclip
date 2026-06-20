@@ -3,9 +3,31 @@ package web
 import "picoclip/internal/core/domain"
 
 templ ActivityPage(events []domain.Event) {
-	@PageShell("activity", "Atividade", "Histórico global de eventos, execuções e ações humanas.", nil) {
+	@PageShell("activity", "Activity", "Global event stream, executions and human actions.", nil) {
 		<section class="panel">
-			@EventTimeline(events)
+			@SectionHeader("Live Activity", "Recent activity updates in real time when events are published.") {}
+			<div id="activity-live">
+				@EventTimeline(events)
+			</div>
 		</section>
+		<script>
+			(function(){
+				if(!window.EventSource) return;
+				var root = document.getElementById('activity-live');
+				if(!root) return;
+				var source = new EventSource('/sse/activity');
+				function esc(value){ return String(value || '').replace(/[&<>'"]/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]; }); }
+				source.onmessage = function(evt){
+					try {
+						var ev = JSON.parse(evt.data);
+						var timeline = root.querySelector('.timeline');
+						if(!timeline){ root.innerHTML = '<div class="timeline"></div>'; timeline = root.querySelector('.timeline'); }
+						var node = document.createElement('article');
+						node.innerHTML = '<span></span><div><strong>'+esc(ev.type)+'</strong><p>'+esc(ev.message)+'</p><small>live</small></div>';
+						timeline.prepend(node);
+					} catch(e) {}
+				};
+			})();
+		</script>
 	}
 }

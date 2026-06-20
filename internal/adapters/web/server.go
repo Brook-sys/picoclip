@@ -17,11 +17,12 @@ type Server struct {
 	skills          *services.SkillService
 	projects        *services.WorkspaceService
 	storage         ports.Storage
+	bus             ports.EventBus
 	adapterSettings map[string]map[string]string
 }
 
-func NewServer(agents *services.AgentService, tasks *services.TaskService, skills *services.SkillService, projects *services.WorkspaceService, storage ports.Storage) *Server {
-	return &Server{agents: agents, tasks: tasks, skills: skills, projects: projects, storage: storage, adapterSettings: map[string]map[string]string{"crush": {"binary_path": "", "default_args": "", "timeout": "30m", "cwd_strategy": "project"}, "noop": {"timeout": "1m"}}}
+func NewServer(agents *services.AgentService, tasks *services.TaskService, skills *services.SkillService, projects *services.WorkspaceService, storage ports.Storage, bus ports.EventBus) *Server {
+	return &Server{agents: agents, tasks: tasks, skills: skills, projects: projects, storage: storage, bus: bus, adapterSettings: map[string]map[string]string{"crush": {"binary_path": "", "default_args": "", "timeout": "30m", "cwd_strategy": "project"}, "noop": {"timeout": "1m"}}}
 }
 
 func (s *Server) Mount(mux *http.ServeMux) {
@@ -86,6 +87,7 @@ func (s *Server) Mount(mux *http.ServeMux) {
 	mux.HandleFunc("GET /skills", s.handleWebSkills)
 	mux.HandleFunc("GET /skills/{id}", s.handleWebSkillDetail)
 	mux.HandleFunc("GET /activity", s.handleWebActivity)
+	mux.HandleFunc("GET /sse/activity", s.handleSSEActivity)
 	mux.HandleFunc("GET /settings", s.handleWebSettings)
 	mux.HandleFunc("GET /settings/adapters", s.handleWebSettings)
 	mux.HandleFunc("POST /settings/general", s.handleWebPostSettingsGeneral)
@@ -112,6 +114,7 @@ func (s *Server) Mount(mux *http.ServeMux) {
 	mux.HandleFunc("POST /skills/{id}/delete", s.handleWebDeleteSkill)
 	mux.HandleFunc("POST /skills/{id}/reset", s.handleWebResetSkill)
 	mux.HandleFunc("POST /skills/{id}/agents", s.handleWebUpdateSkillAgents)
+	mux.HandleFunc("POST /skills/{id}/files/{index}", s.handleWebUpdateSkillFile)
 	mux.HandleFunc("POST /projects", s.handleWebPostProject)
 	mux.HandleFunc("GET /partials/tasks", s.handleWebPartialsTasks)
 	mux.HandleFunc("GET /partials/tasks/{id}", s.handleWebPartialsTaskDetail)

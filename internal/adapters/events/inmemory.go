@@ -2,37 +2,48 @@ package events
 
 import (
 	"context"
+	"sync"
 
 	"picoclip/internal/core/domain"
 )
 
 type InMemoryBus struct {
-	ch chan domain.Event
+	mu          sync.RWMutex
+	subscribers map[chan domain.Event]struct{}
 }
 
 func NewInMemoryBus() *InMemoryBus {
 	return &InMemoryBus{
-		ch: make(chan domain.Event, 100),
+		subscribers: make(map[chan domain.Event]struct{}),
 	}
 }
 
 func (b *InMemoryBus) Publish(ctx context.Context, event domain.Event) error {
-	select {
-	case b.ch <- event:
-		return nil
-	case <-ctx.Done():
-		return ctx.Err()
-	default:
-		// Se o buffer estiver cheio, descartamos (ou bloqueamos, depende da estratégia)
-		// Para o MVP, evitar block:
+	b.mu.RLock()
+	defer b.mu.RUnlock()
+	for ch := range b.subscribers {
 		select {
-		case b.ch <- event:
+		case ch <- event:
 		default:
+			// avoid blocking if channel full
 		}
-		return nil
 	}
+	return nil
 }
 
 func (b *InMemoryBus) Subscribe(ctx context.Context) (<-chan domain.Event, error) {
-	return b.ch, nil
+	ch := make(chan domain.Event, 100)
+	b.mu.Lock()
+	b.subscribers[ch] = struct{}{}
+	b.mu.Unlock()
+
+	go func() {
+		<-ctx.Done()
+		b.mu.Lock()
+		delete(b.subscribers, ch)
+		b.mu.Unlock()
+		close(ch)
+	}()
+
+	return ch, nil
 }

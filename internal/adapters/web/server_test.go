@@ -30,7 +30,7 @@ func newTestServer(t *testing.T) *httptest.Server {
 		t.Fatalf("install builtins: %v", err)
 	}
 	mux := http.NewServeMux()
-	NewServer(agents, tasks, skills, projects, storage).Mount(mux)
+	NewServer(agents, tasks, skills, projects, storage, bus).Mount(mux)
 	return httptest.NewServer(mux)
 }
 

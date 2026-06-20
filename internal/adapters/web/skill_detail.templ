@@ -31,18 +31,31 @@ templ SkillDetailPage(skill domain.Skill, projects []domain.Workspace, agents []
 				</div>
 				
 				<div class="panel">
-					@SectionHeader("Files", "Auxiliary scripts and context files.") {}
+					@SectionHeader("Files", "Auxiliary scripts and context files.") {
+						<button class="button secondary" type="button" onclick="document.getElementById('add-file-row').style.display='block';">Add File</button>
+					}
 					if len(skill.Files) == 0 {
 						@EmptyState("No files attached", "This skill uses only the main instructions.") {}
 					}
-					for _, file := range skill.Files {
-						<div class="card" style="margin-bottom: 16px;">
-							<div class="card-header">
-								<strong>{ file.Path }</strong>
+					for i, file := range skill.Files {
+						<form hx-post={ "/skills/" + skill.ID + "/files/" + fmt.Sprintf("%d", i) } data-success="File updated." hx-target="body" hx-swap="outerHTML" class="card stack" style="margin-bottom: 16px;">
+							<div class="card-header" style="margin-bottom: 0;">
+								<input name="path" value={ file.Path } required placeholder="filename.py" style="max-width: 250px; font-family: monospace;" />
+								<div class="actions">
+									<button type="submit" class="button secondary">Save</button>
+									<button type="submit" name="action" value="delete" class="button danger">Remove</button>
+								</div>
 							</div>
-							<pre><code>{ file.Content }</code></pre>
-						</div>
+							<textarea name="content" required style="min-height: 120px; font-family: monospace;">{ file.Content }</textarea>
+						</form>
 					}
+					<form id="add-file-row" hx-post={ "/skills/" + skill.ID + "/files/new" } data-success="File added." hx-target="body" hx-swap="outerHTML" class="card stack" style="margin-bottom: 16px; display: none;">
+						<div class="card-header" style="margin-bottom: 0;">
+							<input name="path" required placeholder="new_script.js" style="max-width: 250px; font-family: monospace;" />
+							<button type="submit" class="button secondary">Add File</button>
+						</div>
+						<textarea name="content" required style="min-height: 120px; font-family: monospace;" placeholder="File content..."></textarea>
+					</form>
 				</div>
 			</div>
 			

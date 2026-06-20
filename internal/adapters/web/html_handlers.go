@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"sort"
+	"strconv"
 	"strings"
 
 	"picoclip/internal/core/domain"
@@ -774,6 +775,42 @@ func (s *Server) handleWebUpdateSkillAgents(w http.ResponseWriter, r *http.Reque
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
+	s.handleWebSkillDetail(w, r)
+}
+
+func (s *Server) handleWebUpdateSkillFile(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	skill, err := s.storage.Skills().Get(r.Context(), r.PathValue("id"))
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusNotFound)
+		return
+	}
+	indexStr := r.PathValue("index")
+	action := r.FormValue("action")
+	path := r.FormValue("path")
+	content := r.FormValue("content")
+
+	if indexStr == "new" {
+		skill.Files = append(skill.Files, domain.SkillFile{Path: path, Content: content})
+	} else {
+		idx, err := strconv.Atoi(indexStr)
+		if err != nil || idx < 0 || idx >= len(skill.Files) {
+			http.Error(w, "invalid index", http.StatusBadRequest)
+			return
+		}
+		if action == "delete" {
+			skill.Files = append(skill.Files[:idx], skill.Files[idx+1:]...)
+		} else {
+			skill.Files[idx].Path = path
+			skill.Files[idx].Content = content
+		}
+	}
+
+	skill.IsModified = true
+	_ = s.storage.Skills().Update(r.Context(), skill)
 	s.handleWebSkillDetail(w, r)
 }
 
