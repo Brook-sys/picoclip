@@ -99,18 +99,24 @@ templ SettingsPage(view SettingsView) {
 				
 				<div id="environment" class="panel">
 					<h2>Environment Variables</h2>
-					<p class="muted">Global variables injected into task execution (e.g., API keys).</p>
-					<div class="empty-state">
-						<strong>Coming soon</strong>
-						<p>Global environment management will be available in the next release.</p>
-					</div>
+					<p class="muted">Global variables injected into task execution (e.g., API keys). One per line (KEY=value).</p>
+					<form hx-post="/settings/environment" hx-target="body" hx-swap="outerHTML" data-success="Environment saved." class="stacked">
+						<textarea name="environment" placeholder="OPENAI_API_KEY=sk-...\nDATABASE_URL=postgres://..." spellcheck="false" style="font-family: monospace; min-height: 140px;">{ formatEnvText(view.Environment) }</textarea>
+						<button type="submit">Save Environment</button>
+					</form>
 				</div>
 				
 				<div id="danger-zone" class="panel border-danger">
 					<h2 class="text-danger">Danger Zone</h2>
 					<p class="muted">Destructive operations for this PicoClip instance.</p>
+
+					<div class="card bg-surface" style="margin-top: var(--space-4); border-color: var(--border);">
+						<h3>Export Data</h3>
+						<p class="muted">Download settings and global state as JSON.</p>
+						<a class="button secondary" href="/settings/export" download="picoclip-settings.json" style="margin-top: 8px;">Download JSON</a>
+					</div>
 					
-					<div class="card bg-danger-light" style="margin-top: var(--space-4);">
+					<div class="card bg-danger-light" style="margin-top: 16px;">
 						<h3>Factory Reset</h3>
 						<p>This will permanently delete all agents, tasks, runs, messages, projects, custom skills and history. Built-in skills will be restored. This action cannot be undone.</p>
 						<button class="button button-danger" type="button" data-open-modal="reset-modal" style="margin-top: var(--space-2);">Reset All Data</button>

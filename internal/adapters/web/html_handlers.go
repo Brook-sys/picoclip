@@ -1,6 +1,7 @@
 package web
 
 import (
+	"encoding/json"
 	"net/http"
 	"sort"
 	"strings"
@@ -52,23 +53,41 @@ func (s *Server) handleWebRuns(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (s *Server) handleWebRunDetail(w http.ResponseWriter, r *http.Request) {
+func (s *Server) loadRunDetailState(w http.ResponseWriter, r *http.Request) (domain.Run, taskResponse, domain.Agent, bool) {
 	run, err := s.storage.Runs().Get(r.Context(), r.PathValue("id"))
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusNotFound)
-		return
+		return domain.Run{}, taskResponse{}, domain.Agent{}, false
 	}
 	task, err := s.tasks.Get(r.Context(), run.TaskID)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusNotFound)
-		return
+		return domain.Run{}, taskResponse{}, domain.Agent{}, false
 	}
 	agent, err := s.agents.Get(r.Context(), run.AgentID)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusNotFound)
+		return domain.Run{}, taskResponse{}, domain.Agent{}, false
+	}
+	return run, s.taskResponse(r, task), agent, true
+}
+
+func (s *Server) handleWebRunDetail(w http.ResponseWriter, r *http.Request) {
+	run, task, agent, ok := s.loadRunDetailState(w, r)
+	if !ok {
 		return
 	}
-	if err := RunDetailPage(run, s.taskResponse(r, task), agent).Render(r.Context(), w); err != nil {
+	if err := RunDetailPage(run, task, agent).Render(r.Context(), w); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
+}
+
+func (s *Server) handleWebPartialsRunDetail(w http.ResponseWriter, r *http.Request) {
+	run, task, agent, ok := s.loadRunDetailState(w, r)
+	if !ok {
+		return
+	}
+	if err := RunLive(run, task, agent).Render(r.Context(), w); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
 }
@@ -228,6 +247,36 @@ func (s *Server) handleWebPostSettingsAdapters(w http.ResponseWriter, r *http.Re
 	}
 	s.storage.Settings().Set(r.Context(), "adapters", encodeSettingsValue(view.Adapters))
 	s.handleWebSettings(w, r)
+}
+
+func (s *Server) handleWebPostSettingsEnvironment(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	view, _ := s.loadSettingsView(r)
+	view.Environment = make(map[string]string)
+	for _, line := range strings.Split(r.FormValue("environment"), "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "#") || !strings.Contains(line, "=") {
+			continue
+		}
+		parts := strings.SplitN(line, "=", 2)
+		view.Environment[strings.TrimSpace(parts[0])] = strings.TrimSpace(parts[1])
+	}
+	s.storage.Settings().Set(r.Context(), "environment", encodeSettingsValue(view.Environment))
+	s.handleWebSettings(w, r)
+}
+
+func (s *Server) handleWebSettingsExport(w http.ResponseWriter, r *http.Request) {
+	settings, err := s.storage.Settings().List(r.Context())
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Content-Disposition", "attachment; filename=picoclip-settings-export.json")
+	_ = json.NewEncoder(w).Encode(map[string]any{"settings": settings})
 }
 
 func (s *Server) handleWebPostSettingsReset(w http.ResponseWriter, r *http.Request) {

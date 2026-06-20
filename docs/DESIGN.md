@@ -68,7 +68,8 @@ Runs are first-class observability records:
 
 - `/runs` lists executions with status tabs;
 - `/runs/{id}` shows output, error, input context and metadata;
-- duration and attempt metadata belong in the run detail rail.
+- duration and attempt metadata belong in the run detail rail;
+- running runs use a focused `/partials/runs/{id}` polling region instead of refreshing the full page.
 
 ## Dashboard Pattern
 

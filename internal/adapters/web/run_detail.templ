@@ -6,56 +6,71 @@ import "picoclip/internal/core/domain"
 templ RunDetailPage(run domain.Run, task taskResponse, agent domain.Agent) {
 	@PageShell("runs", "Run " + run.ID, "Execution output, driver metadata and raw agent context.", runDetailAction(task.ID)) {
 		<section class="detail-grid">
-			<div class="main-column">
-				<div class="panel">
-					@SectionHeader("Console Output", "Captured output from the agent driver.") {
-						<span class={ "status " + runStatusClass(run.Status) }>{ string(run.Status) }</span>
-					}
-					if run.Output != "" {
-						<pre class="log-viewer">{ run.Output }</pre>
-					}
-					if run.Error != "" {
-						<pre class="log-viewer error-log">{ run.Error }</pre>
-					}
-					if run.Output == "" && run.Error == "" {
-						@EmptyState("No console output", "This run has not produced output yet.") {}
-					}
+			if run.Status == domain.RunStatusRunning {
+				<div class="main-column" id="run-live" hx-get={ "/partials/runs/" + run.ID } hx-trigger="every 2s" hx-swap="innerHTML">
+					@RunLive(run, task, agent)
 				</div>
-
-				if run.Input != "" {
-					<div class="panel">
-						@SectionHeader("System Context", "Raw prompt and context sent to the driver.") {}
-						<details>
-							<summary class="advanced-summary">View input payload</summary>
-							<pre class="log-viewer">{ run.Input }</pre>
-						</details>
-					</div>
-				}
-			</div>
-			
+			} else {
+				<div class="main-column" id="run-live" hx-get={ "/partials/runs/" + run.ID } hx-swap="innerHTML">
+					@RunLive(run, task, agent)
+				</div>
+			}
 			<aside class="side-column">
-				<div class="panel">
-					<h2>Run Properties</h2>
-					@PropertyList() {
-						@PropertyItemHTML("Task") {
-							<a class="primary-link" href={ templ.URL("/tasks/" + task.ID) }>{ task.ID }</a>
-						}
-						@PropertyItemHTML("Agent") {
-							<a class="primary-link" href={ templ.URL("/agents/" + agent.ID) }>{ agent.Name }</a>
-						}
-						@PropertyItem("Driver", run.DriverType)
-						@PropertyItem("Status", string(run.Status))
-						@PropertyItem("Attempt", fmt.Sprintf("%d", run.Attempt))
-						@PropertyItem("Started", run.StartedAt.Format("2006-01-02 15:04:05"))
-						if run.FinishedAt != nil {
-							@PropertyItem("Finished", run.FinishedAt.Format("2006-01-02 15:04:05"))
-							@PropertyItem("Duration", run.FinishedAt.Sub(run.StartedAt).String())
-						}
-					}
+				<div id="run-properties">
+					@RunProperties(run, task, agent)
 				</div>
 			</aside>
 		</section>
 	}
+}
+
+templ RunLive(run domain.Run, task taskResponse, agent domain.Agent) {
+	<div class="panel">
+		@SectionHeader("Console Output", "Captured output from the agent driver.") {
+			<span class={ "status " + runStatusClass(run.Status), templ.KV("pulse", run.Status == domain.RunStatusRunning) }>{ string(run.Status) }</span>
+		}
+		if run.Output != "" {
+			<pre class="log-viewer">{ run.Output }</pre>
+		}
+		if run.Error != "" {
+			<pre class="log-viewer error-log">{ run.Error }</pre>
+		}
+		if run.Output == "" && run.Error == "" {
+			@EmptyState("No console output", "This run has not produced output yet.") {}
+		}
+	</div>
+
+	if run.Input != "" {
+		<div class="panel">
+			@SectionHeader("System Context", "Raw prompt and context sent to the driver.") {}
+			<details>
+				<summary class="advanced-summary">View input payload</summary>
+				<pre class="log-viewer">{ run.Input }</pre>
+			</details>
+		</div>
+	}
+}
+
+templ RunProperties(run domain.Run, task taskResponse, agent domain.Agent) {
+	<div class="panel">
+		<h2>Run Properties</h2>
+		@PropertyList() {
+			@PropertyItemHTML("Task") {
+				<a class="primary-link" href={ templ.URL("/tasks/" + task.ID) }>{ task.ID }</a>
+			}
+			@PropertyItemHTML("Agent") {
+				<a class="primary-link" href={ templ.URL("/agents/" + agent.ID) }>{ agent.Name }</a>
+			}
+			@PropertyItem("Driver", run.DriverType)
+			@PropertyItem("Status", string(run.Status))
+			@PropertyItem("Attempt", fmt.Sprintf("%d", run.Attempt))
+			@PropertyItem("Started", run.StartedAt.Format("2006-01-02 15:04:05"))
+			if run.FinishedAt != nil {
+				@PropertyItem("Finished", run.FinishedAt.Format("2006-01-02 15:04:05"))
+				@PropertyItem("Duration", run.FinishedAt.Sub(run.StartedAt).String())
+			}
+		}
+	</div>
 }
 
 templ runDetailAction(taskID string) {

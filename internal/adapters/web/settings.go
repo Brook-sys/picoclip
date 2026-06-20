@@ -1,6 +1,10 @@
 package web
 
-import "encoding/json"
+import (
+	"encoding/json"
+	"sort"
+	"strings"
+)
 
 type SettingsView struct {
 	General     GeneralSettings
@@ -53,4 +57,20 @@ func decodeSettingsValue[T any](raw string, fallback T) T {
 		return fallback
 	}
 	return value
+}
+
+func formatEnvText(env map[string]string) string {
+	if len(env) == 0 {
+		return ""
+	}
+	var keys []string
+	for k := range env {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	var lines []string
+	for _, k := range keys {
+		lines = append(lines, k+"="+env[k])
+	}
+	return strings.Join(lines, "\n")
 }
