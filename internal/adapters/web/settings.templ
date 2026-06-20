@@ -126,6 +126,15 @@ templ SettingsPage(view SettingsView) {
 						<a class="button secondary" href="/settings/export" download="picoclip-backup.json" style="margin-top: 8px;">Download Backup JSON</a>
 					</div>
 					
+					<div class="card bg-surface" style="margin-top: 16px; border-color: var(--border);">
+						<h3>Restore Backup</h3>
+						<p class="muted">Import a PicoClip backup JSON. This replaces the current database content.</p>
+						<form hx-post="/settings/import" hx-encoding="multipart/form-data" hx-confirm="Importing a backup will replace current data. Continue?" hx-target="body" hx-swap="outerHTML" class="stacked" style="margin-top: 8px;">
+							<input type="file" name="backup_file" accept="application/json,.json" required/>
+							<button class="button secondary" type="submit">Restore JSON</button>
+						</form>
+					</div>
+
 					<div class="card bg-danger-light" style="margin-top: 16px;">
 						<h3>Factory Reset</h3>
 						<p>This will permanently delete all agents, tasks, runs, messages, projects, custom skills and history. Built-in skills will be restored. This action cannot be undone.</p>

@@ -121,6 +121,13 @@ Both SQLite and memory storage also expose `ResetAllData`, used by the Settings 
 
 The memory adapter remains useful as a behavior reference and fallback.
 
+## Export and Restore
+
+Full database dumps and restorations are available under the Settings > Danger Zone.
+
+- **Export Backup**: Downloads all core tables and settings as a consolidated JSON payload.
+- **Restore Backup**: Overwrites the current database from a JSON payload (resets all rows and streams the JSON array elements back into storage).
+
 ## Built-in skills
 
 Built-in skills are installed idempotently at startup. Existing built-ins are updated with new default metadata/instructions, but user-modified built-ins preserve their customized instructions/files until reset.

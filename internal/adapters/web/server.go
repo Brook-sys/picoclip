@@ -93,6 +93,7 @@ func (s *Server) Mount(mux *http.ServeMux) {
 	mux.HandleFunc("POST /settings/adapters/test", s.handleWebPostSettingsAdaptersTest)
 	mux.HandleFunc("POST /settings/environment", s.handleWebPostSettingsEnvironment)
 	mux.HandleFunc("GET /settings/export", s.handleWebSettingsExport)
+	mux.HandleFunc("POST /settings/import", s.handleWebSettingsImport)
 	mux.HandleFunc("POST /settings/reset", s.handleWebPostSettingsReset)
 	mux.HandleFunc("POST /agents", s.handleWebPostAgent)
 	mux.HandleFunc("POST /agents/{id}/edit", s.handleWebUpdateAgent)
