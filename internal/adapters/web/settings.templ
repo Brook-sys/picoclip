@@ -1,30 +1,117 @@
 package web
 
-templ SettingsAdaptersPage(settings map[string]map[string]string) {
-	@PageShell("settings", "Settings", "Configurações globais de adaptadores e variáveis de ambiente.", nil) {
+import "strconv"
+
+templ SettingsPage(view SettingsView) {
+	@PageShell("settings", "Settings", "Global configuration, environment variables, and system administration.", nil) {
 		<section class="detail-grid">
-			<div class="main-column">
+			<aside class="side-column">
+				<nav class="side-nav">
+					<a class="nav-link" href="#general">General</a>
+					<a class="nav-link" href="#adapters">Adapters</a>
+					<a class="nav-link" href="#environment">Environment</a>
+					<a class="nav-link text-danger" href="#danger-zone">Danger Zone</a>
+				</nav>
+				
 				<div class="panel">
+					<h2>System Status</h2>
+					@PropertyList() {
+						@PropertyItem("Agents", strconv.Itoa(view.Stats.Agents))
+						@PropertyItem("Tasks", strconv.Itoa(view.Stats.Tasks))
+						@PropertyItem("Projects", strconv.Itoa(view.Stats.Projects))
+						@PropertyItem("Skills", strconv.Itoa(view.Stats.Skills))
+					}
+				</div>
+			</aside>
+			
+			<div class="main-column">
+				<div id="general" class="panel">
+					<h2>General Settings</h2>
+					<p class="muted">Basic application behaviors.</p>
+					<form hx-post="/settings/general" hx-target="body" hx-swap="outerHTML" data-success="General settings saved." class="stacked">
+						<label>Theme Preference</label>
+						<select name="theme">
+							<option value="system" selected?={ view.General.Theme == "system" }>System</option>
+							<option value="light" selected?={ view.General.Theme == "light" }>Light</option>
+							<option value="dark" selected?={ view.General.Theme == "dark" }>Dark</option>
+						</select>
+						
+						<label>System Log Level</label>
+						<select name="log_level">
+							<option value="debug" selected?={ view.General.LogLevel == "debug" }>Debug</option>
+							<option value="info" selected?={ view.General.LogLevel == "info" }>Info</option>
+							<option value="error" selected?={ view.General.LogLevel == "error" }>Error</option>
+						</select>
+						
+						<label>Max Task Retries</label>
+						<input name="max_task_retries" type="number" min="0" max="10" value={ view.General.MaxTaskRetries } />
+						
+						<button type="submit">Save General</button>
+					</form>
+				</div>
+				
+				<div id="adapters" class="panel">
 					<h2>Crush Driver</h2>
-					<form hx-post="/settings/adapters" hx-target="body" hx-swap="outerHTML" data-success="Configuração salva." class="stacked">
+					<p class="muted">Configuration for the local execution agent adapter.</p>
+					<form hx-post="/settings/adapters" hx-target="body" hx-swap="outerHTML" data-success="Adapter settings saved." class="stacked">
 						<input type="hidden" name="adapter" value="crush"/>
 						<label>Binary Path</label>
-						<input name="binary_path" value={ adapterSetting(settings, "crush", "binary_path") } placeholder="$HOME/crush/crush"/>
+						<input name="binary_path" value={ adapterSetting(view.Adapters, "crush", "binary_path") } placeholder="$HOME/crush/crush"/>
 						<label>Default Args</label>
-						<input name="default_args" value={ adapterSetting(settings, "crush", "default_args") }/>
+						<input name="default_args" value={ adapterSetting(view.Adapters, "crush", "default_args") }/>
 						<label>Timeout</label>
-						<input name="timeout" value={ adapterSetting(settings, "crush", "timeout") }/>
+						<input name="timeout" value={ adapterSetting(view.Adapters, "crush", "timeout") }/>
 						<label>CWD Strategy</label>
 						<select name="cwd_strategy">
-							<option value="project" selected?={ adapterSetting(settings, "crush", "cwd_strategy") == "project" }>Raiz do Projeto</option>
-							<option value="current" selected?={ adapterSetting(settings, "crush", "cwd_strategy") == "current" }>Diretório Atual</option>
+							<option value="project" selected?={ adapterSetting(view.Adapters, "crush", "cwd_strategy") == "project" }>Project Root</option>
+							<option value="current" selected?={ adapterSetting(view.Adapters, "crush", "cwd_strategy") == "current" }>Current Directory</option>
 						</select>
-						<button type="submit">Salvar Crush</button>
+						<button type="submit">Save Crush</button>
 					</form>
+				</div>
+				
+				<div id="environment" class="panel">
+					<h2>Environment Variables</h2>
+					<p class="muted">Global variables injected into task execution (e.g., API keys).</p>
+					<div class="empty-state">
+						<strong>Coming soon</strong>
+						<p>Global environment management will be available in the next release.</p>
+					</div>
+				</div>
+				
+				<div id="danger-zone" class="panel border-danger">
+					<h2 class="text-danger">Danger Zone</h2>
+					<p class="muted">Destructive operations for this PicoClip instance.</p>
+					
+					<div class="card bg-danger-light" style="margin-top: var(--space-4);">
+						<h3>Factory Reset</h3>
+						<p>This will permanently delete all agents, tasks, runs, messages, projects, custom skills and history. Built-in skills will be restored. This action cannot be undone.</p>
+						<button class="button button-danger" type="button" data-open-modal="reset-modal" style="margin-top: var(--space-2);">Reset All Data</button>
+					</div>
 				</div>
 			</div>
 		</section>
+		@ResetModal("reset-modal")
 	}
+}
+
+templ ResetModal(id string) {
+	<div class="modal-backdrop" data-modal={ id } hidden>
+		<div class="modal-card border-danger">
+			<button class="modal-close" type="button" data-close-modal={ id }>×</button>
+			<h2 class="text-danger">Reset All Data</h2>
+			<p>Are you absolutely sure? This will wipe the entire database and cannot be recovered.</p>
+			
+			<form hx-post="/settings/reset" hx-target="body" hx-swap="outerHTML" class="stacked" style="margin-top: var(--space-4);">
+				<label for="confirm_text">Please type <strong>RESET</strong> to confirm:</label>
+				<input id="confirm_text" name="confirm_text" type="text" autocomplete="off" required pattern="RESET" title="Type RESET to confirm" />
+				<div class="actions" style="margin-top: var(--space-4);">
+					<button class="button" type="button" data-close-modal={ id }>Cancel</button>
+					<button class="button button-danger" type="submit">Yes, Reset Data</button>
+				</div>
+			</form>
+		</div>
+	</div>
 }
 
 func adapterSetting(settings map[string]map[string]string, adapter string, key string) string {

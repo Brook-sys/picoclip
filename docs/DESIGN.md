@@ -1,29 +1,91 @@
 # PicoClip Design System
 
-The visual design is composed of simple layout primitives in `internal/adapters/web/ui.templ` and utility CSS in `app.css`.
+PicoClip uses a lightweight server-rendered design system built with Templ, HTMX and plain CSS. The goal is to keep the UI attractive, consistent and easy to extend without adding a heavy SPA framework.
 
-## Core Components
+## Principles
 
-- **Card / Panel**: General purpose container with borders and padding.
-- **SectionHeader**: A standardized title section with a right-aligned action slot.
-- **Badge / Status**: Semantic color indicators (`good`, `warn`, `bad`, `info`). Use `.pulse` for live tasks.
-- **PropertyList**: Horizontal/grid description lists (`dl`) for key-value views.
-- **Button / LinkButton**: Primary and `.secondary` interactions.
-- **Form / FormField**: Unified labels, inputs, and validation wrappers.
-- **EmptyState**: Visual feedback when lists are empty.
-- **table-wrapper**: Required div wrapper around any `table` to handle horizontal overflow on mobile screens without collapsing rows.
+- Server-rendered first.
+- Components over ad-hoc markup.
+- Small CSS surface with design tokens.
+- HTMX partials for live or interactive regions.
+- View models prepare page data before rendering templates.
+- Prefer progressive disclosure for advanced controls.
+- Destructive operations require clear danger styling and typed confirmation.
 
-## CSS Architecture
+## Navigation Architecture
 
-- **Variables**: Located in `:root`. Uses simple colors (`--bg`, `--surface`, `--accent`, `--border`, `--good`, etc). Supports Dark Mode via `[data-theme="dark"]`.
-- **Layout**: The shell is built with CSS Grid (`.app-shell`).
-- **Typography**: Inter (or system sans-serif).
-- **Responsive**: 
-  - `max-width: 980px`: Transitions sidebar to top nav.
-  - `max-width: 680px`: Tightens padding and adjusts multi-column grids to 1 column.
+The shell groups navigation by product area:
 
-## Modals & Popovers
-Modals use `<dialog>` patterns conceptually but are managed via `.modal-backdrop` and explicit javascript helpers globally defined in `layout.templ` to toggle `.modal-open` on the body.
+- **Control**: Dashboard, Tasks, Runs, Activity.
+- **Core**: Projects, Agents, Skills.
+- **Admin**: Settings.
 
-## Extensibility
-Do not add ad-hoc classes. When styling a new view, compose `.panel`, `.stacked`, `.detail-grid`, and `.section-header`.
+This keeps future additions predictable. New pages should be placed into one of these groups instead of appending random links.
+
+## Layout Components
+
+Core CSS/layout primitives:
+
+- `.app-shell`: fixed sidebar + main content.
+- `.sidebar`: grouped navigation.
+- `.page-header`: breadcrumb, title, subtitle and action slot.
+- `.content-grid`: primary + secondary column layout.
+- `.detail-grid`: main column + right rail.
+- `.grid-cols-2`, `.grid-cols-3`, `.grid-cols-4`: responsive metric/action grids.
+- `.stack`, `.stack-sm`: vertical composition helpers.
+
+## Templ Components
+
+Defined in `internal/adapters/web/ui.templ`:
+
+- `Card`
+- `SectionHeader`
+- `PropertyList`
+- `PropertyItem`
+- `PropertyItemHTML`
+- `FormField`
+- `Badge`
+- `StatusBadge`
+- `EmptyState`
+- `Tabs`
+- `TabLink`
+- `EntityRow`
+
+When adding UI, prefer composing these components before introducing new CSS.
+
+## Data Display
+
+Use:
+
+- `.table-wrapper` around every table.
+- `StatusBadge` for lifecycle/status output.
+- `Badge` for metadata and labels.
+- `EntityRow` for compact linked lists.
+- `PropertyList` for detail rails.
+
+## Interaction Patterns
+
+- Use HTMX for form submissions and partial refreshes.
+- Avoid polling entire pages; poll fragments only.
+- Use `hx-target="body" hx-swap="outerHTML"` for simple full-page form refreshes.
+- Use dedicated `/partials/...` routes for live sections.
+- Use toast feedback via the shell for non-GET HTMX requests.
+
+## Modals
+
+Modals are controlled by `data-open-modal` and `data-close-modal` from `layout.templ`.
+
+Rules:
+
+- Keep modals outside polling fragments.
+- Escape closes all modals.
+- The first focusable element receives focus when opened.
+- Destructive modals should use `.border-danger`, `.text-danger`, and typed confirmation.
+
+## Extensibility Rules
+
+- Do not create one-off visual patterns for new features.
+- Add a reusable component if the same shape appears twice.
+- Keep page-specific CSS rare.
+- Prefer ViewModels in Go for derived display data.
+- Every new primary page should have a short E2E smoke check.

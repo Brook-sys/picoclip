@@ -132,10 +132,6 @@ func (r *AgentRepository) Delete(ctx context.Context, id string) error {
 	return nil
 }
 
-type scanner interface {
-	Scan(dest ...any) error
-}
-
 func scanAgent(row scanner) (domain.Agent, error) {
 	var a domain.Agent
 	var tagsJSON, permissionsJSON, skillIDsJSON, configJSON, envJSON, extraArgsJSON, typeStr, capabilityStr string

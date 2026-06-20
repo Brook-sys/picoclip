@@ -10,7 +10,7 @@ test.describe('PicoClip smoke UI', () => {
     });
     page.on('requestfailed', (request) => failedRequests.push(`${request.method()} ${request.url()}`));
 
-    for (const path of ['/', '/projects', '/agents', '/tasks', '/skills', '/activity', '/settings/adapters']) {
+    for (const path of ['/', '/projects', '/agents', '/tasks', '/runs', '/skills', '/activity', '/settings']) {
       const response = await page.goto(path);
       expect(response?.ok(), `${path} should return 2xx`).toBeTruthy();
       await expect(page.locator('main')).toBeVisible();
@@ -96,5 +96,33 @@ test.describe('PicoClip smoke UI', () => {
     const detail = await detailResponse.json();
     expect(detail.task.status).toBe('todo');
     expect(detail.messages.some((message: { body: string }) => message.body === 'Unblocked, continue.')).toBeTruthy();
+  });
+
+  test('danger zone factory reset clears the database', async ({ page }) => {
+    // Create an agent to verify it gets deleted
+    const testAgent = `Doomed Agent ${Date.now()}`;
+    await page.goto('/agents');
+    await page.getByRole('button', { name: 'Novo agente' }).click();
+    await page.locator('[data-modal="agent-quick-modal"]').getByPlaceholder('Nome').fill(testAgent);
+    await page.locator('[data-modal="agent-quick-modal"] select[name="type"]').selectOption('noop');
+    await page.locator('[data-modal="agent-quick-modal"]').getByRole('button', { name: 'Criar agente' }).click();
+    await expect(page.getByRole('heading', { name: testAgent })).toBeVisible();
+
+    // Navigate to settings and open reset modal
+    await page.goto('/settings');
+    await page.getByRole('button', { name: 'Reset All Data' }).click();
+    const modal = page.locator('[data-modal="reset-modal"]');
+    await expect(modal).toBeVisible();
+
+    // Fill confirm and submit
+    await modal.getByLabel(/Please type/i).fill('RESET');
+    await modal.getByRole('button', { name: 'Yes, Reset Data' }).click();
+
+    // Should redirect to dashboard and show empty or default state
+    await expect(page).toHaveURL('/');
+
+    // Verify agent is gone
+    await page.goto('/agents');
+    await expect(page.getByText(testAgent)).not.toBeVisible();
   });
 });

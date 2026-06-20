@@ -21,7 +21,39 @@ func NewSkillService(storage ports.Storage, clock ports.Clock, idGen ports.IDGen
 }
 
 func (s *SkillService) InstallBuiltins(ctx context.Context) error {
+	existing, err := s.storage.Skills().List(ctx, "")
+	if err != nil {
+		return err
+	}
+	existingByKey := make(map[string]domain.Skill, len(existing))
+	for _, skill := range existing {
+		if skill.Kind == domain.SkillKindBuiltin && skill.BuiltinKey != "" {
+			existingByKey[skill.BuiltinKey] = skill
+		}
+	}
+
 	for _, builtin := range builtinSkills() {
+		if current, ok := existingByKey[builtin.slug]; ok {
+			current.Name = builtin.name
+			current.Slug = builtin.slug
+			current.Description = builtin.description
+			current.DefaultInstructions = builtin.instructions
+			current.DefaultFiles = builtin.files
+			current.Permission = builtin.permission
+			current.Metadata = builtin.metadata
+			current.Source = "builtin"
+			current.Version = "1.0.0"
+			current.UpdatedAt = s.clock.Now()
+			if !current.IsModified {
+				current.Instructions = builtin.instructions
+				current.Files = builtin.files
+			}
+			if err := s.storage.Skills().Update(ctx, current); err != nil {
+				return err
+			}
+			continue
+		}
+
 		now := s.clock.Now()
 		skill := domain.Skill{
 			ID:                  s.idGen.NewID("sk"),

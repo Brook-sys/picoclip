@@ -18,6 +18,7 @@ type Storage struct {
 	messages   map[string]domain.Message
 	skills     map[string]domain.Skill
 	workspaces map[string]domain.Workspace
+	settings   map[string]string
 }
 
 type agentRepository struct{ storage *Storage }
@@ -27,6 +28,7 @@ type eventRepository struct{ storage *Storage }
 type messageRepository struct{ storage *Storage }
 type skillRepository struct{ storage *Storage }
 type workspaceRepository struct{ storage *Storage }
+type settingsRepository struct{ storage *Storage }
 
 func NewStorage() *Storage {
 	return &Storage{
@@ -37,6 +39,7 @@ func NewStorage() *Storage {
 		messages:   make(map[string]domain.Message),
 		skills:     make(map[string]domain.Skill),
 		workspaces: make(map[string]domain.Workspace),
+		settings:   make(map[string]string),
 	}
 }
 
@@ -47,6 +50,48 @@ func (s *Storage) Events() ports.EventRepository         { return eventRepositor
 func (s *Storage) Messages() ports.MessageRepository     { return messageRepository{storage: s} }
 func (s *Storage) Skills() ports.SkillRepository         { return skillRepository{storage: s} }
 func (s *Storage) Workspaces() ports.WorkspaceRepository { return workspaceRepository{storage: s} }
+func (s *Storage) Settings() ports.SettingsRepository    { return settingsRepository{storage: s} }
+
+func (s *Storage) ResetAllData(ctx context.Context) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.agents = make(map[string]domain.Agent)
+	s.tasks = make(map[string]domain.Task)
+	s.runs = make(map[string]domain.Run)
+	s.events = make(map[string]domain.Event)
+	s.messages = make(map[string]domain.Message)
+	s.skills = make(map[string]domain.Skill)
+	s.workspaces = make(map[string]domain.Workspace)
+	s.settings = make(map[string]string)
+	return nil
+}
+
+func (r settingsRepository) Get(ctx context.Context, key string) (string, error) {
+	r.storage.mu.RLock()
+	defer r.storage.mu.RUnlock()
+	val, ok := r.storage.settings[key]
+	if !ok {
+		return "", domain.ErrNotFound
+	}
+	return val, nil
+}
+
+func (r settingsRepository) Set(ctx context.Context, key string, value string) error {
+	r.storage.mu.Lock()
+	defer r.storage.mu.Unlock()
+	r.storage.settings[key] = value
+	return nil
+}
+
+func (r settingsRepository) List(ctx context.Context) (map[string]string, error) {
+	r.storage.mu.RLock()
+	defer r.storage.mu.RUnlock()
+	m := make(map[string]string, len(r.storage.settings))
+	for k, v := range r.storage.settings {
+		m[k] = v
+	}
+	return m, nil
+}
 
 func (r agentRepository) Create(ctx context.Context, agent domain.Agent) error {
 	r.storage.mu.Lock()

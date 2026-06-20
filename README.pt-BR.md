@@ -53,6 +53,7 @@ Veja:
 
 - [Roadmap](docs/ROADMAP.md)
 - [Estado Atual](docs/CURRENT_STATE.md)
+- [Arquitetura de Storage](docs/STORAGE.md)
 - [Guia de Desenvolvimento](docs/DEVELOPMENT.md)
 
 ## Colaboração

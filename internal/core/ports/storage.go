@@ -14,6 +14,14 @@ type Storage interface {
 	Messages() MessageRepository
 	Skills() SkillRepository
 	Workspaces() WorkspaceRepository
+	Settings() SettingsRepository
+	ResetAllData(ctx context.Context) error
+}
+
+type SettingsRepository interface {
+	Get(ctx context.Context, key string) (string, error)
+	Set(ctx context.Context, key string, value string) error
+	List(ctx context.Context) (map[string]string, error)
 }
 
 type AgentRepository interface {

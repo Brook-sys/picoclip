@@ -2,12 +2,49 @@ package web
 
 import (
 	"net/http"
+	"sort"
 	"strings"
 
 	"picoclip/internal/core/domain"
 	"picoclip/internal/core/ports"
 	"picoclip/internal/core/services"
 )
+
+func (s *Server) handleWebRuns(w http.ResponseWriter, r *http.Request) {
+	agents, tasks, projects, _, ok := s.loadWebState(w, r)
+	if !ok {
+		return
+	}
+
+	var runs []domain.Run
+	for _, task := range tasks {
+		taskRuns, err := s.storage.Runs().ListByTask(r.Context(), task.ID)
+		if err == nil {
+			runs = append(runs, taskRuns...)
+		}
+	}
+
+	// Sort runs descending by creation
+	sort.Slice(runs, func(i, j int) bool {
+		return runs[i].StartedAt.After(runs[j].StartedAt)
+	})
+
+	agentMap := make(map[string]domain.Agent)
+	for _, a := range agents {
+		agentMap[a.ID] = a
+	}
+
+	taskMap := make(map[string]taskResponse)
+	for _, t := range tasks {
+		taskMap[t.ID] = t
+	}
+
+	_ = projects
+
+	if err := RunsPage(runs, taskMap, agentMap).Render(r.Context(), w); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
+}
 
 func (s *Server) handleWebRunDetail(w http.ResponseWriter, r *http.Request) {
 	run, err := s.storage.Runs().Get(r.Context(), r.PathValue("id"))
@@ -101,10 +138,63 @@ func (s *Server) handleWebAgentNew(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (s *Server) handleWebSettingsAdapters(w http.ResponseWriter, r *http.Request) {
-	if err := SettingsAdaptersPage(s.adapterSettings).Render(r.Context(), w); err != nil {
+func (s *Server) loadSettingsView(r *http.Request) (SettingsView, error) {
+	ctx := r.Context()
+	view := defaultSettingsView()
+	raw, err := s.storage.Settings().List(ctx)
+	if err != nil {
+		return view, err
+	}
+	if val, ok := raw["general"]; ok {
+		view.General = decodeSettingsValue(val, view.General)
+	}
+	if val, ok := raw["adapters"]; ok {
+		view.Adapters = decodeSettingsValue(val, view.Adapters)
+	}
+	if val, ok := raw["environment"]; ok {
+		view.Environment = decodeSettingsValue(val, view.Environment)
+	}
+
+	// Basic Stats
+	if agents, err := s.agents.List(ctx); err == nil {
+		view.Stats.Agents = len(agents)
+	}
+	if projects, err := s.projects.List(ctx); err == nil {
+		view.Stats.Projects = len(projects)
+	}
+	if skills, err := s.skills.List(ctx, ""); err == nil {
+		view.Stats.Skills = len(skills)
+	}
+	if tasks, err := s.tasks.List(ctx, ports.TaskFilter{}); err == nil {
+		view.Stats.Tasks = len(tasks)
+	}
+
+	return view, nil
+}
+
+func (s *Server) handleWebSettings(w http.ResponseWriter, r *http.Request) {
+	view, err := s.loadSettingsView(r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if err := SettingsPage(view).Render(r.Context(), w); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
+}
+
+func (s *Server) handleWebPostSettingsGeneral(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	view, _ := s.loadSettingsView(r)
+	view.General.Theme = r.FormValue("theme")
+	view.General.LogLevel = r.FormValue("log_level")
+	view.General.MaxTaskRetries = r.FormValue("max_task_retries")
+
+	s.storage.Settings().Set(r.Context(), "general", encodeSettingsValue(view.General))
+	s.handleWebSettings(w, r)
 }
 
 func (s *Server) handleWebPostSettingsAdapters(w http.ResponseWriter, r *http.Request) {
@@ -117,15 +207,39 @@ func (s *Server) handleWebPostSettingsAdapters(w http.ResponseWriter, r *http.Re
 		http.Error(w, "adapter required", http.StatusBadRequest)
 		return
 	}
-	if s.adapterSettings[adapter] == nil {
-		s.adapterSettings[adapter] = make(map[string]string)
+	view, _ := s.loadSettingsView(r)
+	if view.Adapters[adapter] == nil {
+		view.Adapters[adapter] = make(map[string]string)
 	}
 	for k, v := range r.Form {
 		if k != "adapter" {
-			s.adapterSettings[adapter][k] = v[0]
+			view.Adapters[adapter][k] = v[0]
 		}
 	}
-	s.handleWebSettingsAdapters(w, r)
+	s.storage.Settings().Set(r.Context(), "adapters", encodeSettingsValue(view.Adapters))
+	s.handleWebSettings(w, r)
+}
+
+func (s *Server) handleWebPostSettingsReset(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if strings.ToUpper(r.FormValue("confirm_text")) != "RESET" {
+		w.Header().Set("HX-Retarget", "body")
+		w.Header().Set("HX-Reswap", "none")
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+	if err := s.storage.ResetAllData(r.Context()); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	s.skills.InstallBuiltins(r.Context())
+	s.projects.EnsureDefault(r.Context())
+
+	w.Header().Set("HX-Redirect", "/")
+	w.WriteHeader(http.StatusOK)
 }
 
 func (s *Server) handleWebAgents(w http.ResponseWriter, r *http.Request) {

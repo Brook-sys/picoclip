@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"log"
 	"net/http"
 	"os"
@@ -10,13 +11,45 @@ import (
 	"picoclip/internal/adapters/drivers"
 	"picoclip/internal/adapters/events"
 	"picoclip/internal/adapters/storage/memory"
+	"picoclip/internal/adapters/storage/sqlite"
 	"picoclip/internal/adapters/web"
+	"picoclip/internal/core/ports"
 	"picoclip/internal/core/services"
 )
 
 func main() {
 	ctx := context.Background()
-	storage := memory.NewStorage()
+
+	var storage ports.Storage
+	storageType := os.Getenv("PICOCLIP_STORAGE")
+	if storageType == "memory" {
+		log.Println("Using memory storage")
+		storage = memory.NewStorage()
+	} else {
+		dbPath := os.Getenv("PICOCLIP_DB_PATH")
+		if dbPath == "" {
+			err := os.MkdirAll("data", 0755)
+			if err != nil {
+				log.Fatalf("Failed to create data dir: %v", err)
+			}
+			dbPath = filepath.Join("data", "picoclip.db")
+		}
+		log.Printf("Using SQLite storage at %s", dbPath)
+		db, err := sql.Open("sqlite", dbPath)
+		if err != nil {
+			log.Fatalf("Failed to open db: %v", err)
+		}
+		db.SetMaxOpenConns(1)
+		if _, err := db.ExecContext(ctx, "PRAGMA busy_timeout = 5000; PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON;"); err != nil {
+			log.Fatalf("Failed to configure db: %v", err)
+		}
+		sqliteStorage := sqlite.NewStorage(db)
+		if err := sqliteStorage.Migrate(ctx); err != nil {
+			log.Fatalf("Failed to migrate db: %v", err)
+		}
+		storage = sqliteStorage
+	}
+
 	bus := events.NewInMemoryBus()
 	clock := services.SystemClock{}
 	idGen := &services.TimeIDGenerator{}

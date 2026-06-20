@@ -11,7 +11,7 @@ templ PageShell(active string, title string, subtitle string, action templ.Compo
 				(function(){var mode=localStorage.getItem('picoclip.theme')||'system';var dark=window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches;var resolved=mode==='system'?(dark?'dark':'light'):mode;document.documentElement.dataset.theme=resolved;document.documentElement.dataset.themeMode=mode;})();
 			</script>
 			<script src="/assets/htmx.min.js"></script>
-			<link rel="stylesheet" href="/assets/app.css?v=2"/>
+			<link rel="stylesheet" href="/assets/app.css?v=3"/>
 		</head>
 		<body>
 			<div class="app-shell">
@@ -20,14 +20,24 @@ templ PageShell(active string, title string, subtitle string, action templ.Compo
 						<span>PicoClip</span>
 						<small>agent control plane</small>
 					</a>
-					<nav>
-						<a class={ templ.KV("active", active == "dashboard") } href="/">Dashboard</a>
-						<a class={ templ.KV("active", active == "projects") } href="/projects">Projects</a>
-						<a class={ templ.KV("active", active == "agents") } href="/agents">Agents</a>
-						<a class={ templ.KV("active", active == "tasks") } href="/tasks">Tasks</a>
-						<a class={ templ.KV("active", active == "skills") } href="/skills">Skills</a>
-						<a class={ templ.KV("active", active == "activity") } href="/activity">Activity</a>
-						<a class={ templ.KV("active", active == "settings") } href="/settings/adapters">Settings</a>
+					<nav aria-label="Primary navigation">
+						<div class="nav-group">
+							<div class="nav-group-title">Control</div>
+							<a class={ templ.KV("active", active == "dashboard") } href="/">Dashboard</a>
+							<a class={ templ.KV("active", active == "tasks") } href="/tasks">Tasks</a>
+							<a class={ templ.KV("active", active == "runs") } href="/runs">Runs</a>
+							<a class={ templ.KV("active", active == "activity") } href="/activity">Activity</a>
+						</div>
+						<div class="nav-group">
+							<div class="nav-group-title">Core</div>
+							<a class={ templ.KV("active", active == "projects") } href="/projects">Projects</a>
+							<a class={ templ.KV("active", active == "agents") } href="/agents">Agents</a>
+							<a class={ templ.KV("active", active == "skills") } href="/skills">Skills</a>
+						</div>
+						<div class="nav-group">
+							<div class="nav-group-title">Admin</div>
+							<a class={ templ.KV("active", active == "settings") } href="/settings">Settings</a>
+						</div>
 					</nav>
 					<div class="sidebar-footer">
 						<label for="theme-select">Tema</label>
@@ -41,7 +51,7 @@ templ PageShell(active string, title string, subtitle string, action templ.Compo
 				<main class="main">
 					<header class="page-header">
 						<div>
-							<p class="eyebrow">{ active }</p>
+							<p class="eyebrow"><a href="/">PicoClip</a><span>/</span><span>{ active }</span></p>
 							<h1>{ title }</h1>
 							<p>{ subtitle }</p>
 						</div>

@@ -1,0 +1,53 @@
+package web
+
+import "picoclip/internal/core/domain"
+
+templ RunsPage(runs []domain.Run, tasks map[string]taskResponse, agents map[string]domain.Agent) {
+	@PageShell("runs", "Runs", "Execution history, driver status, and agent output for tasks.", nil) {
+		<div class="panel">
+			@SectionHeader("Execution Runs", "Inspect recent and historical agent executions.") {}
+			if len(runs) == 0 {
+				@EmptyState("No runs yet", "Runs will appear here when agents start executing tasks.") {}
+			} else {
+				<div class="table-wrapper">
+					<table>
+						<thead>
+							<tr>
+								<th>Run</th>
+								<th>Status</th>
+								<th>Task</th>
+								<th>Agent</th>
+								<th>Driver</th>
+								<th>Started</th>
+							</tr>
+						</thead>
+						<tbody>
+							for _, run := range runs {
+								<tr>
+									<td><a class="primary-link" href={ templ.URL("/runs/" + run.ID) }>{ run.ID }</a></td>
+									<td><span class={ "status", "status-" + string(run.Status) }>{ string(run.Status) }</span></td>
+									<td>
+										if task, ok := tasks[run.TaskID]; ok {
+											<a class="primary-link" href={ templ.URL("/tasks/" + task.ID) }>{ task.Message }</a>
+										} else {
+											<span>{ run.TaskID }</span>
+										}
+									</td>
+									<td>
+										if agent, ok := agents[run.AgentID]; ok {
+											{ agent.Name }
+										} else {
+											{ run.AgentID }
+										}
+									</td>
+									<td>{ run.DriverType }</td>
+									<td>{ run.StartedAt.Format("2006-01-02 15:04") }</td>
+								</tr>
+							}
+						</tbody>
+					</table>
+				</div>
+			}
+		</div>
+	}
+}

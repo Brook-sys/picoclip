@@ -1,0 +1,107 @@
+package sqlite
+
+import (
+	"context"
+	"database/sql"
+	"errors"
+
+	"picoclip/internal/core/domain"
+)
+
+type RunRepository struct {
+	db *sql.DB
+}
+
+func (r *RunRepository) Create(ctx context.Context, run domain.Run) error {
+	query := `
+		INSERT INTO runs (
+			id, task_id, agent_id, driver_type, status, attempt,
+			input, output, error, started_at, finished_at
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`
+	_, err := r.db.ExecContext(ctx, query,
+		run.ID, run.TaskID, run.AgentID, string(run.DriverType), string(run.Status), run.Attempt,
+		run.Input, run.Output, run.Error, run.StartedAt, run.FinishedAt,
+	)
+	return err
+}
+
+func (r *RunRepository) Get(ctx context.Context, id string) (domain.Run, error) {
+	query := `
+		SELECT id, task_id, agent_id, driver_type, status, attempt,
+			input, output, error, started_at, finished_at
+		FROM runs WHERE id = ?
+	`
+	row := r.db.QueryRowContext(ctx, query, id)
+	return scanRun(row)
+}
+
+func (r *RunRepository) ListByTask(ctx context.Context, taskID string) ([]domain.Run, error) {
+	query := `
+		SELECT id, task_id, agent_id, driver_type, status, attempt,
+			input, output, error, started_at, finished_at
+		FROM runs WHERE task_id = ? ORDER BY started_at ASC
+	`
+	rows, err := r.db.QueryContext(ctx, query, taskID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var runs []domain.Run
+	for rows.Next() {
+		run, err := scanRun(rows)
+		if err != nil {
+			return nil, err
+		}
+		runs = append(runs, run)
+	}
+	if err = rows.Err(); err != nil {
+		return nil, err
+	}
+	return runs, nil
+}
+
+func (r *RunRepository) Update(ctx context.Context, run domain.Run) error {
+	query := `
+		UPDATE runs SET
+			task_id = ?, agent_id = ?, driver_type = ?, status = ?, attempt = ?,
+			input = ?, output = ?, error = ?, started_at = ?, finished_at = ?
+		WHERE id = ?
+	`
+	res, err := r.db.ExecContext(ctx, query,
+		run.TaskID, run.AgentID, string(run.DriverType), string(run.Status), run.Attempt,
+		run.Input, run.Output, run.Error, run.StartedAt, run.FinishedAt,
+		run.ID,
+	)
+	if err != nil {
+		return err
+	}
+	rowsAffected, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rowsAffected == 0 {
+		return domain.ErrNotFound
+	}
+	return nil
+}
+
+func scanRun(row scanner) (domain.Run, error) {
+	var r domain.Run
+	var driverStr, statusStr string
+
+	err := row.Scan(
+		&r.ID, &r.TaskID, &r.AgentID, &driverStr, &statusStr, &r.Attempt,
+		&r.Input, &r.Output, &r.Error, &r.StartedAt, &r.FinishedAt,
+	)
+	if errors.Is(err, sql.ErrNoRows) {
+		return domain.Run{}, domain.ErrNotFound
+	}
+	if err != nil {
+		return domain.Run{}, err
+	}
+	r.DriverType = driverStr
+	r.Status = domain.RunStatus(statusStr)
+	return r, nil
+}

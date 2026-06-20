@@ -53,14 +53,20 @@ templ FormField(name string, label string, helpText string) {
 }
 
 templ Badge(text string, variant string) {
-	<span class={ "badge", templ.KV("badge-" + variant, variant != "") }>{ text }</span>
+	<span class={ "badge", templ.KV("badge-"+variant, variant != "") }>{ text }</span>
+}
+
+templ StatusBadge(status string, variant string, isLive bool) {
+	<span class={ "status", "status-"+variant, templ.KV("pulse", isLive) }>{ status }</span>
 }
 
 templ EmptyState(title string, message string) {
 	<div class="empty-state">
 		<strong>{ title }</strong>
 		<p>{ message }</p>
-		{ children... }
+		<div style="margin-top: 16px;">
+			{ children... }
+		</div>
 	</div>
 }
 
@@ -84,3 +90,4 @@ templ EntityRow(kind string, title string, description string, href string) {
 		<span class="entity-row-arrow">→</span>
 	</a>
 }
+

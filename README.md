@@ -53,6 +53,7 @@ See:
 
 - [Roadmap](docs/ROADMAP.md)
 - [Current State](docs/CURRENT_STATE.md)
+- [Storage Architecture](docs/STORAGE.md)
 - [Development Guide](docs/DEVELOPMENT.md)
 
 ## Contributing
