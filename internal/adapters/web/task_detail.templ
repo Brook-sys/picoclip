@@ -7,25 +7,26 @@ templ TaskDetailPage(task taskResponse, rawTask domain.Task, agents []domain.Age
 	@PageShell("tasks", taskExcerpt(task.Prompt), "Task detail: conversation, subtasks, runs and activity.", taskDetailAction()) {
 		<section class="detail-grid">
 			<div class="main-column">
-				<div class="panel">
-					<div class="section-header">
-						<h2>Prompt</h2>
-						<div class="header-badges">
-							if task.CheckoutRunID != "" && task.Status != domain.TaskStatusDone && task.Status != domain.TaskStatusCancelled {
-								<span class="status pulse">Agent running</span>
-							} else if task.Status != domain.TaskStatusDone && task.Status != domain.TaskStatusCancelled && task.Status != domain.TaskStatusBlocked {
-								<span class="status status-todo">Agent sleeping</span>
+				<div class="card">
+					<div class="card-header" style="margin-bottom: 8px;">
+						<div style="display: flex; gap: 8px; align-items: center;">
+							@StatusBadge(string(task.Status), statusClass(task.Status), isLiveTask(task, rawTask))
+							if isLiveTask(task, rawTask) {
+								<span class="muted" style="font-size: 13px;">Agent running</span>
 							}
-							<span class={ "status " + statusClass(task.Status) }>{ string(task.Status) }</span>
 						</div>
 					</div>
-					<p class="prompt">{ task.Prompt }</p>
+					<div class="prompt" style="font-size: 15px;">
+						{ task.Prompt }
+					</div>
 				</div>
+
 				<div id="task-live" hx-get={ "/partials/tasks/" + task.ID } hx-trigger="every 3s" hx-swap="innerHTML">
 					@TaskLive(task, messages, runs, events, children, agents, projects)
 				</div>
+
 				<div class="panel">
-					@SectionHeader("Post Comment", "Add context, answer questions, or intervene.")
+					@SectionHeader("Post Comment", "Add context, answer questions, or intervene.") {}
 					<form hx-post={ "/tasks/" + task.ID + "/messages" } hx-target="#task-live" hx-swap="innerHTML" class="stacked">
 						<input name="role" value="user" type="hidden"/>
 						<textarea name="body" placeholder="Add comment or command..."></textarea>
@@ -33,26 +34,29 @@ templ TaskDetailPage(task taskResponse, rawTask domain.Task, agents []domain.Age
 					</form>
 				</div>
 			</div>
+			
 			<aside class="side-column">
 				<div class="panel">
 					<h2>Properties</h2>
-					<dl>
-						<dt>Task ID</dt>
-						<dd><code>{ task.ID }</code></dd>
-						<dt>Assignee</dt>
-						<dd>{ agentName(agents, task.AgentID) }</dd>
-						<dt>Workspace</dt>
-						<dd>{ projectName(projects, task.ProjectID) }</dd>
-						<dt>Parent</dt>
-						<dd>{ task.ParentID }</dd>
-						<dt>Attempts</dt>
-						<dd>{ fmt.Sprintf("%d/%d", rawTask.Attempts, rawTask.MaxAttempts) }</dd>
-						<dt>Created</dt>
-						<dd>{ task.CreatedAt }</dd>
-						<dt>Updated</dt>
-						<dd>{ task.UpdatedAt }</dd>
-					</dl>
+					@PropertyList() {
+						@PropertyItem("Task ID", task.ID)
+						@PropertyItemHTML("Assignee") {
+							<a class="primary-link" href={ templ.URL("/agents/" + task.AgentID) }>{ agentName(agents, task.AgentID) }</a>
+						}
+						@PropertyItemHTML("Workspace") {
+							<a class="primary-link" href={ templ.URL("/projects/" + task.ProjectID) }>{ projectName(projects, task.ProjectID) }</a>
+						}
+						if task.ParentID != "" {
+							@PropertyItemHTML("Parent") {
+								<a class="primary-link" href={ templ.URL("/tasks/" + task.ParentID) }>{ task.ParentID }</a>
+							}
+						}
+						@PropertyItem("Attempts", fmt.Sprintf("%d / %d", rawTask.Attempts, rawTask.MaxAttempts))
+						@PropertyItem("Created", task.CreatedAt)
+						@PropertyItem("Updated", task.UpdatedAt)
+					}
 				</div>
+				
 				<div class="panel">
 					<h2>Workflow</h2>
 					<form hx-post={ "/tasks/" + task.ID + "/status" } hx-target="body" hx-swap="outerHTML" data-success="Status updated." class="stacked">
@@ -60,23 +64,25 @@ templ TaskDetailPage(task taskResponse, rawTask domain.Task, agents []domain.Age
 						<textarea name="comment" placeholder="Required comment when transitioning to done/blocked..."></textarea>
 						<button type="submit">Update status</button>
 					</form>
-					<form hx-post={ "/tasks/" + task.ID + "/wake" } hx-target="body" hx-swap="outerHTML" data-success="Agent triggered." class="stacked">
-						<button type="submit">Wake agent</button>
+					<form hx-post={ "/tasks/" + task.ID + "/wake" } hx-target="body" hx-swap="outerHTML" data-success="Agent triggered." class="stacked" style="margin-top: 12px;">
+						<button class="button secondary" type="submit">Wake agent</button>
 					</form>
 				</div>
+				
 				<div class="panel">
 					<h2>Delegate</h2>
-					<form hx-post={ "/tasks/" + task.ID + "/delegate" } hx-target="body" hx-swap="outerHTML" class="stacked">
+					<form hx-post={ "/tasks/" + task.ID + "/delegate" } hx-target="body" hx-swap="outerHTML" data-success="Subtask created." class="stacked">
 						@AgentSelect(agents, "")
 						<textarea name="prompt" placeholder="Subtask goal..."></textarea>
-						<button type="submit">Create child task</button>
+						<button type="submit">Create subtask</button>
 					</form>
 				</div>
-				<div class="panel">
-					<h2>Danger Zone</h2>
+				
+				<div class="panel border-danger">
+					<h2 class="text-danger">Danger Zone</h2>
 					<form hx-post={ "/tasks/" + task.ID + "/cancel" } hx-confirm="Are you sure you want to cancel this task?" data-success="Task cancelled." hx-target="body" hx-swap="outerHTML" class="stacked">
-						<input name="reason" placeholder="Reason for cancellation..."/>
-						<button class="danger" type="submit">Cancel task</button>
+						<input name="reason" placeholder="Reason for cancellation..." required />
+						<button class="button button-danger" type="submit">Cancel task</button>
 					</form>
 				</div>
 			</aside>
@@ -84,8 +90,12 @@ templ TaskDetailPage(task taskResponse, rawTask domain.Task, agents []domain.Age
 	}
 }
 
+func isLiveTask(task taskResponse, raw domain.Task) bool {
+	return task.CheckoutRunID != "" && task.Status != domain.TaskStatusDone && task.Status != domain.TaskStatusCancelled
+}
+
 templ taskDetailAction() {
-	<a class="button secondary" href="/tasks">Voltar</a>
+	<a class="button secondary" href="/tasks">Back to tasks</a>
 }
 
 templ TaskStatusSelect(selected domain.TaskStatus) {
@@ -97,8 +107,8 @@ templ TaskStatusSelect(selected domain.TaskStatus) {
 }
 
 templ AgentSelect(agents []domain.Agent, selected string) {
-	<select name="agent_id">
-		<option value="">Selecione agente</option>
+	<select name="agent_id" required>
+		<option value="">Select an agent</option>
 		for _, agent := range agents {
 			<option value={ agent.ID } selected?={ agent.ID == selected }>{ agent.Name + " — " + agent.Title }</option>
 		}

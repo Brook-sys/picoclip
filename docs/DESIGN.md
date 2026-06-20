@@ -53,6 +53,23 @@ Defined in `internal/adapters/web/ui.templ`:
 
 When adding UI, prefer composing these components before introducing new CSS.
 
+## Task Detail Pattern
+
+Task detail pages should use a `detail-grid`:
+
+- main column: prompt, conversation, subtasks, runs and activity;
+- right rail: properties, workflow actions, delegation and danger zone;
+- task comments remain separate from system activity;
+- runs remain separate from comments and link to `/runs/{id}`.
+
+## Runs Pattern
+
+Runs are first-class observability records:
+
+- `/runs` lists executions with status tabs;
+- `/runs/{id}` shows output, error, input context and metadata;
+- duration and attempt metadata belong in the run detail rail.
+
 ## Dashboard Pattern
 
 The dashboard should behave like an operational command center:

@@ -17,10 +17,16 @@ func (s *Server) handleWebRuns(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var runs []domain.Run
+	statusFilter := r.URL.Query().Get("status")
 	for _, task := range tasks {
 		taskRuns, err := s.storage.Runs().ListByTask(r.Context(), task.ID)
 		if err == nil {
-			runs = append(runs, taskRuns...)
+			for _, run := range taskRuns {
+				if statusFilter != "" && string(run.Status) != statusFilter {
+					continue
+				}
+				runs = append(runs, run)
+			}
 		}
 	}
 
@@ -41,7 +47,7 @@ func (s *Server) handleWebRuns(w http.ResponseWriter, r *http.Request) {
 
 	_ = projects
 
-	if err := RunsPage(runs, taskMap, agentMap).Render(r.Context(), w); err != nil {
+	if err := RunsPage(runs, taskMap, agentMap, statusFilter).Render(r.Context(), w); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
 }

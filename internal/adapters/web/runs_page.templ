@@ -2,9 +2,17 @@ package web
 
 import "picoclip/internal/core/domain"
 
-templ RunsPage(runs []domain.Run, tasks map[string]taskResponse, agents map[string]domain.Agent) {
+templ RunsPage(runs []domain.Run, tasks map[string]taskResponse, agents map[string]domain.Agent, activeStatus string) {
 	@PageShell("runs", "Runs", "Execution history, driver status, and agent output for tasks.", nil) {
-		<div class="panel">
+		<div class="stack">
+			@Tabs() {
+				@TabLink("All", "/runs", activeStatus == "")
+				@TabLink("Running", "/runs?status=running", activeStatus == "running")
+				@TabLink("Succeeded", "/runs?status=succeeded", activeStatus == "succeeded")
+				@TabLink("Failed", "/runs?status=failed", activeStatus == "failed")
+				@TabLink("Canceled", "/runs?status=canceled", activeStatus == "canceled")
+			}
+			<div class="panel">
 			@SectionHeader("Execution Runs", "Inspect recent and historical agent executions.") {}
 			if len(runs) == 0 {
 				@EmptyState("No runs yet", "Runs will appear here when agents start executing tasks.") {}
@@ -48,6 +56,7 @@ templ RunsPage(runs []domain.Run, tasks map[string]taskResponse, agents map[stri
 					</table>
 				</div>
 			}
+			</div>
 		</div>
 	}
 }

@@ -4,14 +4,13 @@ import "fmt"
 import "picoclip/internal/core/domain"
 
 templ RunDetailPage(run domain.Run, task taskResponse, agent domain.Agent) {
-	@PageShell("tasks", "Run " + run.ID, "Detalhes da execução do agente", runDetailAction(task.ID)) {
+	@PageShell("runs", "Run " + run.ID, "Execution output, driver metadata and raw agent context.", runDetailAction(task.ID)) {
 		<section class="detail-grid">
 			<div class="main-column">
 				<div class="panel">
-					<div class="section-header">
-						<h2>Console Output</h2>
-						<span class={ "status " + statusClass(domain.TaskStatus(run.Status)) }>{ string(run.Status) }</span>
-					</div>
+					@SectionHeader("Console Output", "Captured output from the agent driver.") {
+						<span class={ "status " + runStatusClass(run.Status) }>{ string(run.Status) }</span>
+					}
 					if run.Output != "" {
 						<pre class="log-viewer">{ run.Output }</pre>
 					}
@@ -19,40 +18,40 @@ templ RunDetailPage(run domain.Run, task taskResponse, agent domain.Agent) {
 						<pre class="log-viewer error-log">{ run.Error }</pre>
 					}
 					if run.Output == "" && run.Error == "" {
-						<p class="empty">Nenhuma saída de console registrada.</p>
+						@EmptyState("No console output", "This run has not produced output yet.") {}
 					}
 				</div>
+
 				if run.Input != "" {
 					<div class="panel">
-						<h2>System Context (Input)</h2>
+						@SectionHeader("System Context", "Raw prompt and context sent to the driver.") {}
 						<details>
-							<summary class="advanced-summary">Ver prompt e contexto enviados</summary>
+							<summary class="advanced-summary">View input payload</summary>
 							<pre class="log-viewer">{ run.Input }</pre>
 						</details>
 					</div>
 				}
 			</div>
+			
 			<aside class="side-column">
 				<div class="panel">
-					<h2>Detalhes do Run</h2>
-					<dl>
-						<dt>Task</dt>
-						<dd><a href={ templ.URL("/tasks/" + task.ID) }>{ task.ID }</a></dd>
-						<dt>Agente</dt>
-						<dd><a href={ templ.URL("/agents/" + agent.ID) }>{ agent.Name }</a></dd>
-						<dt>Driver</dt>
-						<dd>{ run.DriverType }</dd>
-						<dt>Status</dt>
-						<dd>{ string(run.Status) }</dd>
-						<dt>Tentativa</dt>
-						<dd>{ fmt.Sprintf("%d", run.Attempt) }</dd>
-						<dt>Início</dt>
-						<dd>{ run.StartedAt.Format("2006-01-02 15:04:05") }</dd>
-						if run.FinishedAt != nil {
-							<dt>Término</dt>
-							<dd>{ run.FinishedAt.Format("2006-01-02 15:04:05") }</dd>
+					<h2>Run Properties</h2>
+					@PropertyList() {
+						@PropertyItemHTML("Task") {
+							<a class="primary-link" href={ templ.URL("/tasks/" + task.ID) }>{ task.ID }</a>
 						}
-					</dl>
+						@PropertyItemHTML("Agent") {
+							<a class="primary-link" href={ templ.URL("/agents/" + agent.ID) }>{ agent.Name }</a>
+						}
+						@PropertyItem("Driver", run.DriverType)
+						@PropertyItem("Status", string(run.Status))
+						@PropertyItem("Attempt", fmt.Sprintf("%d", run.Attempt))
+						@PropertyItem("Started", run.StartedAt.Format("2006-01-02 15:04:05"))
+						if run.FinishedAt != nil {
+							@PropertyItem("Finished", run.FinishedAt.Format("2006-01-02 15:04:05"))
+							@PropertyItem("Duration", run.FinishedAt.Sub(run.StartedAt).String())
+						}
+					}
 				</div>
 			</aside>
 		</section>
@@ -60,5 +59,8 @@ templ RunDetailPage(run domain.Run, task taskResponse, agent domain.Agent) {
 }
 
 templ runDetailAction(taskID string) {
-	<a class="button secondary" href={ templ.URL("/tasks/" + taskID) }>Voltar para Task</a>
+	<div style="display: flex; gap: 8px;">
+		<a class="button secondary" href={ templ.URL("/runs") }>All runs</a>
+		<a class="button" href={ templ.URL("/tasks/" + taskID) }>Open task</a>
+	</div>
 }
