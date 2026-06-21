@@ -29,6 +29,7 @@ type RuntimeCardView struct {
 	AITestedAt  string
 	AIOk        bool
 	AIMessage   string
+	AIOutput    string
 }
 
 func (s *Server) runtimeCards(r *http.Request) []RuntimeCardView {
@@ -40,7 +41,7 @@ func (s *Server) runtimeCards(r *http.Request) []RuntimeCardView {
 		var configFiles []domain.RuntimeConfigFile
 		var versions []domain.RuntimeVersion
 		tested, testedAt, functional, checks, savedHealth := runtimeHealthSummary(state)
-		aiTested, aiTestedAt, aiOK, aiMessage := runtimeAITestSummary(state)
+		aiTested, aiTestedAt, aiOK, aiMessage, aiOutput := runtimeAITestSummary(state)
 		if configured {
 			if tested {
 				health = savedHealth
@@ -73,6 +74,7 @@ func (s *Server) runtimeCards(r *http.Request) []RuntimeCardView {
 			AITestedAt:  aiTestedAt,
 			AIOk:        aiOK,
 			AIMessage:   aiMessage,
+			AIOutput:    aiOutput,
 		})
 	}
 	return cards
@@ -95,24 +97,22 @@ func runtimeHealthSummary(state domain.RuntimeState) (tested bool, testedAt stri
 	return true, testedAt, functional, checks, health
 }
 
-func runtimeAITestSummary(state domain.RuntimeState) (tested bool, testedAt string, ok bool, message string) {
+func runtimeAITestSummary(state domain.RuntimeState) (tested bool, testedAt string, ok bool, message string, output string) {
 	if state.MetadataJSON == "" || state.MetadataJSON == "{}" {
-		return false, "", false, ""
+		return false, "", false, "", ""
 	}
 	var metadata struct {
 		LastAITest *services.RuntimeAITestResult `json:"last_ai_test"`
 	}
 	if err := json.Unmarshal([]byte(state.MetadataJSON), &metadata); err != nil || metadata.LastAITest == nil {
-		return false, "", false, ""
+		return false, "", false, "", ""
 	}
 	res := metadata.LastAITest
 	ok = res.Status == "ok"
 	message = res.Message
-	if res.Output != "" {
-		message += " (Output: " + res.Output + ")"
-	}
+	output = res.Output
 	testedAt = timeSince(res.CheckedAt)
-	return true, testedAt, ok, message
+	return true, testedAt, ok, message, output
 }
 
 func (s *Server) handleWebPostRuntimeExisting(w http.ResponseWriter, r *http.Request) {
@@ -195,22 +195,21 @@ func (s *Server) handleWebPostRuntimeConfig(w http.ResponseWriter, r *http.Reque
 func (s *Server) handleWebPostRuntimeTest(w http.ResponseWriter, r *http.Request) {
 	runtimeID := domain.RuntimeID(r.PathValue("id"))
 	if _, err := s.runtimes.Test(r.Context(), runtimeID); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		w.Header().Set("HX-Trigger", `{"picoclip-toast":{"message":"CLI check failed.","type":"error"}}`)
+		s.handleWebSettings(w, r)
 		return
 	}
+	w.Header().Set("HX-Trigger", `{"picoclip-toast":{"message":"CLI check successful.","type":"success"}}`)
 	s.handleWebSettings(w, r)
 }
 
 func (s *Server) handleWebPostRuntimeTestAI(w http.ResponseWriter, r *http.Request) {
 	runtimeID := domain.RuntimeID(r.PathValue("id"))
 	result, err := s.runtimes.TestAI(r.Context(), runtimeID)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-	if result.Status != "ok" {
-		http.Error(w, result.Message, http.StatusBadRequest)
-		return
+	if err != nil || result.Status != "ok" {
+		w.Header().Set("HX-Trigger", `{"picoclip-toast":{"message":"AI test failed.","type":"error"}}`)
+	} else {
+		w.Header().Set("HX-Trigger", `{"picoclip-toast":{"message":"AI test successful.","type":"success"}}`)
 	}
 	s.handleWebSettings(w, r)
 }

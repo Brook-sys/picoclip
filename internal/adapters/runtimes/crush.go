@@ -154,7 +154,7 @@ func (a *CrushAdapter) Execute(ctx context.Context, state domain.RuntimeState, i
 	cmd := exec.CommandContext(ctx, bin, args...)
 	cmd.Env = append(cmd.Environ(), envPairs(input.Env)...)
 	if state.ConfigPath != "" {
-		cmd.Env = append(cmd.Env, "CRUSH_GLOBAL_CONFIG="+state.ConfigPath)
+		cmd.Env = append(cmd.Env, "CRUSH_GLOBAL_CONFIG="+filepath.Dir(state.ConfigPath))
 	}
 	if state.DataPath != "" {
 		cmd.Env = append(cmd.Env, "CRUSH_GLOBAL_DATA="+state.DataPath)

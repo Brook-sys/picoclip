@@ -100,12 +100,12 @@ templ PageShell(active string, title string, subtitle string, action templ.Compo
 							applyTheme(localStorage.getItem('picoclip.theme') || 'system');
 							var select = document.getElementById('theme-select');
 							if(select){ select.addEventListener('change', function(){ applyTheme(select.value); toast('Tema atualizado.', 'success'); }); }
-							document.body.addEventListener('change', function(evt){ if(evt.target && evt.target.name==='density'){ localStorage.setItem('picoclip.density', evt.target.value); document.documentElement.dataset.density=evt.target.value; } });
+							document.addEventListener('change', function(evt){ if(evt.target && evt.target.name==='density'){ localStorage.setItem('picoclip.density', evt.target.value); document.documentElement.dataset.density=evt.target.value; } });
 							if(window.matchMedia){ window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', function(){ if((localStorage.getItem('picoclip.theme')||'system')==='system') applyTheme('system'); }); }
-							function syncModalState(){ document.body.classList.toggle('modal-open', !!document.querySelector('.modal-backdrop:not([hidden])')); }
+							function syncModalState(){ document.documentElement.classList.toggle('modal-open', !!document.querySelector('.modal-backdrop:not([hidden])')); }
 							function openModal(id){ var modal=document.querySelector('[data-modal="'+id+'"]'); if(modal){ modal.hidden=false; modal.style.display='flex'; syncModalState(); var focus=modal.querySelector('input, textarea, select, button'); if(focus) focus.focus(); } }
 							function closeModal(id){ var modal=document.querySelector('[data-modal="'+id+'"]'); if(modal){ modal.hidden=true; modal.style.display='none'; syncModalState(); } }
-							document.body.addEventListener('click', function(evt){
+							document.addEventListener('click', function(evt){
 								var open = evt.target.closest('[data-open-modal]');
 								if(open) openModal(open.dataset.openModal);
 								var close = evt.target.closest('[data-close-modal]');
@@ -114,22 +114,25 @@ templ PageShell(active string, title string, subtitle string, action templ.Compo
 								var option = evt.target.closest('[data-agent-option]');
 								if(option){ var picker=option.closest('[data-agent-picker]'); picker.querySelector('[data-agent-value]').value=option.dataset.agentId; picker.querySelector('.agent-search').value=option.querySelector('strong').textContent; picker.querySelectorAll('[data-agent-option]').forEach(function(x){x.classList.remove('selected')}); option.classList.add('selected'); }
 							});
-							document.body.addEventListener('input', function(evt){
+							document.addEventListener('input', function(evt){
 								if(evt.target.classList && evt.target.classList.contains('agent-search')){ var q=evt.target.value.toLowerCase(); var picker=evt.target.closest('[data-agent-picker]'); picker.querySelectorAll('[data-agent-option]').forEach(function(option){ option.hidden = q && option.dataset.agentSearch.indexOf(q) === -1; }); }
 							});
 							document.addEventListener('keydown', function(evt){ if(evt.key==='Escape'){ document.querySelectorAll('.modal-backdrop').forEach(function(m){m.hidden=true; m.style.display='none'}); syncModalState(); } });
-							document.body.addEventListener('htmx:beforeRequest', function(evt){
+							document.addEventListener('htmx:beforeRequest', function(evt){
 								var verb = (evt.detail.requestConfig && evt.detail.requestConfig.verb || '').toUpperCase();
-								if(verb === 'GET' && document.body.classList.contains('modal-open')){ evt.preventDefault(); return; }
-								var form = evt.target;
+								if(verb === 'GET' && document.documentElement.classList.contains('modal-open')){ evt.preventDefault(); return; }
+								var form = evt.target && evt.target.closest ? evt.target.closest('form') : evt.target;
 								var button = form && form.querySelector ? form.querySelector('button[type="submit"]') : null;
 								if(button){ button.dataset.originalText = button.textContent; button.textContent = button.dataset.loadingText || 'Salvando...'; button.disabled = true; }
 								if(form && form.classList) form.classList.add('is-loading');
 							});
-							document.body.addEventListener('htmx:afterRequest', function(evt){
+							document.addEventListener('picoclip-toast', function(evt){
+								if(evt.detail && evt.detail.message) toast(evt.detail.message, evt.detail.type || 'success');
+							});
+							document.addEventListener('htmx:afterRequest', function(evt){
 								var method = (evt.detail.requestConfig && evt.detail.requestConfig.verb || '').toUpperCase();
 								var successful = evt.detail.successful;
-								var form = evt.target;
+								var form = evt.target && evt.target.closest ? evt.target.closest('form') : evt.target;
 								var button = form && form.querySelector ? form.querySelector('button[type="submit"]') : null;
 								if(button){ button.disabled = false; button.textContent = button.dataset.originalText || button.textContent; }
 								if(form && form.classList) form.classList.remove('is-loading');

@@ -170,6 +170,12 @@ templ SettingsPage(view SettingsView) {
 											if r.AIMessage != "" {
 												<br/><small class="muted">{ r.AIMessage }</small>
 											}
+											if r.AIOutput != "" {
+												<details style="margin-top: var(--space-2);">
+													<summary>Raw AI test output</summary>
+													<pre style="white-space: pre-wrap; max-height: 220px; overflow: auto; font-size: 12px;">{ r.AIOutput }</pre>
+												</details>
+											}
 											if r.Health.Version != "" {
 												<br/><strong>Version:</strong> <span>{ r.Health.Version }</span>
 											}
@@ -182,10 +188,10 @@ templ SettingsPage(view SettingsView) {
 											}
 										</div>
 										<div class="actions" style="gap: var(--space-2); align-items: center; margin-bottom: var(--space-3);">
-											<form hx-post={ "/runtimes/" + string(r.ID) + "/test" } data-success="CLI check successful." data-error="CLI check failed." hx-target="body" hx-swap="outerHTML">
+											<form hx-post={ "/runtimes/" + string(r.ID) + "/test" } data-no-toast="true" hx-target="body" hx-swap="outerHTML">
 												<button class="button secondary" type="submit">Test CLI</button>
 											</form>
-											<form hx-post={ "/runtimes/" + string(r.ID) + "/test-ai" } hx-confirm="This will send a real test request to the configured AI provider. It may consume tokens. Continue?" data-success="AI test successful." data-error="AI test failed." hx-target="body" hx-swap="outerHTML">
+											<form hx-post={ "/runtimes/" + string(r.ID) + "/test-ai" } hx-confirm="This will send a real test request to the configured AI provider. It may consume tokens. Continue?" data-no-toast="true" hx-target="body" hx-swap="outerHTML">
 												<button class="button secondary" type="submit">Test AI Request</button>
 											</form>
 											<form hx-post={ "/runtimes/" + string(r.ID) + "/uninstall" } hx-confirm="Are you sure you want to uninstall this runtime? Configuration files will be deleted if installed exclusively." hx-target="body" hx-swap="outerHTML" style="margin-left: auto;">

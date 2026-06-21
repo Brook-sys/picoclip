@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -43,6 +44,42 @@ func (a fakeRuntimeAdapter) Execute(ctx context.Context, state domain.RuntimeSta
 	return ports.RuntimeExecutionResult{Output: a.out}, a.err
 }
 
+func TestRuntimeManagerTestAISavesMetadataAndHandlesError(t *testing.T) {
+	ctx := context.Background()
+	storage := memory.NewStorage()
+	baseDir := t.TempDir()
+	clock := SystemClock{}
+	manager := NewRuntimeManager(storage, baseDir, clock)
+
+	adapter := fakeRuntimeAdapter{id: "crush", err: errors.New("raw failure banner")}
+	manager.Register(adapter)
+
+	state := domain.RuntimeState{
+		ID:           "runtime_crush",
+		RuntimeID:    "crush",
+		Mode:         domain.InstallModeExisting,
+		Enabled:      true,
+		SettingsJSON: "{}",
+		MetadataJSON: "{}",
+	}
+	if err := storage.Runtimes().Save(ctx, state); err != nil {
+		t.Fatal(err)
+	}
+
+	result, err := manager.TestAI(ctx, "crush")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Status != "error" {
+		t.Fatalf("expected error, got %v", result.Status)
+	}
+	if result.Message != "AI request failed" {
+		t.Fatalf("expected short message, got %s", result.Message)
+	}
+	if result.Output != "raw failure banner" {
+		t.Fatalf("expected raw output, got %s", result.Output)
+	}
+}
 func TestRuntimeManagerTestAISavesMetadata(t *testing.T) {
 	ctx := context.Background()
 	storage := memory.NewStorage()

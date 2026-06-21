@@ -217,7 +217,8 @@ func (m *RuntimeManager) TestAI(ctx context.Context, id domain.RuntimeID) (Runti
 	result := RuntimeAITestResult{CheckedAt: now}
 	if err != nil {
 		result.Status = "error"
-		result.Message = err.Error()
+		result.Message = "AI request failed"
+		result.Output = err.Error()
 	} else {
 		result.Status = "ok"
 		result.Message = "AI request successful"
