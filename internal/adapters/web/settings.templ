@@ -18,17 +18,23 @@ templ SettingsPage(view SettingsView) {
 				<div class="settings-panel">
 					<h2>Diagnostics</h2>
 					<p class="muted">System health checks.</p>
-					@PropertyList() {
+					<div class="diagnostic-list">
 						for _, check := range view.Diagnostics.Checks {
-							@PropertyItemHTML(check.Name) {
-								if check.Status == "ok" {
-									<span style="color: var(--success);">{ check.Status }</span>
-								} else {
-									<span class="text-danger">{ check.Status }</span>
-								}
-							}
+							<div class={ "diagnostic-item", templ.KV("diagnostic-ok", check.Status == "ok"), templ.KV("diagnostic-error", check.Status != "ok") }>
+								<span class="diagnostic-icon" aria-hidden="true">
+									if check.Status == "ok" {
+										@Icon("check", 14)
+									} else {
+										@Icon("x", 14)
+									}
+								</span>
+								<span class="diagnostic-content">
+									<strong>{ check.Name }</strong>
+									<small>{ check.Status }</small>
+								</span>
+							</div>
 						}
-					}
+					</div>
 				</div>
 
 				<div class="settings-panel">
