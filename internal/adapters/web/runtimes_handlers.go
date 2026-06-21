@@ -18,6 +18,7 @@ type RuntimeCardView struct {
 	State       domain.RuntimeState
 	Configured  bool
 	Health      domain.RuntimeHealth
+	ConfigFiles []domain.RuntimeConfigFile
 }
 
 func (s *Server) runtimeCards(r *http.Request) []RuntimeCardView {
@@ -26,8 +27,12 @@ func (s *Server) runtimeCards(r *http.Request) []RuntimeCardView {
 	for _, manifest := range s.runtimes.Catalog() {
 		state, configured := states[manifest.ID]
 		health := domain.RuntimeHealth{Status: "not_configured"}
+		var configFiles []domain.RuntimeConfigFile
 		if configured {
 			health, _ = s.runtimes.Health(r.Context(), manifest.ID)
+			if adapter, ok := s.runtimes.Adapter(manifest.ID); ok {
+				configFiles, _ = adapter.ReadConfig(r.Context(), state)
+			}
 		}
 		cards = append(cards, RuntimeCardView{
 			ID:          manifest.ID,
@@ -39,6 +44,7 @@ func (s *Server) runtimeCards(r *http.Request) []RuntimeCardView {
 			State:       state,
 			Configured:  configured,
 			Health:      health,
+			ConfigFiles: configFiles,
 		})
 	}
 	return cards

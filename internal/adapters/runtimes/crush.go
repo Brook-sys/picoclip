@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"time"
 
@@ -32,26 +33,42 @@ func (a *CrushAdapter) SupportedInstallModes() []domain.InstallMode {
 }
 
 func (a *CrushAdapter) Install(ctx context.Context, mode domain.InstallMode, destDir string) (domain.RuntimeState, error) {
-	binPath := filepath.Join(destDir, "bin", "crush")
+	binName := "crush"
+	if runtime.GOOS == "windows" {
+		binName = "crush.exe"
+	}
+	binPath := filepath.Join(destDir, "bin", binName)
 	configPath := filepath.Join(destDir, "config", "crush.json")
 	dataPath := filepath.Join(destDir, "data")
 	logsPath := filepath.Join(destDir, "logs")
 	if mode == domain.InstallModeGlobal {
-		binPath = filepath.Join(userBinDir(), "crush")
+		binPath = filepath.Join(userBinDir(), binName)
 		home, _ := os.UserHomeDir()
 		configPath = filepath.Join(home, ".config", "crush", "crush.json")
 		dataPath = filepath.Join(home, ".local", "share", "crush")
 		logsPath = filepath.Join(dataPath, "logs")
 	}
-	if err := copyExistingBinary(a.FallbackBinary, binPath); err != nil {
-		return domain.RuntimeState{}, err
+
+	version, sourceURL, err := installFromGitHubRelease(ctx, "charmbracelet", "crush", "crush", "crush", binPath)
+	if err != nil {
+		if err := copyExistingBinary(a.FallbackBinary, binPath); err != nil {
+			return domain.RuntimeState{}, fmt.Errorf("failed to download release and fallback failed: %w", err)
+		}
 	}
+
 	if err := writeFileIfMissing(configPath, []byte("{\n  \"$schema\": \"https://charm.land/crush.json\",\n  \"options\": {\n    \"disable_metrics\": true\n  }\n}\n"), 0644); err != nil {
 		return domain.RuntimeState{}, err
 	}
 	_ = os.MkdirAll(dataPath, 0755)
 	_ = os.MkdirAll(logsPath, 0755)
-	return nowState(a.ID(), mode, binPath, configPath, "", dataPath, logsPath), nil
+
+	state := nowState(a.ID(), mode, binPath, configPath, "", dataPath, logsPath)
+	if version != "" {
+		state.Version = version
+		state.SourceURL = sourceURL
+		state.Source = "github_release"
+	}
+	return state, nil
 }
 
 func (a *CrushAdapter) Resolve(ctx context.Context, state domain.RuntimeState) error {

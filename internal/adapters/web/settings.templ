@@ -126,11 +126,23 @@ templ SettingsPage(view SettingsView) {
 												<span class="text-danger">{ r.Health.Status }</span>
 											}
 										</div>
-										if r.State.ConfigPath != "" {
+										if len(r.ConfigFiles) > 0 {
+											for _, file := range r.ConfigFiles {
+												<form hx-post={ "/runtimes/" + string(r.ID) + "/config" } hx-target="body" hx-swap="outerHTML" class="stacked" data-success="Runtime config saved." style="margin-top: var(--space-3);">
+													<strong>{ file.Name }</strong>
+													if file.Sensitive {
+														<span class="badge text-danger" style="margin-left: 8px;">Sensitive</span>
+													}
+													<input type="hidden" name="file_name" value={ file.Name } />
+													<textarea name="content" spellcheck="false" style="font-family: monospace; min-height: 120px; font-size: 12px; white-space: pre;">{ string(file.Content) }</textarea>
+													<button class="button secondary" type="submit">Save { file.Name }</button>
+												</form>
+											}
+										} else if r.State.ConfigPath != "" {
 											<form hx-post={ "/runtimes/" + string(r.ID) + "/config" } hx-target="body" hx-swap="outerHTML" class="stacked" data-success="Runtime config saved.">
 												<input type="hidden" name="file_name" value="config.json" />
 												<textarea name="content" spellcheck="false" style="font-family: monospace; min-height: 120px; font-size: 12px;"></textarea>
-												<button class="button secondary" type="submit">Save Config (Experimental)</button>
+												<button class="button secondary" type="submit">Save Config</button>
 											</form>
 										}
 									}

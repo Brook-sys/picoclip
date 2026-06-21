@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"time"
 
@@ -32,27 +33,43 @@ func (a *PicoClawAdapter) SupportedInstallModes() []domain.InstallMode {
 }
 
 func (a *PicoClawAdapter) Install(ctx context.Context, mode domain.InstallMode, destDir string) (domain.RuntimeState, error) {
-	binPath := filepath.Join(destDir, "bin", "picoclaw")
+	binName := "picoclaw"
+	if runtime.GOOS == "windows" {
+		binName = "picoclaw.exe"
+	}
+	binPath := filepath.Join(destDir, "bin", binName)
 	homePath := filepath.Join(destDir, "home")
 	configPath := filepath.Join(destDir, "config", "config.json")
 	logsPath := filepath.Join(destDir, "logs")
 	if mode == domain.InstallModeGlobal {
-		binPath = filepath.Join(userBinDir(), "picoclaw")
+		binPath = filepath.Join(userBinDir(), binName)
 		home, _ := os.UserHomeDir()
 		homePath = filepath.Join(home, ".picoclaw")
 		configPath = filepath.Join(homePath, "config.json")
 		logsPath = filepath.Join(homePath, "logs")
 	}
-	if err := copyExistingBinary(a.FallbackBinary, binPath); err != nil {
-		return domain.RuntimeState{}, err
+
+	version, sourceURL, err := installFromGitHubRelease(ctx, "sipeed", "picoclaw", "picoclaw", "picoclaw", binPath)
+	if err != nil {
+		if err := copyExistingBinary(a.FallbackBinary, binPath); err != nil {
+			return domain.RuntimeState{}, fmt.Errorf("failed to download release and fallback failed: %w", err)
+		}
 	}
+
 	if err := writeFileIfMissing(configPath, []byte("{\n  \"agents\": {\n    \"defaults\": {\n      \"workspace\": \""+filepath.ToSlash(filepath.Join(homePath, "workspace"))+"\",\n      \"restrict_to_workspace\": true\n    }\n  },\n  \"tools\": {\n    \"exec\": {\n      \"enabled\": true,\n      \"enable_deny_patterns\": true\n    },\n    \"mcp\": {\n      \"enabled\": false,\n      \"servers\": {}\n    }\n  }\n}\n"), 0644); err != nil {
 		return domain.RuntimeState{}, err
 	}
 	_ = writeFileIfMissing(filepath.Join(filepath.Dir(configPath), ".security.yml"), []byte("# Sensitive PicoClaw values managed by PicoClip.\n"), 0600)
 	_ = os.MkdirAll(filepath.Join(homePath, "workspace"), 0755)
 	_ = os.MkdirAll(logsPath, 0755)
-	return nowState(a.ID(), mode, binPath, configPath, homePath, homePath, logsPath), nil
+
+	state := nowState(a.ID(), mode, binPath, configPath, homePath, homePath, logsPath)
+	if version != "" {
+		state.Version = version
+		state.SourceURL = sourceURL
+		state.Source = "github_release"
+	}
+	return state, nil
 }
 
 func (a *PicoClawAdapter) Resolve(ctx context.Context, state domain.RuntimeState) error {
