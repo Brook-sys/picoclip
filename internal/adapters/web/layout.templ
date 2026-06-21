@@ -66,8 +66,13 @@ templ PageShell(active string, title string, subtitle string, action templ.Compo
 					<div id="toast-root" class="toast-root" aria-live="polite"></div>
 					<script>
 						(function(){
+							if(window.__picoclipUIInitialized) return;
+							window.__picoclipUIInitialized = true;
+
 							function resolveTheme(mode){ var dark=window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches; return mode==='system'?(dark?'dark':'light'):mode; }
 							function applyTheme(mode){ localStorage.setItem('picoclip.theme', mode); document.documentElement.dataset.themeMode=mode; document.documentElement.dataset.theme=resolveTheme(mode); var select=document.getElementById('theme-select'); if(select) select.value=mode; }
+							
+							var toastTimers = [];
 							function toast(message, type){
 								var root = document.getElementById('toast-root');
 								if(!root) return;
@@ -76,7 +81,19 @@ templ PageShell(active string, title string, subtitle string, action templ.Compo
 								el.textContent = message;
 								root.appendChild(el);
 								setTimeout(function(){ el.classList.add('show'); }, 10);
-								setTimeout(function(){ el.classList.remove('show'); setTimeout(function(){ el.remove(); }, 180); }, 2600);
+								var hide = function(){ 
+									el.classList.remove('show'); 
+									setTimeout(function(){ if(el.parentNode) el.remove(); }, 180); 
+								};
+								var timer = setTimeout(hide, 3000);
+								toastTimers.push(timer);
+								if (root.children.length > 3) {
+									var old = root.firstElementChild;
+									if(old) {
+										old.classList.remove('show');
+										setTimeout(function(){ if(old.parentNode) old.remove(); }, 180);
+									}
+								}
 							}
 							window.picoclipToast = toast;
 							window.picoclipApplyTheme = applyTheme;
@@ -116,7 +133,9 @@ templ PageShell(active string, title string, subtitle string, action templ.Compo
 								var button = form && form.querySelector ? form.querySelector('button[type="submit"]') : null;
 								if(button){ button.disabled = false; button.textContent = button.dataset.originalText || button.textContent; }
 								if(form && form.classList) form.classList.remove('is-loading');
-								if(method && method !== 'GET') toast(successful ? (form.dataset.success || 'Alteração salva com sucesso.') : 'Falha ao salvar alteração.', successful ? 'success' : 'error');
+								if(form && form.dataset.noToast === "true") return;
+								var msg = successful ? (form && form.dataset.success || 'Alteração salva com sucesso.') : (form && form.dataset.error || 'Falha ao processar.');
+								if(method && method !== 'GET') toast(msg, successful ? 'success' : 'error');
 							});
 
 							var palette = document.getElementById('command-palette-backdrop');

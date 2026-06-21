@@ -29,6 +29,13 @@ type RuntimeManager struct {
 	catalog  []RuntimeManifest
 }
 
+type RuntimeAITestResult struct {
+	Status    string    `json:"status"`
+	Message   string    `json:"message"`
+	Output    string    `json:"output,omitempty"`
+	CheckedAt time.Time `json:"checked_at"`
+}
+
 func NewRuntimeManager(storage ports.Storage, baseDir string, clock ports.Clock) *RuntimeManager {
 	return &RuntimeManager{
 		storage:  storage,
@@ -190,6 +197,43 @@ func (m *RuntimeManager) TestAllConfigured(ctx context.Context, logger ports.Log
 
 func (m *RuntimeManager) Health(ctx context.Context, id domain.RuntimeID) (domain.RuntimeHealth, error) {
 	return m.Test(ctx, id)
+}
+
+func (m *RuntimeManager) TestAI(ctx context.Context, id domain.RuntimeID) (RuntimeAITestResult, error) {
+	state, err := m.State(ctx, id)
+	if err != nil {
+		return RuntimeAITestResult{Status: "error", Message: "Not installed"}, nil
+	}
+	testCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+
+	now := m.clock.Now()
+	res, err := m.Execute(testCtx, id, ports.RuntimeExecutionInput{
+		Agent: domain.Agent{Name: "System AI Tester", Type: domain.AgentType(id)},
+		Task:  domain.Task{Prompt: "Say exactly and only the word PONG"},
+		Run:   domain.Run{ID: "run_test_ai"},
+	})
+
+	result := RuntimeAITestResult{CheckedAt: now}
+	if err != nil {
+		result.Status = "error"
+		result.Message = err.Error()
+	} else {
+		result.Status = "ok"
+		result.Message = "AI request successful"
+		result.Output = res.Output
+	}
+
+	metadata := make(map[string]any)
+	if state.MetadataJSON != "" && state.MetadataJSON != "{}" {
+		_ = json.Unmarshal([]byte(state.MetadataJSON), &metadata)
+	}
+	metadata["last_ai_test"] = result
+	if raw, err := json.Marshal(metadata); err == nil {
+		state.MetadataJSON = string(raw)
+		_ = m.storage.Runtimes().Save(ctx, state)
+	}
+	return result, nil
 }
 
 func (m *RuntimeManager) Execute(ctx context.Context, id domain.RuntimeID, input ports.RuntimeExecutionInput) (ports.RuntimeExecutionResult, error) {

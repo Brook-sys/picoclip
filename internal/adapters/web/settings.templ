@@ -118,7 +118,7 @@ templ SettingsPage(view SettingsView) {
 								
 								<div style="margin-top: var(--space-3); padding-top: var(--space-3); border-top: 1px solid var(--border);">
 									if !r.Configured {
-										<form hx-post={ "/runtimes/" + string(r.ID) + "/install" } hx-target="body" hx-swap="outerHTML" class="stacked">
+										<form hx-post={ "/runtimes/" + string(r.ID) + "/install" } hx-target="body" hx-swap="outerHTML" data-success="Runtime installed." data-error="Runtime install failed." class="stacked">
 											<select name="mode">
 												<option value="exclusive">Install Exclusive (Sandboxed)</option>
 												<option value="global">Install Global (~/.local/bin)</option>
@@ -134,7 +134,7 @@ templ SettingsPage(view SettingsView) {
 											<p class="muted">Choose latest, nightly, one of the latest 10 releases, or type an exact tag.</p>
 											<button class="button secondary" type="submit" data-loading-disable>Install</button>
 										</form>
-										<form hx-post={ "/runtimes/" + string(r.ID) + "/existing" } hx-target="body" hx-swap="outerHTML" style="display: flex; gap: var(--space-2); margin-top: var(--space-2);">
+										<form hx-post={ "/runtimes/" + string(r.ID) + "/existing" } hx-target="body" hx-swap="outerHTML" data-success="Existing runtime configured." data-error="Failed to configure existing runtime." style="display: flex; gap: var(--space-2); margin-top: var(--space-2);">
 											<input type="text" name="bin_path" placeholder="/usr/bin/..." style="flex: 1;" required />
 											<button class="button secondary" type="submit">Use Existing</button>
 										</form>
@@ -144,7 +144,7 @@ templ SettingsPage(view SettingsView) {
 											if r.State.ConfigPath != "" {
 												<strong>Config:</strong> <code style="word-break: break-all;">{ r.State.ConfigPath }</code><br/>
 											}
-											<strong>Functional status:</strong> 
+											<strong>CLI Status:</strong> 
 											if !r.Tested {
 												<span class="muted">Not tested yet</span>
 											} else if r.Functional {
@@ -153,7 +153,22 @@ templ SettingsPage(view SettingsView) {
 												<span class="text-danger">Not functional</span>
 											}
 											if r.TestedAt != "" {
-												<br/><strong>Last tested:</strong> <span class="muted">{ r.TestedAt }</span>
+												<span class="muted" style="margin-left: var(--space-2);">Last tested: { r.TestedAt }</span>
+											}
+											<br/>
+											<strong>AI Status:</strong>
+											if !r.AITested {
+												<span class="muted">Not tested yet</span>
+											} else if r.AIOk {
+												<span style="color: var(--success);">Functional</span>
+											} else {
+												<span class="text-danger">Failed</span>
+											}
+											if r.AITestedAt != "" {
+												<span class="muted" style="margin-left: var(--space-2);">Last tested: { r.AITestedAt }</span>
+											}
+											if r.AIMessage != "" {
+												<br/><small class="muted">{ r.AIMessage }</small>
 											}
 											if r.Health.Version != "" {
 												<br/><strong>Version:</strong> <span>{ r.Health.Version }</span>
@@ -166,11 +181,14 @@ templ SettingsPage(view SettingsView) {
 												</div>
 											}
 										</div>
-										<div class="actions" style="gap: var(--space-2); align-items: center;">
-											<form hx-post={ "/runtimes/" + string(r.ID) + "/test" } hx-target="body" hx-swap="outerHTML">
-												<button class="button secondary" type="submit">Test Runtime</button>
+										<div class="actions" style="gap: var(--space-2); align-items: center; margin-bottom: var(--space-3);">
+											<form hx-post={ "/runtimes/" + string(r.ID) + "/test" } data-success="CLI check successful." data-error="CLI check failed." hx-target="body" hx-swap="outerHTML">
+												<button class="button secondary" type="submit">Test CLI</button>
 											</form>
-											<form hx-post={ "/runtimes/" + string(r.ID) + "/uninstall" } hx-confirm="Are you sure you want to uninstall this runtime? Configuration files will be deleted if installed exclusively." hx-target="body" hx-swap="outerHTML">
+											<form hx-post={ "/runtimes/" + string(r.ID) + "/test-ai" } hx-confirm="This will send a real test request to the configured AI provider. It may consume tokens. Continue?" data-success="AI test successful." data-error="AI test failed." hx-target="body" hx-swap="outerHTML">
+												<button class="button secondary" type="submit">Test AI Request</button>
+											</form>
+											<form hx-post={ "/runtimes/" + string(r.ID) + "/uninstall" } hx-confirm="Are you sure you want to uninstall this runtime? Configuration files will be deleted if installed exclusively." hx-target="body" hx-swap="outerHTML" style="margin-left: auto;">
 												<button class="button button-danger text-danger" type="submit" style="background: transparent; border-color: transparent; padding-left: 0;">Uninstall Runtime</button>
 											</form>
 										</div>

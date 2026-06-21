@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"picoclip/internal/core/domain"
+	"picoclip/internal/core/services"
 )
 
 type RuntimeCardView struct {
@@ -24,6 +25,10 @@ type RuntimeCardView struct {
 	TestedAt    string
 	Functional  bool
 	Checks      []domain.DiagnosticCheck
+	AITested    bool
+	AITestedAt  string
+	AIOk        bool
+	AIMessage   string
 }
 
 func (s *Server) runtimeCards(r *http.Request) []RuntimeCardView {
@@ -35,6 +40,7 @@ func (s *Server) runtimeCards(r *http.Request) []RuntimeCardView {
 		var configFiles []domain.RuntimeConfigFile
 		var versions []domain.RuntimeVersion
 		tested, testedAt, functional, checks, savedHealth := runtimeHealthSummary(state)
+		aiTested, aiTestedAt, aiOK, aiMessage := runtimeAITestSummary(state)
 		if configured {
 			if tested {
 				health = savedHealth
@@ -63,6 +69,10 @@ func (s *Server) runtimeCards(r *http.Request) []RuntimeCardView {
 			TestedAt:    testedAt,
 			Functional:  functional,
 			Checks:      checks,
+			AITested:    aiTested,
+			AITestedAt:  aiTestedAt,
+			AIOk:        aiOK,
+			AIMessage:   aiMessage,
 		})
 	}
 	return cards
@@ -83,6 +93,26 @@ func runtimeHealthSummary(state domain.RuntimeState) (tested bool, testedAt stri
 	testedAt = timeSince(*state.LastHealthAt)
 	checks = health.Checks
 	return true, testedAt, functional, checks, health
+}
+
+func runtimeAITestSummary(state domain.RuntimeState) (tested bool, testedAt string, ok bool, message string) {
+	if state.MetadataJSON == "" || state.MetadataJSON == "{}" {
+		return false, "", false, ""
+	}
+	var metadata struct {
+		LastAITest *services.RuntimeAITestResult `json:"last_ai_test"`
+	}
+	if err := json.Unmarshal([]byte(state.MetadataJSON), &metadata); err != nil || metadata.LastAITest == nil {
+		return false, "", false, ""
+	}
+	res := metadata.LastAITest
+	ok = res.Status == "ok"
+	message = res.Message
+	if res.Output != "" {
+		message += " (Output: " + res.Output + ")"
+	}
+	testedAt = timeSince(res.CheckedAt)
+	return true, testedAt, ok, message
 }
 
 func (s *Server) handleWebPostRuntimeExisting(w http.ResponseWriter, r *http.Request) {
@@ -166,6 +196,20 @@ func (s *Server) handleWebPostRuntimeTest(w http.ResponseWriter, r *http.Request
 	runtimeID := domain.RuntimeID(r.PathValue("id"))
 	if _, err := s.runtimes.Test(r.Context(), runtimeID); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	s.handleWebSettings(w, r)
+}
+
+func (s *Server) handleWebPostRuntimeTestAI(w http.ResponseWriter, r *http.Request) {
+	runtimeID := domain.RuntimeID(r.PathValue("id"))
+	result, err := s.runtimes.TestAI(r.Context(), runtimeID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if result.Status != "ok" {
+		http.Error(w, result.Message, http.StatusBadRequest)
 		return
 	}
 	s.handleWebSettings(w, r)
