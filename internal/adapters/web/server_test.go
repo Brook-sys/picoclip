@@ -10,6 +10,7 @@ import (
 
 	"picoclip/internal/adapters/events"
 	"picoclip/internal/adapters/storage/memory"
+	"picoclip/internal/core/domain"
 	"picoclip/internal/core/services"
 )
 
@@ -18,8 +19,12 @@ func newTestServer(t *testing.T) *httptest.Server {
 }
 
 func newTestServerWithDebug(t *testing.T, debug bool) *httptest.Server {
-	t.Helper()
 	storage := memory.NewStorage()
+	return newTestServerWithStorage(t, storage, debug)
+}
+
+func newTestServerWithStorage(t *testing.T, storage *memory.Storage, debug bool) *httptest.Server {
+	t.Helper()
 	clock := services.SystemClock{}
 	idGen := &services.TimeIDGenerator{}
 	bus := events.NewInMemoryBus()
@@ -137,6 +142,30 @@ func TestAgentNewHidesNoopAndShowsRuntimeWarningWhenDebugDisabled(t *testing.T) 
 	}
 	if !strings.Contains(html, "No runtimes installed") {
 		t.Fatalf("expected no runtime warning")
+	}
+}
+
+func TestAgentNewHidesRuntimeWithMissingBinary(t *testing.T) {
+	storage := memory.NewStorage()
+	state := domain.RuntimeState{ID: "runtime_picoclaw", RuntimeID: "picoclaw", Mode: domain.InstallModeExclusive, Enabled: true, BinPath: "/tmp/definitely-missing-picoclaw", SettingsJSON: "{}", MetadataJSON: "{}"}
+	if err := storage.Runtimes().Save(t.Context(), state); err != nil {
+		t.Fatal(err)
+	}
+	ts := newTestServerWithStorage(t, storage, false)
+	defer ts.Close()
+
+	res, err := ts.Client().Get(ts.URL + "/agents/new")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer res.Body.Close()
+	buf := new(bytes.Buffer)
+	if _, err := buf.ReadFrom(res.Body); err != nil {
+		t.Fatal(err)
+	}
+	html := buf.String()
+	if strings.Contains(html, `value="picoclaw"`) {
+		t.Fatalf("picoclaw should not be visible when its binary is missing")
 	}
 }
 

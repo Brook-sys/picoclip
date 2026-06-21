@@ -16,9 +16,15 @@ func (s *Server) agentRuntimeOptions(ctx context.Context) []RuntimeOption {
 	states, _ := s.runtimes.States(ctx)
 	options := make([]RuntimeOption, 0, len(states)+1)
 	for _, manifest := range s.runtimes.Catalog() {
-		if _, ok := states[manifest.ID]; ok {
-			options = append(options, RuntimeOption{ID: manifest.ID, Label: manifest.Name})
+		state, ok := states[manifest.ID]
+		if !ok {
+			continue
 		}
+		adapter, ok := s.runtimes.Adapter(manifest.ID)
+		if !ok || adapter.Resolve(ctx, state) != nil {
+			continue
+		}
+		options = append(options, RuntimeOption{ID: manifest.ID, Label: manifest.Name})
 	}
 	if s.debugMode {
 		options = append(options, RuntimeOption{ID: "noop", Label: "Noop (debug)"})
@@ -34,8 +40,14 @@ func (s *Server) validateAgentRuntime(ctx context.Context, agentType domain.Agen
 		return fmt.Errorf("runtime not available: noop")
 	}
 	if agentType == "crush" || agentType == "picoclaw" {
-		if _, err := s.runtimes.State(ctx, domain.RuntimeID(agentType)); err != nil {
+		runtimeID := domain.RuntimeID(agentType)
+		state, err := s.runtimes.State(ctx, runtimeID)
+		if err != nil {
 			return fmt.Errorf("runtime not installed: %s", agentType)
+		}
+		adapter, ok := s.runtimes.Adapter(runtimeID)
+		if !ok || adapter.Resolve(ctx, state) != nil {
+			return fmt.Errorf("runtime not installed or not available: %s", agentType)
 		}
 	}
 	return nil
