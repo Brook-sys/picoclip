@@ -118,10 +118,11 @@ templ PageShell(active string, title string, subtitle string, action templ.Compo
 								if(evt.target.classList && evt.target.classList.contains('agent-search')){ var q=evt.target.value.toLowerCase(); var picker=evt.target.closest('[data-agent-picker]'); picker.querySelectorAll('[data-agent-option]').forEach(function(option){ option.hidden = q && option.dataset.agentSearch.indexOf(q) === -1; }); }
 							});
 							document.addEventListener('keydown', function(evt){ if(evt.key==='Escape'){ document.querySelectorAll('.modal-backdrop').forEach(function(m){m.hidden=true; m.style.display='none'}); syncModalState(); } });
+							function requestForm(evt){ var el = evt.detail && evt.detail.elt ? evt.detail.elt : evt.target; return el && el.closest ? el.closest('form') : el; }
 							document.addEventListener('htmx:beforeRequest', function(evt){
 								var verb = (evt.detail.requestConfig && evt.detail.requestConfig.verb || '').toUpperCase();
 								if(verb === 'GET' && document.documentElement.classList.contains('modal-open')){ evt.preventDefault(); return; }
-								var form = evt.target && evt.target.closest ? evt.target.closest('form') : evt.target;
+								var form = requestForm(evt);
 								var button = form && form.querySelector ? form.querySelector('button[type="submit"]') : null;
 								if(button){ button.dataset.originalText = button.textContent; button.textContent = button.dataset.loadingText || 'Salvando...'; button.disabled = true; }
 								if(form && form.classList) form.classList.add('is-loading');
@@ -132,7 +133,7 @@ templ PageShell(active string, title string, subtitle string, action templ.Compo
 							document.addEventListener('htmx:afterRequest', function(evt){
 								var method = (evt.detail.requestConfig && evt.detail.requestConfig.verb || '').toUpperCase();
 								var successful = evt.detail.successful;
-								var form = evt.target && evt.target.closest ? evt.target.closest('form') : evt.target;
+								var form = requestForm(evt);
 								var button = form && form.querySelector ? form.querySelector('button[type="submit"]') : null;
 								if(button){ button.disabled = false; button.textContent = button.dataset.originalText || button.textContent; }
 								if(form && form.classList) form.classList.remove('is-loading');
