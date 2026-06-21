@@ -123,11 +123,9 @@ func TestAgentTaskLifecycleAPI(t *testing.T) {
 	}
 }
 
-func TestAgentNewHidesNoopAndShowsRuntimeWarningWhenDebugDisabled(t *testing.T) {
-	ts := newTestServerWithDebug(t, false)
-	defer ts.Close()
-
-	res, err := ts.Client().Get(ts.URL + "/agents/new")
+func readHTML(t *testing.T, client *http.Client, url string) string {
+	t.Helper()
+	res, err := client.Get(url)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -136,12 +134,23 @@ func TestAgentNewHidesNoopAndShowsRuntimeWarningWhenDebugDisabled(t *testing.T) 
 	if _, err := buf.ReadFrom(res.Body); err != nil {
 		t.Fatal(err)
 	}
-	html := buf.String()
+	return buf.String()
+}
+
+func TestAgentNewHidesNoopAndShowsRuntimeWarningWhenDebugDisabled(t *testing.T) {
+	ts := newTestServerWithDebug(t, false)
+	defer ts.Close()
+
+	html := readHTML(t, ts.Client(), ts.URL+"/agents/new")
 	if strings.Contains(html, `value="noop"`) {
 		t.Fatalf("noop should not be visible when debug is disabled")
 	}
 	if !strings.Contains(html, "No runtimes installed") {
 		t.Fatalf("expected no runtime warning")
+	}
+	htmlModal := readHTML(t, ts.Client(), ts.URL+"/agents")
+	if strings.Contains(htmlModal, `value="noop"`) {
+		t.Fatalf("noop should not be visible in modal when debug is disabled")
 	}
 }
 
@@ -154,18 +163,14 @@ func TestAgentNewHidesRuntimeWithMissingBinary(t *testing.T) {
 	ts := newTestServerWithStorage(t, storage, false)
 	defer ts.Close()
 
-	res, err := ts.Client().Get(ts.URL + "/agents/new")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer res.Body.Close()
-	buf := new(bytes.Buffer)
-	if _, err := buf.ReadFrom(res.Body); err != nil {
-		t.Fatal(err)
-	}
-	html := buf.String()
+	html := readHTML(t, ts.Client(), ts.URL+"/agents/new")
 	if strings.Contains(html, `value="picoclaw"`) {
 		t.Fatalf("picoclaw should not be visible when its binary is missing")
+	}
+
+	htmlModal := readHTML(t, ts.Client(), ts.URL+"/agents")
+	if strings.Contains(htmlModal, `value="picoclaw"`) {
+		t.Fatalf("picoclaw should not be visible in modal when its binary is missing")
 	}
 }
 

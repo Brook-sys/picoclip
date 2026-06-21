@@ -395,7 +395,7 @@ func (s *Server) handleWebAgents(w http.ResponseWriter, r *http.Request) {
 		}
 		agents = filtered
 	}
-	if err := AgentsPage(agents, projects, tasks).Render(r.Context(), w); err != nil {
+	if err := AgentsPage(agents, projects, tasks, s.agentRuntimeOptions(r.Context())).Render(r.Context(), w); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
 }

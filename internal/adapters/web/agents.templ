@@ -2,8 +2,8 @@ package web
 
 import "picoclip/internal/core/domain"
 
-templ AgentsPage(agents []domain.Agent, projects []domain.Workspace, tasks []taskResponse) {
-	@PageShell("agents", "Agents", "Local workers with drivers, skills, permissions and assigned workload.", agentsAction()) {
+templ AgentsPage(agents []domain.Agent, projects []domain.Workspace, tasks []taskResponse, runtimeOptions []RuntimeOption) {
+	@PageShell("agents", "Agents", "Local workers with runtimes, skills, permissions and assigned workload.", agentsAction()) {
 		<section class="panel">
 			@SectionHeader("Agent Workforce", "Monitor available agents and their task load.") {}
 			<div class="stack-sm" style="margin-bottom: 16px;">
@@ -17,7 +17,7 @@ templ AgentsPage(agents []domain.Agent, projects []domain.Workspace, tasks []tas
 							<th>Status</th>
 							<th>Role</th>
 							<th>Tags</th>
-							<th>Driver</th>
+							<th>Runtime</th>
 							<th>Permissions</th>
 							<th>Tasks</th>
 						</tr>
@@ -50,7 +50,7 @@ templ AgentsPage(agents []domain.Agent, projects []domain.Workspace, tasks []tas
 				</table>
 			</div>
 		</section>
-		@AgentQuickModal("agent-quick-modal", agents)
+		@AgentQuickModal("agent-quick-modal", agents, runtimeOptions)
 	}
 }
 

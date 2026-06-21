@@ -23,7 +23,7 @@ templ AgentDetailPage(agent domain.Agent, agents []domain.Agent, tasks []taskRes
 						<dd>{ agent.Title }</dd>
 						<dt>Reports to</dt>
 						<dd>{ agentName(agents, agent.ReportsToID) }</dd>
-						<dt>Driver</dt>
+						<dt>Runtime</dt>
 						<dd>{ string(agent.Type) }</dd>
 						<dt>Tags</dt>
 						<dd>@TagChips(agentDisplayTags(agent, projects))</dd>

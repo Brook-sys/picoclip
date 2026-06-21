@@ -3,7 +3,7 @@ package web
 import "picoclip/internal/core/domain"
 
 templ AgentNewPage(projects []domain.Workspace, agents []domain.Agent, skills []domain.Skill, runtimeOptions []RuntimeOption) {
-	@PageShell("agents", "Novo agente", "Criação de agente com hierarquia, skills, instruções e adapter.", agentNewAction()) {
+	@PageShell("agents", "Novo agente", "Criação de agente com hierarquia, skills, instruções e runtime.", agentNewAction()) {
 		<form method="post" action="/agents" class="detail-grid">
 			<div class="main-column">
 				<div class="panel">
@@ -40,20 +40,9 @@ templ AgentNewPage(projects []domain.Workspace, agents []domain.Agent, skills []
 					</div>
 				</div>
 				<div class="panel">
-					<h2>Adaptador / Driver</h2>
+					<h2>Runtime</h2>
 					<div class="stacked">
-						if len(runtimeOptions) == 0 {
-							<div class="card border-danger">
-								<strong class="text-danger">No runtimes installed.</strong>
-								<p class="muted">Go to Settings → Runtimes before creating agents.</p>
-							</div>
-						} else {
-							<select name="type">
-								for _, runtime := range runtimeOptions {
-									<option value={ string(runtime.ID) }>{ runtime.Label }</option>
-								}
-							</select>
-						}
+						@RuntimeSelect(runtimeOptions, "")
 						<textarea name="extra_args" placeholder="Extra args, um por linha&#10;--foo&#10;--bar=value"></textarea>
 						<textarea name="config" placeholder="Configuração (key=value por linha)"></textarea>
 						<textarea name="env" placeholder="Variáveis de ambiente (key=value por linha)"></textarea>

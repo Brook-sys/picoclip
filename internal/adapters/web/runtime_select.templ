@@ -1,0 +1,16 @@
+package web
+
+templ RuntimeSelect(runtimeOptions []RuntimeOption, selected string) {
+	if len(runtimeOptions) == 0 {
+		<div class="card border-danger">
+			<strong class="text-danger">No runtimes installed.</strong>
+			<p class="muted">Go to Settings → Runtimes before creating agents.</p>
+		</div>
+	} else {
+		<select name="type">
+			for _, runtime := range runtimeOptions {
+				<option value={ string(runtime.ID) } selected?={ string(runtime.ID) == selected }>{ runtime.Label }</option>
+			}
+		</select>
+	}
+}

@@ -7,7 +7,7 @@ import (
 	"picoclip/internal/core/services"
 )
 
-templ AgentQuickModal(id string, agents []domain.Agent) {
+templ AgentQuickModal(id string, agents []domain.Agent, runtimeOptions []RuntimeOption) {
 	<div class="modal-backdrop" data-modal={ id } hidden style="display: none;">
 		<div class="modal-card">
 			<button class="modal-close" type="button" data-close-modal={ id }>×</button>
@@ -17,11 +17,7 @@ templ AgentQuickModal(id string, agents []domain.Agent) {
 				<input name="title" placeholder="Título / Cargo"/>
 				@AgentPicker(agents, "reports_to_id", "", "Responde a...")
 				<textarea name="tags" placeholder="Tags, uma por linha"></textarea>
-				<select name="type">
-					<option value="crush">Crush</option>
-					<option value="picoclaw">PicoClaw</option>
-					<option value="noop">Noop</option>
-				</select>
+				@RuntimeSelect(runtimeOptions, "")
 				<select name="permission_preset">
 					@PermissionPresetOptions(nil)
 				</select>

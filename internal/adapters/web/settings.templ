@@ -93,9 +93,9 @@ templ SettingsPage(view SettingsView) {
 					<h2>Storage</h2>
 					<p class="muted">Database and file management.</p>
 					@PropertyList() {
-						@PropertyItem("Driver", "SQLite (modernc.org/sqlite)")
-						@PropertyItem("Database Path", "data/picoclip.db")
-						@PropertyItem("Migrations", "Version 2 applied")
+						@PropertyItem("Driver", view.Diagnostics.StorageType)
+						@PropertyItem("Database Path", view.Diagnostics.DatabasePath)
+						@PropertyItem("Migrations", "Applied")
 					}
 				</div>
 				

@@ -3,7 +3,7 @@ package web
 import "picoclip/internal/core/domain"
 
 templ RunsPage(runs []domain.Run, tasks map[string]taskResponse, agents map[string]domain.Agent, activeStatus string) {
-	@PageShell("runs", "Runs", "Execution history, driver status, and agent output for tasks.", nil) {
+	@PageShell("runs", "Runs", "Execution history, runtime status, and agent output for tasks.", nil) {
 		<div class="stack">
 			@Tabs() {
 				@TabLink("All", "/runs", activeStatus == "")
@@ -25,7 +25,7 @@ templ RunsPage(runs []domain.Run, tasks map[string]taskResponse, agents map[stri
 								<th>Status</th>
 								<th>Task</th>
 								<th>Agent</th>
-								<th>Driver</th>
+								<th>Runtime</th>
 								<th>Started</th>
 							</tr>
 						</thead>
