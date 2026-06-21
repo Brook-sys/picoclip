@@ -2,6 +2,18 @@ package web
 
 import "strconv"
 
+templ SystemStatusCard(label string, value string, iconName string, variant string) {
+	<div class={ "system-status-card", "system-status-" + variant }>
+		<span class="system-status-icon" aria-hidden="true">
+			@Icon(iconName, 16)
+		</span>
+		<span class="system-status-content">
+			<strong>{ value }</strong>
+			<small>{ label }</small>
+		</span>
+	</div>
+}
+
 templ SettingsPage(view SettingsView) {
 	@PageShell("settings", "Settings", "Global configuration, environment variables, and system administration.", nil) {
 		<section class="settings-layout">
@@ -39,12 +51,13 @@ templ SettingsPage(view SettingsView) {
 
 				<div class="settings-panel">
 					<h2>System Status</h2>
-					@PropertyList() {
-						@PropertyItem("Agents", strconv.Itoa(view.Stats.Agents))
-						@PropertyItem("Tasks", strconv.Itoa(view.Stats.Tasks))
-						@PropertyItem("Projects", strconv.Itoa(view.Stats.Projects))
-						@PropertyItem("Skills", strconv.Itoa(view.Stats.Skills))
-					}
+					<p class="muted">Current workspace inventory.</p>
+					<div class="system-status-grid">
+						@SystemStatusCard("Agents", strconv.Itoa(view.Stats.Agents), "cpu", "agents")
+						@SystemStatusCard("Tasks", strconv.Itoa(view.Stats.Tasks), "check-circle", "tasks")
+						@SystemStatusCard("Projects", strconv.Itoa(view.Stats.Projects), "folder", "projects")
+						@SystemStatusCard("Skills", strconv.Itoa(view.Stats.Skills), "zap", "skills")
+					</div>
 				</div>
 			</aside>
 			
