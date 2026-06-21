@@ -15,6 +15,7 @@ type Storage struct {
 	tasks      map[string]domain.Task
 	runs       map[string]domain.Run
 	events     map[string]domain.Event
+	runtimes   map[string]domain.RuntimeState
 	messages   map[string]domain.Message
 	skills     map[string]domain.Skill
 	workspaces map[string]domain.Workspace
@@ -36,6 +37,7 @@ func NewStorage() *Storage {
 		tasks:      make(map[string]domain.Task),
 		runs:       make(map[string]domain.Run),
 		events:     make(map[string]domain.Event),
+		runtimes:   make(map[string]domain.RuntimeState),
 		messages:   make(map[string]domain.Message),
 		skills:     make(map[string]domain.Skill),
 		workspaces: make(map[string]domain.Workspace),
@@ -59,6 +61,7 @@ func (s *Storage) ResetAllData(ctx context.Context) error {
 	s.tasks = make(map[string]domain.Task)
 	s.runs = make(map[string]domain.Run)
 	s.events = make(map[string]domain.Event)
+	s.runtimes = make(map[string]domain.RuntimeState)
 	s.messages = make(map[string]domain.Message)
 	s.skills = make(map[string]domain.Skill)
 	s.workspaces = make(map[string]domain.Workspace)
@@ -73,6 +76,7 @@ func (s *Storage) RestoreAllData(ctx context.Context, data ports.BackupData) err
 	s.tasks = make(map[string]domain.Task)
 	s.runs = make(map[string]domain.Run)
 	s.events = make(map[string]domain.Event)
+	s.runtimes = make(map[string]domain.RuntimeState)
 	s.messages = make(map[string]domain.Message)
 	s.skills = make(map[string]domain.Skill)
 	s.workspaces = make(map[string]domain.Workspace)
@@ -95,6 +99,9 @@ func (s *Storage) RestoreAllData(ctx context.Context, data ports.BackupData) err
 	}
 	for _, x := range data.Runs {
 		s.runs[x.ID] = x
+	}
+	for _, x := range data.Runtimes {
+		s.runtimes[x.ID] = x
 	}
 	for _, x := range data.Messages {
 		s.messages[x.ID] = x

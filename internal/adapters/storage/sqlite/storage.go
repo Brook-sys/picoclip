@@ -29,6 +29,10 @@ func (s *Storage) Runs() ports.RunRepository {
 	return &RunRepository{db: s.db}
 }
 
+func (s *Storage) Runtimes() ports.RuntimeRepository {
+	return &RuntimeRepository{db: s.db}
+}
+
 func (s *Storage) Events() ports.EventRepository {
 	return &EventRepository{db: s.db}
 }
@@ -59,6 +63,7 @@ func (s *Storage) ResetAllData(ctx context.Context) error {
 		DELETE FROM agents;
 		DELETE FROM workspaces;
 		DELETE FROM settings;
+		DELETE FROM runtime_states;
 	`)
 	return err
 }

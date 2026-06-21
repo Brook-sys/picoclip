@@ -13,10 +13,10 @@ type Engine struct {
 	wg        sync.WaitGroup
 }
 
-func NewEngine(storage ports.Storage, bus ports.EventBus, drivers *DriverRegistry, memory ports.MemoryProvider, config Config) *Engine {
+func NewEngine(storage ports.Storage, bus ports.EventBus, runtimes *RuntimeManager, memory ports.MemoryProvider, config Config) *Engine {
 	clock := SystemClock{}
 	idGen := &TimeIDGenerator{}
-	runner := NewRunner(storage, clock, idGen, bus, drivers, memory, config)
+	runner := NewRunner(storage, clock, idGen, bus, runtimes, memory, config)
 	dispatcher := NewDispatcher(storage, runner, config.MaxConcurrentRuns)
 	scheduler := NewScheduler(config.PollInterval, dispatcher)
 	return &Engine{scheduler: scheduler}

@@ -8,8 +8,8 @@ import (
 	"os"
 	"path/filepath"
 
-	"picoclip/internal/adapters/drivers"
 	"picoclip/internal/adapters/events"
+	"picoclip/internal/adapters/runtimes"
 	"picoclip/internal/adapters/storage/memory"
 	"picoclip/internal/adapters/storage/sqlite"
 	"picoclip/internal/adapters/web"
@@ -53,17 +53,25 @@ func main() {
 	bus := events.NewInMemoryBus()
 	clock := services.SystemClock{}
 	idGen := &services.TimeIDGenerator{}
-	registry := services.NewDriverRegistry()
+	runtimeBase := os.Getenv("PICOCLIP_RUNTIMES")
+	if runtimeBase == "" {
+		runtimeBase = filepath.Join("data", "runtimes")
+	}
+	runtimeManager := services.NewRuntimeManager(storage, runtimeBase, clock)
 
 	crushPath := os.Getenv("CRUSH_PATH")
 	if crushPath == "" {
-		crushPath = filepath.Join(os.Getenv("HOME"), "crush", "crush")
+		crushPath = "crush"
 	}
-	registry.Register(drivers.NewCrushDriver(crushPath))
-	registry.Register(&drivers.NoopDriver{})
+	picoclawPath := os.Getenv("PICOCLAW_PATH")
+	if picoclawPath == "" {
+		picoclawPath = "picoclaw"
+	}
+	runtimeManager.Register(runtimes.NewCrushAdapter(crushPath))
+	runtimeManager.Register(runtimes.NewPicoClawAdapter(picoclawPath))
 
 	config := services.DefaultConfig()
-	engine := services.NewEngine(storage, bus, registry, services.NoopMemoryProvider{}, config)
+	engine := services.NewEngine(storage, bus, runtimeManager, services.NoopMemoryProvider{}, config)
 	engine.Start(ctx)
 	defer engine.Stop()
 
@@ -77,7 +85,7 @@ func main() {
 	_, _ = workspaceService.EnsureDefault(ctx)
 	skillService := services.NewSkillService(storage, clock, idGen)
 	_ = skillService.InstallBuiltins(ctx)
-	server := web.NewServer(agentService, taskService, skillService, workspaceService, storage, bus)
+	server := web.NewServer(agentService, taskService, skillService, workspaceService, runtimeManager, storage, bus)
 
 	mux := http.NewServeMux()
 	server.Mount(mux)

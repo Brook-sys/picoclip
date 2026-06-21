@@ -249,5 +249,33 @@ func migrations() []migration {
 				);
 			`,
 		},
+		{
+			version: 3,
+			name:    "create_runtime_states",
+			sql: `
+				CREATE TABLE IF NOT EXISTS runtime_states (
+					id TEXT PRIMARY KEY,
+					runtime_id TEXT NOT NULL UNIQUE,
+					mode TEXT NOT NULL,
+					enabled INTEGER NOT NULL DEFAULT 1,
+					version TEXT NOT NULL DEFAULT '',
+					bin_path TEXT NOT NULL DEFAULT '',
+					config_path TEXT NOT NULL DEFAULT '',
+					home_path TEXT NOT NULL DEFAULT '',
+					data_path TEXT NOT NULL DEFAULT '',
+					logs_path TEXT NOT NULL DEFAULT '',
+					source TEXT NOT NULL DEFAULT '',
+					source_url TEXT NOT NULL DEFAULT '',
+					checksum TEXT NOT NULL DEFAULT '',
+					installed_at TIMESTAMP NOT NULL,
+					updated_at TIMESTAMP NOT NULL,
+					last_health_at TIMESTAMP,
+					last_health_json TEXT NOT NULL DEFAULT '{}',
+					settings_json TEXT NOT NULL DEFAULT '{}',
+					metadata_json TEXT NOT NULL DEFAULT '{}'
+				);
+				CREATE INDEX IF NOT EXISTS idx_runtime_states_runtime_id ON runtime_states(runtime_id);
+			`,
+		},
 	}
 }

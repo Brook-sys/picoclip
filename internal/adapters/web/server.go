@@ -16,13 +16,14 @@ type Server struct {
 	tasks           *services.TaskService
 	skills          *services.SkillService
 	projects        *services.WorkspaceService
+	runtimes        *services.RuntimeManager
 	storage         ports.Storage
 	bus             ports.EventBus
 	adapterSettings map[string]map[string]string
 }
 
-func NewServer(agents *services.AgentService, tasks *services.TaskService, skills *services.SkillService, projects *services.WorkspaceService, storage ports.Storage, bus ports.EventBus) *Server {
-	return &Server{agents: agents, tasks: tasks, skills: skills, projects: projects, storage: storage, bus: bus, adapterSettings: map[string]map[string]string{"crush": {"binary_path": "", "default_args": "", "timeout": "30m", "cwd_strategy": "project"}, "noop": {"timeout": "1m"}}}
+func NewServer(agents *services.AgentService, tasks *services.TaskService, skills *services.SkillService, projects *services.WorkspaceService, runtimes *services.RuntimeManager, storage ports.Storage, bus ports.EventBus) *Server {
+	return &Server{agents: agents, tasks: tasks, skills: skills, projects: projects, runtimes: runtimes, storage: storage, bus: bus, adapterSettings: map[string]map[string]string{"noop": {"timeout": "1m"}}}
 }
 
 func (s *Server) Mount(mux *http.ServeMux) {
@@ -46,6 +47,7 @@ func (s *Server) Mount(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/projects", s.handleCreateProject)
 	mux.HandleFunc("GET /api/capabilities", s.handleGetCapabilities)
 	mux.HandleFunc("GET /api/search", s.handleAPISearch)
+	mux.HandleFunc("GET /api/runtimes", s.handleAPIRuntimes)
 	mux.HandleFunc("GET /agent-api/docs", s.handleAgentDocs)
 	mux.HandleFunc("GET /agent-api/me", s.handleAgentMe)
 	mux.HandleFunc("GET /agent-api/agents", s.handleGetAgents)
@@ -93,6 +95,9 @@ func (s *Server) Mount(mux *http.ServeMux) {
 	mux.HandleFunc("POST /settings/general", s.handleWebPostSettingsGeneral)
 	mux.HandleFunc("POST /settings/adapters", s.handleWebPostSettingsAdapters)
 	mux.HandleFunc("POST /settings/adapters/test", s.handleWebPostSettingsAdaptersTest)
+	mux.HandleFunc("POST /runtimes/{id}/install", s.handleWebPostRuntimeInstall)
+	mux.HandleFunc("POST /runtimes/{id}/existing", s.handleWebPostRuntimeExisting)
+	mux.HandleFunc("POST /runtimes/{id}/config", s.handleWebPostRuntimeConfig)
 	mux.HandleFunc("POST /settings/environment", s.handleWebPostSettingsEnvironment)
 	mux.HandleFunc("GET /settings/export", s.handleWebSettingsExport)
 	mux.HandleFunc("POST /settings/import", s.handleWebSettingsImport)

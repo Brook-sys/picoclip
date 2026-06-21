@@ -171,6 +171,7 @@ func (s *Server) handleWebAgentNew(w http.ResponseWriter, r *http.Request) {
 func (s *Server) loadSettingsView(r *http.Request) (SettingsView, error) {
 	ctx := r.Context()
 	view := defaultSettingsView()
+	view.Runtimes = s.runtimeCards(r)
 	raw, err := s.storage.Settings().List(ctx)
 	if err != nil {
 		return view, err

@@ -23,6 +23,7 @@ func (s *Storage) RestoreAllData(ctx context.Context, data ports.BackupData) err
 		DELETE FROM agents;
 		DELETE FROM workspaces;
 		DELETE FROM settings;
+		DELETE FROM runtime_states;
 	`); err != nil {
 		return err
 	}
@@ -66,6 +67,11 @@ func (s *Storage) RestoreAllData(ctx context.Context, data ports.BackupData) err
 	}
 	for _, x := range data.Runs {
 		if _, err := tx.ExecContext(ctx, `INSERT INTO runs (id, task_id, agent_id, driver_type, status, attempt, input, output, error, started_at, finished_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, x.ID, x.TaskID, x.AgentID, x.DriverType, string(x.Status), x.Attempt, x.Input, x.Output, x.Error, x.StartedAt, x.FinishedAt); err != nil {
+			return err
+		}
+	}
+	for _, x := range data.Runtimes {
+		if _, err := tx.ExecContext(ctx, `INSERT INTO runtime_states (id, runtime_id, mode, enabled, version, bin_path, config_path, home_path, data_path, logs_path, source, source_url, checksum, installed_at, updated_at, last_health_at, last_health_json, settings_json, metadata_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, x.ID, x.RuntimeID, x.Mode, x.Enabled, x.Version, x.BinPath, x.ConfigPath, x.HomePath, x.DataPath, x.LogsPath, x.Source, x.SourceURL, x.Checksum, x.InstalledAt, x.UpdatedAt, x.LastHealthAt, x.LastHealthJSON, x.SettingsJSON, x.MetadataJSON); err != nil {
 			return err
 		}
 	}

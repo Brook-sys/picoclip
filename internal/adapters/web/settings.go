@@ -10,6 +10,7 @@ type SettingsView struct {
 	General     GeneralSettings
 	Adapters    map[string]map[string]string
 	Environment map[string]string
+	Runtimes    []RuntimeCardView
 	Stats       SettingsStats
 }
 

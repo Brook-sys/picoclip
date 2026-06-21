@@ -30,7 +30,8 @@ func newTestServer(t *testing.T) *httptest.Server {
 		t.Fatalf("install builtins: %v", err)
 	}
 	mux := http.NewServeMux()
-	NewServer(agents, tasks, skills, projects, storage, bus).Mount(mux)
+	runtimes := services.NewRuntimeManager(storage, "data/runtimes", clock)
+	NewServer(agents, tasks, skills, projects, runtimes, storage, bus).Mount(mux)
 	return httptest.NewServer(mux)
 }
 

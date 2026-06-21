@@ -12,24 +12,24 @@ import (
 )
 
 type Runner struct {
-	storage ports.Storage
-	clock   ports.Clock
-	idGen   ports.IDGenerator
-	bus     ports.EventBus
-	drivers *DriverRegistry
-	memory  ports.MemoryProvider
-	config  Config
+	storage  ports.Storage
+	clock    ports.Clock
+	idGen    ports.IDGenerator
+	bus      ports.EventBus
+	runtimes *RuntimeManager
+	memory   ports.MemoryProvider
+	config   Config
 }
 
-func NewRunner(storage ports.Storage, clock ports.Clock, idGen ports.IDGenerator, bus ports.EventBus, drivers *DriverRegistry, memory ports.MemoryProvider, config Config) *Runner {
+func NewRunner(storage ports.Storage, clock ports.Clock, idGen ports.IDGenerator, bus ports.EventBus, runtimes *RuntimeManager, memory ports.MemoryProvider, config Config) *Runner {
 	return &Runner{
-		storage: storage,
-		clock:   clock,
-		idGen:   idGen,
-		bus:     bus,
-		drivers: drivers,
-		memory:  memory,
-		config:  config,
+		storage:  storage,
+		clock:    clock,
+		idGen:    idGen,
+		bus:      bus,
+		runtimes: runtimes,
+		memory:   memory,
+		config:   config,
 	}
 }
 
@@ -55,10 +55,9 @@ func (r *Runner) Run(ctx context.Context, task domain.Task) {
 		return
 	}
 
-	driver, ok := r.drivers.Get(agent.Type)
-	if !ok {
-		_ = r.bus.Publish(ctx, domain.Event{ID: r.idGen.NewID("evt"), Type: domain.EventDriverMissing, TaskID: task.ID, AgentID: agent.ID, Message: "Driver not available", CreatedAt: r.clock.Now()})
-		r.failTask(ctx, task, "driver not available")
+	if _, ok := r.runtimes.Adapter(domain.RuntimeID(agent.Type)); !ok && agent.Type != "noop" {
+		_ = r.bus.Publish(ctx, domain.Event{ID: r.idGen.NewID("evt"), Type: domain.EventDriverMissing, TaskID: task.ID, AgentID: agent.ID, Message: "Runtime not available", CreatedAt: r.clock.Now()})
+		r.failTask(ctx, task, "runtime not available")
 		return
 	}
 
@@ -113,7 +112,12 @@ func (r *Runner) Run(ctx context.Context, task domain.Task) {
 		memoryContext = ""
 	}
 
-	result, err := driver.Run(runCtx, ports.DriverInput{Agent: agent, Task: task, Run: run, Memory: memoryContext, Config: agent.Config, Env: agent.Env, ExtraArgs: agent.ExtraArgs})
+	var result ports.RuntimeExecutionResult
+	if agent.Type == "noop" {
+		result = ports.RuntimeExecutionResult{Output: "noop driver executed"}
+	} else {
+		result, err = r.runtimes.Execute(runCtx, domain.RuntimeID(agent.Type), ports.RuntimeExecutionInput{Agent: agent, Task: task, Run: run, Memory: memoryContext, Config: agent.Config, Env: agent.Env, ExtraArgs: agent.ExtraArgs})
+	}
 	finishedAt := r.clock.Now()
 	run.FinishedAt = &finishedAt
 	latest, latestErr := r.storage.Tasks().Get(ctx, task.ID)
@@ -144,7 +148,11 @@ func (r *Runner) Run(ctx context.Context, task domain.Task) {
 	}
 	latest, latestErr = r.storage.Tasks().Get(ctx, task.ID)
 	if latestErr == nil && latest.Status != domain.TaskStatusDone && latest.Status != domain.TaskStatusCancelled {
-		latest.Status = domain.TaskStatusInProgress
+		if agent.Type == "noop" {
+			latest.Status = domain.TaskStatusTodo
+		} else {
+			latest.Status = domain.TaskStatusInProgress
+		}
 		latest.UpdatedAt = finishedAt
 		_ = r.storage.Tasks().Update(ctx, latest)
 	}

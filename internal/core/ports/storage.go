@@ -7,20 +7,22 @@ import (
 )
 
 type BackupData struct {
-	Settings   map[string]string  `json:"settings"`
-	Agents     []domain.Agent     `json:"agents"`
-	Workspaces []domain.Workspace `json:"projects"`
-	Skills     []domain.Skill     `json:"skills"`
-	Tasks      []domain.Task      `json:"tasks"`
-	Runs       []domain.Run       `json:"runs"`
-	Messages   []domain.Message   `json:"messages"`
-	Events     []domain.Event     `json:"events"`
+	Settings   map[string]string     `json:"settings"`
+	Agents     []domain.Agent        `json:"agents"`
+	Workspaces []domain.Workspace    `json:"projects"`
+	Skills     []domain.Skill        `json:"skills"`
+	Tasks      []domain.Task         `json:"tasks"`
+	Runs       []domain.Run          `json:"runs"`
+	Runtimes   []domain.RuntimeState `json:"runtimes"`
+	Messages   []domain.Message      `json:"messages"`
+	Events     []domain.Event        `json:"events"`
 }
 
 type Storage interface {
 	Agents() AgentRepository
 	Tasks() TaskRepository
 	Runs() RunRepository
+	Runtimes() RuntimeRepository
 	Events() EventRepository
 	Messages() MessageRepository
 	Skills() SkillRepository

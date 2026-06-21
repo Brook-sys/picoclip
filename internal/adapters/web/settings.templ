@@ -10,7 +10,7 @@ templ SettingsPage(view SettingsView) {
 					<a class="nav-link" href="#general">General</a>
 					<a class="nav-link" href="#appearance">Appearance</a>
 					<a class="nav-link" href="#storage">Storage</a>
-					<a class="nav-link" href="#adapters">Adapters</a>
+					<a class="nav-link" href="#runtimes">Runtimes</a>
 					<a class="nav-link" href="#environment">Environment</a>
 					<a class="nav-link text-danger" href="#danger-zone">Danger Zone</a>
 				</nav>
@@ -83,28 +83,61 @@ templ SettingsPage(view SettingsView) {
 					}
 				</div>
 				
-				<div id="adapters" class="panel">
-					<h2>Crush Driver</h2>
-					<p class="muted">Configuration for the local execution agent adapter.</p>
-					<form hx-post="/settings/adapters" hx-target="body" hx-swap="outerHTML" data-success="Adapter settings saved." class="stacked">
-						<input type="hidden" name="adapter" value="crush"/>
-						<label>Binary Path</label>
-						<input name="binary_path" value={ adapterSetting(view.Adapters, "crush", "binary_path") } placeholder="$HOME/crush/crush"/>
-						<label>Default Args</label>
-						<input name="default_args" value={ adapterSetting(view.Adapters, "crush", "default_args") }/>
-						<label>Timeout</label>
-						<input name="timeout" value={ adapterSetting(view.Adapters, "crush", "timeout") }/>
-						<label>CWD Strategy</label>
-						<select name="cwd_strategy">
-							<option value="project" selected?={ adapterSetting(view.Adapters, "crush", "cwd_strategy") == "project" }>Project Root</option>
-							<option value="current" selected?={ adapterSetting(view.Adapters, "crush", "cwd_strategy") == "current" }>Current Directory</option>
-						</select>
-						<button type="submit">Save Crush</button>
-					</form>
-					<form hx-post="/settings/adapters/test" hx-target="body" hx-swap="none" data-success="Adapter configuration looks valid." class="stacked" style="margin-top: 12px;">
-						<input type="hidden" name="adapter" value="crush"/>
-						<button class="button secondary" type="submit">Test Crush Configuration</button>
-					</form>
+				<div id="runtimes" class="panel">
+					<h2>Agent Runtimes</h2>
+					<p class="muted">Manage the execution backends (like Crush or PicoClaw) used by agents to run tasks.</p>
+					
+					<div class="grid-cols-2" style="margin-top: var(--space-4);">
+						for _, r := range view.Runtimes {
+							<div class="card bg-surface" style="border-color: var(--border);">
+								<div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: var(--space-2);">
+									<h3 style="margin: 0;">{ r.Name }</h3>
+									if r.Configured {
+										<span class="badge" style="background-color: var(--success-bg); color: var(--success); border: 1px solid var(--success-border);">Installed</span>
+									} else {
+										<span class="badge" style="background-color: var(--surface-hover); color: var(--muted); border: 1px solid var(--border);">Not configured</span>
+									}
+								</div>
+								<p class="muted" style="margin-top: 0; font-size: 0.9em;">{ r.Description }</p>
+								
+								<div style="margin-top: var(--space-3); padding-top: var(--space-3); border-top: 1px solid var(--border);">
+									if !r.Configured {
+										<form hx-post={ "/runtimes/" + string(r.ID) + "/install" } hx-target="body" hx-swap="outerHTML" style="display: flex; gap: var(--space-2);">
+											<select name="mode" style="flex: 1;">
+												<option value="exclusive">Install Exclusive (Sandboxed)</option>
+												<option value="global">Install Global (~/.local/bin)</option>
+											</select>
+											<button class="button secondary" type="submit" data-loading-disable>Install</button>
+										</form>
+										<form hx-post={ "/runtimes/" + string(r.ID) + "/existing" } hx-target="body" hx-swap="outerHTML" style="display: flex; gap: var(--space-2); margin-top: var(--space-2);">
+											<input type="text" name="bin_path" placeholder="/usr/bin/..." style="flex: 1;" required />
+											<button class="button secondary" type="submit">Use Existing</button>
+										</form>
+									} else {
+										<div style="font-size: 0.9em; margin-bottom: var(--space-3);">
+											<strong>Path:</strong> <code style="word-break: break-all;">{ r.State.BinPath }</code><br/>
+											if r.State.ConfigPath != "" {
+												<strong>Config:</strong> <code style="word-break: break-all;">{ r.State.ConfigPath }</code><br/>
+											}
+											<strong>Health:</strong> 
+											if r.Health.Status == "ok" {
+												<span style="color: var(--success);">{ r.Health.Version }</span>
+											} else {
+												<span class="text-danger">{ r.Health.Status }</span>
+											}
+										</div>
+										if r.State.ConfigPath != "" {
+											<form hx-post={ "/runtimes/" + string(r.ID) + "/config" } hx-target="body" hx-swap="outerHTML" class="stacked" data-success="Runtime config saved.">
+												<input type="hidden" name="file_name" value="config.json" />
+												<textarea name="content" spellcheck="false" style="font-family: monospace; min-height: 120px; font-size: 12px;"></textarea>
+												<button class="button secondary" type="submit">Save Config (Experimental)</button>
+											</form>
+										}
+									}
+								</div>
+							</div>
+						}
+					</div>
 				</div>
 				
 				<div id="environment" class="panel">
