@@ -137,7 +137,9 @@ templ PageShell(active string, title string, subtitle string, action templ.Compo
 								var button = form && form.querySelector ? form.querySelector('button[type="submit"]') : null;
 								if(button){ button.disabled = false; button.textContent = button.dataset.originalText || button.textContent; }
 								if(form && form.classList) form.classList.remove('is-loading');
+								var requestPath = (evt.detail.pathInfo && evt.detail.pathInfo.requestPath) || (evt.detail.requestConfig && evt.detail.requestConfig.path) || '';
 								if(form && form.dataset.noToast === "true") return;
+								if(/\/runtimes\/[^\/]+\/test(-ai)?$/.test(requestPath)) return;
 								var msg = successful ? (form && form.dataset.success || 'Alteração salva com sucesso.') : (form && form.dataset.error || 'Falha ao processar.');
 								if(method && method !== 'GET') toast(msg, successful ? 'success' : 'error');
 							});

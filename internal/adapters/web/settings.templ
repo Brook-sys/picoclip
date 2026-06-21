@@ -189,10 +189,10 @@ templ SettingsPage(view SettingsView) {
 										</div>
 										<div class="actions" style="gap: var(--space-2); align-items: center; margin-bottom: var(--space-3);">
 											<form hx-post={ "/runtimes/" + string(r.ID) + "/test" } data-no-toast="true" hx-target="body" hx-swap="outerHTML">
-												<button class="button secondary" type="submit">Test CLI</button>
+												<button class="button secondary" type="submit" data-loading-text="Testing CLI...">Test CLI</button>
 											</form>
 											<form hx-post={ "/runtimes/" + string(r.ID) + "/test-ai" } hx-confirm="This will send a real test request to the configured AI provider. It may consume tokens. Continue?" data-no-toast="true" hx-target="body" hx-swap="outerHTML">
-												<button class="button secondary" type="submit">Test AI Request</button>
+												<button class="button secondary" type="submit" data-loading-text="Testing AI...">Test AI Request</button>
 											</form>
 											<form hx-post={ "/runtimes/" + string(r.ID) + "/uninstall" } hx-confirm="Are you sure you want to uninstall this runtime? Configuration files will be deleted if installed exclusively." hx-target="body" hx-swap="outerHTML" style="margin-left: auto;">
 												<button class="button button-danger text-danger" type="submit" style="background: transparent; border-color: transparent; padding-left: 0;">Uninstall Runtime</button>
