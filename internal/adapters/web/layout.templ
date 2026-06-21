@@ -138,6 +138,8 @@ templ PageShell(active string, title string, subtitle string, action templ.Compo
 								if(button){ button.disabled = false; button.textContent = button.dataset.originalText || button.textContent; }
 								if(form && form.classList) form.classList.remove('is-loading');
 								var requestPath = (evt.detail.pathInfo && evt.detail.pathInfo.requestPath) || (evt.detail.requestConfig && evt.detail.requestConfig.path) || '';
+								var triggerHeader = evt.detail.xhr && (evt.detail.xhr.getResponseHeader('HX-Trigger') || evt.detail.xhr.getResponseHeader('HX-Trigger-After-Swap') || evt.detail.xhr.getResponseHeader('HX-Trigger-After-Settle'));
+								if(triggerHeader){ try { var events = JSON.parse(triggerHeader); if(events['picoclip-toast']) toast(events['picoclip-toast'].message, events['picoclip-toast'].type || 'success'); } catch(e){} }
 								if(form && form.dataset.noToast === "true") return;
 								if(/\/runtimes\/[^\/]+\/test(-ai)?$/.test(requestPath)) return;
 								var msg = successful ? (form && form.dataset.success || 'Alteração salva com sucesso.') : (form && form.dataset.error || 'Falha ao processar.');
