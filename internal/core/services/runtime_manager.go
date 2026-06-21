@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	"errors"
+	"os"
 	"path/filepath"
 	"time"
 
@@ -95,7 +96,7 @@ func (m *RuntimeManager) ConfigureExisting(ctx context.Context, id domain.Runtim
 	return state, nil
 }
 
-func (m *RuntimeManager) Install(ctx context.Context, id domain.RuntimeID, mode domain.InstallMode) (domain.RuntimeState, error) {
+func (m *RuntimeManager) Install(ctx context.Context, id domain.RuntimeID, mode domain.InstallMode, versionAlias string) (domain.RuntimeState, error) {
 	adapter, ok := m.Adapter(id)
 	if !ok {
 		return domain.RuntimeState{}, domain.ErrDriverUnavailable
@@ -103,7 +104,7 @@ func (m *RuntimeManager) Install(ctx context.Context, id domain.RuntimeID, mode 
 	if mode != domain.InstallModeExclusive && mode != domain.InstallModeGlobal {
 		return domain.RuntimeState{}, errors.New("unsupported install mode")
 	}
-	state, err := adapter.Install(ctx, mode, filepath.Join(m.baseDir, string(id)))
+	state, err := adapter.Install(ctx, mode, filepath.Join(m.baseDir, string(id)), versionAlias)
 	if err != nil {
 		return domain.RuntimeState{}, err
 	}
@@ -125,6 +126,17 @@ func (m *RuntimeManager) Install(ctx context.Context, id domain.RuntimeID, mode 
 		return domain.RuntimeState{}, err
 	}
 	return state, nil
+}
+
+func (m *RuntimeManager) Uninstall(ctx context.Context, id domain.RuntimeID) error {
+	state, err := m.State(ctx, id)
+	if err != nil {
+		return err
+	}
+	if state.Mode == domain.InstallModeExclusive {
+		_ = os.RemoveAll(filepath.Join(m.baseDir, string(id)))
+	}
+	return m.storage.Runtimes().Delete(ctx, string(state.RuntimeID))
 }
 
 func (m *RuntimeManager) Health(ctx context.Context, id domain.RuntimeID) (domain.RuntimeHealth, error) {

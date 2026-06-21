@@ -15,36 +15,122 @@ import (
 	"runtime"
 	"strings"
 	"time"
+
+	"picoclip/internal/core/domain"
 )
 
 type githubRelease struct {
-	TagName string `json:"tag_name"`
-	Assets  []struct {
+	TagName    string    `json:"tag_name"`
+	Prerelease bool      `json:"prerelease"`
+	CreatedAt  time.Time `json:"created_at"`
+	Assets     []struct {
 		Name               string `json:"name"`
 		BrowserDownloadURL string `json:"browser_download_url"`
 		Size               int64  `json:"size"`
 	} `json:"assets"`
 }
 
-func installFromGitHubRelease(ctx context.Context, owner string, repo string, assetPrefix string, binaryName string, dst string) (string, string, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "https://api.github.com/repos/"+owner+"/"+repo+"/releases/latest", nil)
+func listGitHubVersions(ctx context.Context, owner, repo string, limit int) ([]domain.RuntimeVersion, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, fmt.Sprintf("https://api.github.com/repos/%s/%s/releases?per_page=%d", owner, repo, limit), nil)
 	if err != nil {
-		return "", "", err
+		return nil, err
 	}
 	req.Header.Set("Accept", "application/vnd.github+json")
 	req.Header.Set("User-Agent", "picoclip-runtime-installer")
-	resp, err := http.DefaultClient.Do(req)
+	client := http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("github list releases failed: %s", resp.Status)
+	}
+
+	var releases []githubRelease
+	if err := json.NewDecoder(resp.Body).Decode(&releases); err != nil {
+		return nil, err
+	}
+
+	var versions []domain.RuntimeVersion
+	var foundLatest bool
+	for _, rel := range releases {
+		version := domain.RuntimeVersion{
+			Tag:        rel.TagName,
+			Label:      rel.TagName,
+			Prerelease: rel.Prerelease,
+			CreatedAt:  rel.CreatedAt,
+		}
+		if !rel.Prerelease && !foundLatest {
+			version.Latest = true
+			version.Label = "latest (" + rel.TagName + ")"
+			foundLatest = true
+		}
+		if rel.Prerelease {
+			version.Nightly = true
+		}
+		versions = append(versions, version)
+	}
+	return versions, nil
+}
+
+func fetchGitHubRelease(ctx context.Context, owner, repo, versionAlias string) (githubRelease, error) {
+	url := fmt.Sprintf("https://api.github.com/repos/%s/%s/releases/latest", owner, repo)
+
+	if versionAlias != "" && versionAlias != "latest" {
+		if versionAlias == "nightly" {
+			url = fmt.Sprintf("https://api.github.com/repos/%s/%s/releases?per_page=1", owner, repo)
+		} else {
+			url = fmt.Sprintf("https://api.github.com/repos/%s/%s/releases/tags/%s", owner, repo, versionAlias)
+		}
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return githubRelease{}, err
+	}
+	req.Header.Set("Accept", "application/vnd.github+json")
+	req.Header.Set("User-Agent", "picoclip-runtime-installer")
+	client := http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return githubRelease{}, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusNotFound && versionAlias != "" && versionAlias != "latest" && versionAlias != "nightly" {
+		return githubRelease{}, fmt.Errorf("Version tag %q was not found for %s. Check the tag name or choose one from the suggestions.", versionAlias, repo)
+	}
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return githubRelease{}, fmt.Errorf("github release request failed: %s", resp.Status)
+	}
+
+	if versionAlias == "nightly" {
+		var releases []githubRelease
+		if err := json.NewDecoder(resp.Body).Decode(&releases); err != nil {
+			return githubRelease{}, err
+		}
+		for _, rel := range releases {
+			if rel.Prerelease {
+				return rel, nil
+			}
+		}
+		return githubRelease{}, fmt.Errorf("no nightly/prerelease found for %s", repo)
+	}
+
+	var release githubRelease
+	if err := json.NewDecoder(resp.Body).Decode(&release); err != nil {
+		return githubRelease{}, err
+	}
+	return release, nil
+}
+
+func installFromGitHubRelease(ctx context.Context, owner string, repo string, assetPrefix string, binaryName string, versionAlias string, dst string) (string, string, error) {
+	release, err := fetchGitHubRelease(ctx, owner, repo, versionAlias)
 	if err != nil {
 		return "", "", err
 	}
-	defer resp.Body.Close()
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return "", "", fmt.Errorf("github release request failed: %s", resp.Status)
-	}
-	var release githubRelease
-	if err := json.NewDecoder(resp.Body).Decode(&release); err != nil {
-		return "", "", err
-	}
+
 	assetNames := runtimeAssetNames(assetPrefix, release.TagName)
 	for _, expected := range assetNames {
 		for _, asset := range release.Assets {

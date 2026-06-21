@@ -27,7 +27,8 @@ type RuntimeAdapter interface {
 	Name() string
 	Kind() domain.RuntimeKind
 	SupportedInstallModes() []domain.InstallMode
-	Install(ctx context.Context, mode domain.InstallMode, destDir string) (domain.RuntimeState, error)
+	ListVersions(ctx context.Context, limit int) ([]domain.RuntimeVersion, error)
+	Install(ctx context.Context, mode domain.InstallMode, destDir string, versionAlias string) (domain.RuntimeState, error)
 	Resolve(ctx context.Context, state domain.RuntimeState) error
 	Health(ctx context.Context, state domain.RuntimeState) domain.RuntimeHealth
 	ReadConfig(ctx context.Context, state domain.RuntimeState) ([]domain.RuntimeConfigFile, error)

@@ -118,11 +118,20 @@ templ SettingsPage(view SettingsView) {
 								
 								<div style="margin-top: var(--space-3); padding-top: var(--space-3); border-top: 1px solid var(--border);">
 									if !r.Configured {
-										<form hx-post={ "/runtimes/" + string(r.ID) + "/install" } hx-target="body" hx-swap="outerHTML" style="display: flex; gap: var(--space-2);">
-											<select name="mode" style="flex: 1;">
+										<form hx-post={ "/runtimes/" + string(r.ID) + "/install" } hx-target="body" hx-swap="outerHTML" class="stacked">
+											<select name="mode">
 												<option value="exclusive">Install Exclusive (Sandboxed)</option>
 												<option value="global">Install Global (~/.local/bin)</option>
 											</select>
+											<input type="text" name="version_alias" value="latest" list={ "versions-" + string(r.ID) } placeholder="latest, nightly, or tag" required />
+											<datalist id={ "versions-" + string(r.ID) }>
+												<option value="latest">latest</option>
+												<option value="nightly">nightly/prerelease</option>
+												for _, v := range r.Versions {
+													<option value={ v.Tag }>{ v.Label }</option>
+												}
+											</datalist>
+											<p class="muted">Choose latest, nightly, one of the latest 10 releases, or type an exact tag.</p>
 											<button class="button secondary" type="submit" data-loading-disable>Install</button>
 										</form>
 										<form hx-post={ "/runtimes/" + string(r.ID) + "/existing" } hx-target="body" hx-swap="outerHTML" style="display: flex; gap: var(--space-2); margin-top: var(--space-2);">
@@ -142,6 +151,9 @@ templ SettingsPage(view SettingsView) {
 												<span class="text-danger">{ r.Health.Status }</span>
 											}
 										</div>
+										<form hx-post={ "/runtimes/" + string(r.ID) + "/uninstall" } hx-confirm="Are you sure you want to uninstall this runtime? Configuration files will be deleted if installed exclusively." hx-target="body" hx-swap="outerHTML">
+											<button class="button button-danger text-danger" type="submit" style="background: transparent; border-color: transparent; padding-left: 0;">Uninstall Runtime</button>
+										</form>
 										if len(r.ConfigFiles) > 0 {
 											for _, file := range r.ConfigFiles {
 												<form hx-post={ "/runtimes/" + string(r.ID) + "/config" } hx-target="body" hx-swap="outerHTML" class="stacked" data-success="Runtime config saved." style="margin-top: var(--space-3);">

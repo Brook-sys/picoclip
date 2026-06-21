@@ -99,6 +99,7 @@ func (s *Server) Mount(mux *http.ServeMux) {
 	mux.HandleFunc("POST /settings/adapters/test", s.handleWebPostSettingsAdaptersTest)
 	mux.HandleFunc("POST /runtimes/{id}/install", s.handleWebPostRuntimeInstall)
 	mux.HandleFunc("POST /runtimes/{id}/existing", s.handleWebPostRuntimeExisting)
+	mux.HandleFunc("POST /runtimes/{id}/uninstall", s.handleWebPostRuntimeUninstall)
 	mux.HandleFunc("POST /runtimes/{id}/config", s.handleWebPostRuntimeConfig)
 	mux.HandleFunc("POST /settings/environment", s.handleWebPostSettingsEnvironment)
 	mux.HandleFunc("GET /settings/export", s.handleWebSettingsExport)

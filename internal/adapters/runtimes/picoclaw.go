@@ -32,7 +32,11 @@ func (a *PicoClawAdapter) SupportedInstallModes() []domain.InstallMode {
 	return []domain.InstallMode{domain.InstallModeExclusive, domain.InstallModeGlobal, domain.InstallModeExisting}
 }
 
-func (a *PicoClawAdapter) Install(ctx context.Context, mode domain.InstallMode, destDir string) (domain.RuntimeState, error) {
+func (a *PicoClawAdapter) ListVersions(ctx context.Context, limit int) ([]domain.RuntimeVersion, error) {
+	return listGitHubVersions(ctx, "sipeed", "picoclaw", limit)
+}
+
+func (a *PicoClawAdapter) Install(ctx context.Context, mode domain.InstallMode, destDir string, versionAlias string) (domain.RuntimeState, error) {
 	binName := "picoclaw"
 	if runtime.GOOS == "windows" {
 		binName = "picoclaw.exe"
@@ -49,7 +53,7 @@ func (a *PicoClawAdapter) Install(ctx context.Context, mode domain.InstallMode, 
 		logsPath = filepath.Join(homePath, "logs")
 	}
 
-	version, sourceURL, err := installFromGitHubRelease(ctx, "sipeed", "picoclaw", "picoclaw", "picoclaw", binPath)
+	version, sourceURL, err := installFromGitHubRelease(ctx, "sipeed", "picoclaw", "picoclaw", "picoclaw", versionAlias, binPath)
 	if err != nil {
 		if err := copyExistingBinary(a.FallbackBinary, binPath); err != nil {
 			return domain.RuntimeState{}, fmt.Errorf("failed to download release and fallback failed: %w", err)
@@ -102,8 +106,8 @@ func (a *PicoClawAdapter) Health(ctx context.Context, state domain.RuntimeState)
 		health.Checks = append(health.Checks, domain.DiagnosticCheck{Name: "version_command", Status: "error", Message: err.Error(), CheckedAt: now})
 		return health
 	}
-	health.Version = version
-	health.Checks = append(health.Checks, domain.DiagnosticCheck{Name: "version_command", Status: "ok", Message: version, CheckedAt: now})
+	health.Version = extractRuntimeVersion(string(a.ID()), version)
+	health.Checks = append(health.Checks, domain.DiagnosticCheck{Name: "version_command", Status: "ok", Message: health.Version, CheckedAt: now})
 	if state.ConfigPath != "" {
 		if _, err := os.Stat(state.ConfigPath); err != nil {
 			health.Checks = append(health.Checks, domain.DiagnosticCheck{Name: "config_exists", Status: "warning", Message: err.Error(), CheckedAt: now})

@@ -19,6 +19,7 @@ type RuntimeCardView struct {
 	Configured  bool
 	Health      domain.RuntimeHealth
 	ConfigFiles []domain.RuntimeConfigFile
+	Versions    []domain.RuntimeVersion
 }
 
 func (s *Server) runtimeCards(r *http.Request) []RuntimeCardView {
@@ -28,10 +29,15 @@ func (s *Server) runtimeCards(r *http.Request) []RuntimeCardView {
 		state, configured := states[manifest.ID]
 		health := domain.RuntimeHealth{Status: "not_configured"}
 		var configFiles []domain.RuntimeConfigFile
+		var versions []domain.RuntimeVersion
 		if configured {
 			health, _ = s.runtimes.Health(r.Context(), manifest.ID)
 			if adapter, ok := s.runtimes.Adapter(manifest.ID); ok {
 				configFiles, _ = adapter.ReadConfig(r.Context(), state)
+			}
+		} else {
+			if adapter, ok := s.runtimes.Adapter(manifest.ID); ok {
+				versions, _ = adapter.ListVersions(r.Context(), 10)
 			}
 		}
 		cards = append(cards, RuntimeCardView{
@@ -45,6 +51,7 @@ func (s *Server) runtimeCards(r *http.Request) []RuntimeCardView {
 			Configured:  configured,
 			Health:      health,
 			ConfigFiles: configFiles,
+			Versions:    versions,
 		})
 	}
 	return cards
@@ -82,7 +89,17 @@ func (s *Server) handleWebPostRuntimeInstall(w http.ResponseWriter, r *http.Requ
 	if mode == "" {
 		mode = domain.InstallModeExclusive
 	}
-	if _, err := s.runtimes.Install(r.Context(), runtimeID, mode); err != nil {
+	versionAlias := strings.TrimSpace(r.FormValue("version_alias"))
+	if _, err := s.runtimes.Install(r.Context(), runtimeID, mode, versionAlias); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	s.handleWebSettings(w, r)
+}
+
+func (s *Server) handleWebPostRuntimeUninstall(w http.ResponseWriter, r *http.Request) {
+	runtimeID := domain.RuntimeID(r.PathValue("id"))
+	if err := s.runtimes.Uninstall(r.Context(), runtimeID); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
