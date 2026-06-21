@@ -957,12 +957,12 @@ pc-tag-multiselect { position: relative; display: flex; flex-wrap: wrap; align-i
 .diagnostic-error .diagnostic-icon::after { background: var(--bad); }
 .diagnostic-error .diagnostic-content small { color: var(--bad); }
 
-.system-status-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
-.system-status-card { display: flex; align-items: flex-start; gap: 10px; padding: 12px; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface); box-shadow: var(--shadow-sm); }
-.system-status-icon { display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; flex: none; border-radius: var(--radius-sm); }
-.system-status-content { display: grid; gap: 1px; min-width: 0; }
-.system-status-content strong { font-size: 20px; font-weight: 800; line-height: 1; letter-spacing: -0.02em; }
-.system-status-content small { font-size: 12px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
+.system-status-grid { display: grid; grid-template-columns: 1fr; gap: 8px; }
+.system-status-card { display: flex; align-items: center; gap: 12px; min-width: 0; padding: 12px 14px; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface); box-shadow: var(--shadow-sm); overflow: hidden; }
+.system-status-icon { display: inline-flex; align-items: center; justify-content: center; width: 34px; height: 34px; flex: none; border-radius: var(--radius-sm); }
+.system-status-content { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; min-width: 0; width: 100%; }
+.system-status-content strong { flex: none; font-size: 22px; font-weight: 850; line-height: 1; letter-spacing: -0.03em; }
+.system-status-content small { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
 .system-status-agents .system-status-icon { background: color-mix(in srgb, var(--info) 10%, transparent); color: var(--info); }
 .system-status-tasks .system-status-icon { background: color-mix(in srgb, var(--good) 10%, transparent); color: var(--good); }
 .system-status-projects .system-status-icon { background: color-mix(in srgb, var(--warn) 10%, transparent); color: var(--warn); }

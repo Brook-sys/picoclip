@@ -5,11 +5,11 @@ import "strconv"
 templ SystemStatusCard(label string, value string, iconName string, variant string) {
 	<div class={ "system-status-card", "system-status-" + variant }>
 		<span class="system-status-icon" aria-hidden="true">
-			@Icon(iconName, 16)
+			@Icon(iconName, 18)
 		</span>
 		<span class="system-status-content">
-			<strong>{ value }</strong>
 			<small>{ label }</small>
+			<strong>{ value }</strong>
 		</span>
 	</div>
 }
