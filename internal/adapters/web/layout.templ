@@ -166,6 +166,114 @@ templ PageShell(active string, title string, subtitle string, action templ.Compo
 								if(evt.key==='Enter' && commandIndex>=0 && commandItems[commandIndex]){ evt.preventDefault(); window.location.href=commandItems[commandIndex].url; }
 							});
 							if(palette){ palette.addEventListener('click', function(evt){ if(evt.target===palette) closeCommandPalette(); }); }
+
+							class TagMultiSelect extends HTMLElement {
+								connectedCallback() {
+									this.name = this.dataset.name || 'tags';
+									this.availableTags = [];
+									try { this.availableTags = JSON.parse(this.dataset.available || '[]'); } catch(e) {}
+									this.input = this.querySelector('.pc-multiselect-input');
+									this.dropdown = this.querySelector('.pc-multiselect-dropdown');
+									this.selectedIndex = -1;
+									this.filteredTags = [];
+
+									if (!this.input || !this.dropdown) return;
+
+									this.addEventListener('click', e => {
+										if (e.target.closest('.pc-chip-remove')) {
+											e.target.closest('.pc-chip').remove();
+											const inputVal = e.target.closest('.pc-chip').previousElementSibling;
+											if (inputVal && inputVal.type === 'hidden') inputVal.remove();
+										} else if (e.target.closest('.pc-dropdown-item')) {
+											this.addTag(e.target.closest('.pc-dropdown-item').dataset.value);
+										} else {
+											this.input.focus();
+										}
+									});
+
+									this.input.addEventListener('input', () => this.showDropdown());
+									this.input.addEventListener('focus', () => this.showDropdown());
+									document.addEventListener('click', e => {
+										if (!this.contains(e.target)) {
+											this.dropdown.hidden = true;
+										}
+									});
+
+									this.input.addEventListener('keydown', e => {
+										if (e.key === 'Enter') {
+											e.preventDefault();
+											if (this.selectedIndex >= 0 && this.filteredTags[this.selectedIndex]) {
+												this.addTag(this.filteredTags[this.selectedIndex]);
+											} else if (this.input.value.trim()) {
+												this.addTag(this.input.value.trim());
+											}
+										} else if (e.key === 'ArrowDown') {
+											e.preventDefault();
+											this.selectedIndex = Math.min(this.selectedIndex + 1, this.filteredTags.length - 1);
+											this.renderDropdown();
+										} else if (e.key === 'ArrowUp') {
+											e.preventDefault();
+											this.selectedIndex = Math.max(this.selectedIndex - 1, 0);
+											this.renderDropdown();
+										} else if (e.key === 'Escape') {
+											this.dropdown.hidden = true;
+										} else if (e.key === 'Backspace' && !this.input.value) {
+											const chips = this.querySelectorAll('.pc-chip');
+											if (chips.length > 0) {
+												const lastChip = chips[chips.length - 1];
+												lastChip.remove();
+												const hiddenInput = this.querySelectorAll(`input[type="hidden"][name="${this.name}"]`);
+												if (hiddenInput.length > 0) hiddenInput[hiddenInput.length - 1].remove();
+											}
+										}
+									});
+								}
+
+								showDropdown() {
+									const val = this.input.value.trim().toLowerCase();
+									this.filteredTags = this.availableTags.filter(t => t.toLowerCase().includes(val));
+									if (val && !this.filteredTags.some(t => t.toLowerCase() === val)) {
+										this.filteredTags.push(this.input.value.trim());
+									}
+									this.selectedIndex = this.filteredTags.length > 0 ? 0 : -1;
+									this.renderDropdown();
+									this.dropdown.hidden = this.filteredTags.length === 0;
+								}
+
+								renderDropdown() {
+									this.dropdown.innerHTML = this.filteredTags.map((t, i) => 
+										`<div class="pc-dropdown-item ${i === this.selectedIndex ? 'active' : ''}" data-value="${t.replace(/"/g, '&quot;')}">${t}</div>`
+									).join('');
+								}
+
+								addTag(tagStr) {
+									if (!tagStr) return;
+									
+									const existing = Array.from(this.querySelectorAll(`input[type="hidden"][name="${this.name}"]`)).map(el => el.value);
+									if (existing.includes(tagStr)) {
+										this.input.value = '';
+										this.dropdown.hidden = true;
+										return;
+									}
+
+									const hidden = document.createElement('input');
+									hidden.type = 'hidden';
+									hidden.name = this.name;
+									hidden.value = tagStr;
+									this.insertBefore(hidden, this.input);
+
+									const chip = document.createElement('span');
+									chip.className = 'pc-chip';
+									chip.innerHTML = `${tagStr} <button type="button" class="pc-chip-remove" aria-label="Remove tag"><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="pc-icon pc-icon-x"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg></button>`;
+									this.insertBefore(chip, this.input);
+
+									this.input.value = '';
+									this.dropdown.hidden = true;
+								}
+							}
+							if (!customElements.get('pc-tag-multiselect')) {
+								customElements.define('pc-tag-multiselect', TagMultiSelect);
+							}
 						})();
 					</script>
 				</main>

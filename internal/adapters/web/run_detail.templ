@@ -36,7 +36,7 @@ templ RunLive(run domain.Run, task taskResponse, agent domain.Agent) {
 			<pre class="log-viewer error-log">{ run.Error }</pre>
 		}
 		if run.Output == "" && run.Error == "" {
-			@EmptyState("No console output", "This run has not produced output yet.") {}
+			@EmptyState("No console output", "This run has not produced output yet.", "bar-chart") {}
 		}
 	</div>
 

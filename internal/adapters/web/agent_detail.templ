@@ -51,8 +51,9 @@ templ AgentDetailPage(agent domain.Agent, agents []domain.Agent, tasks []taskRes
 							}
 						</select>
 						<textarea name="description" placeholder="Description and responsibilities">{ agent.Description }</textarea>
-						<label>Tags</label>
-						<textarea name="tags" placeholder="backend&#10;review&#10;Proj:MyProject">{ strings.Join(agent.Tags, "\n") }</textarea>
+						@FormField("tags", "Tags", "Use tags to organize agents and project affinity.") {
+							@TagMultiSelectField("tags", agent.Tags, availableAgentTagsJSON(agents, projects))
+						}
 						<label>Agent instruction file</label>
 						<input name="instruction_file" value={ agent.InstructionFile } placeholder="/absolute/path/AGENTS.md" title="Absolute path to a markdown file (e.g. AGENTS.md) that defines this agent's behavior. Injected into the system prompt at runtime."/>
 						<textarea name="system_prompt" placeholder="Optional custom agent prompt">{ agent.SystemPrompt }</textarea>

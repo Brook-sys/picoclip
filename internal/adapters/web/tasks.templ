@@ -61,7 +61,7 @@ templ TaskLive(task taskResponse, messages []domain.Message, runs []domain.Run, 
 
 templ SubtaskTree(children []taskResponse, agents []domain.Agent, projects []domain.Workspace) {
 	if len(children) == 0 {
-		@EmptyState("No subtasks", "Delegated child tasks will appear here.") {}
+		@EmptyState("No subtasks", "Delegated child tasks will appear here.", "check-circle") {}
 	} else {
 		<div class="subtask-tree">
 			for _, child := range children {

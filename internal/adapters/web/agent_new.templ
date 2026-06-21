@@ -18,8 +18,9 @@ templ AgentNewPage(projects []domain.Workspace, agents []domain.Agent, skills []
 							}
 						</select>
 						<textarea name="description" placeholder="Papel e responsabilidades"></textarea>
-						<label>Tags</label>
-						<textarea name="tags" placeholder="backend&#10;review&#10;Proj:Meu Projeto"></textarea>
+						@FormField("tags", "Tags", "Use tags to organize agents. You can create new tags inline.") {
+							@TagMultiSelectField("tags", []string{}, availableAgentTagsJSON(agents, projects))
+						}
 						<div class="tag-suggestions">
 							@ProjectTagSuggestions(projects)
 						</div>
@@ -63,7 +64,7 @@ templ AgentNewPage(projects []domain.Workspace, agents []domain.Agent, skills []
 }
 
 templ agentNewAction() {
-	<a class="button secondary" href="/agents">Cancelar</a>
+	<a class="pc-btn pc-btn-secondary" href="/agents">Cancelar</a>
 }
 
 templ ProjectTagSuggestions(projects []domain.Workspace) {

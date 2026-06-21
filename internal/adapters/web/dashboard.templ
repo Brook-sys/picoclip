@@ -66,7 +66,7 @@ templ DashboardPage(view DashboardView, agents []domain.Agent, projects []domain
 							</table>
 						</div>
 					} else {
-						@EmptyState("No active runs", "Agents are currently idle.") {}
+						@EmptyState("No active runs", "Agents are currently idle.", "play") {}
 					}
 				</div>
 			</div>

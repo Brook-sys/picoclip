@@ -16,7 +16,9 @@ templ AgentQuickModal(id string, agents []domain.Agent, runtimeOptions []Runtime
 				<input name="name" placeholder="Nome" required/>
 				<input name="title" placeholder="Título / Cargo"/>
 				@AgentPicker(agents, "reports_to_id", "", "Responde a...")
-				<textarea name="tags" placeholder="Tags, uma por linha"></textarea>
+				@FormField("tags", "Tags", "Create or select organizational tags.") {
+					@TagMultiSelectField("tags", []string{}, availableAgentTagsJSON(agents, nil))
+				}
 				@RuntimeSelect(runtimeOptions, "")
 				<select name="permission_preset">
 					@PermissionPresetOptions(nil)

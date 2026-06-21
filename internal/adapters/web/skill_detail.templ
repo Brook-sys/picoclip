@@ -35,7 +35,7 @@ templ SkillDetailPage(skill domain.Skill, projects []domain.Workspace, agents []
 						<button class="button secondary" type="button" onclick="document.getElementById('add-file-row').style.display='block';">Add File</button>
 					}
 					if len(skill.Files) == 0 {
-						@EmptyState("No files attached", "This skill uses only the main instructions.") {}
+						@EmptyState("No files attached", "This skill uses only the main instructions.", "book") {}
 					}
 					for i, file := range skill.Files {
 						<form hx-post={ "/skills/" + skill.ID + "/files/" + fmt.Sprintf("%d", i) } data-success="File updated." hx-target="body" hx-swap="outerHTML" class="card stack" style="margin-bottom: 16px;">

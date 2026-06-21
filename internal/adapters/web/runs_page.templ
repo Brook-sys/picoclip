@@ -15,7 +15,7 @@ templ RunsPage(runs []domain.Run, tasks map[string]taskResponse, agents map[stri
 			<div class="panel">
 			@SectionHeader("Execution Runs", "Inspect recent and historical agent executions.") {}
 			if len(runs) == 0 {
-				@EmptyState("No runs yet", "Runs will appear here when agents start executing tasks.") {}
+				@EmptyState("No runs yet", "Runs will appear here when agents start executing tasks.", "bar-chart") {}
 			} else {
 				<div class="table-wrapper">
 					<table>

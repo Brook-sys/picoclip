@@ -528,7 +528,7 @@ func (s *Server) handleWebPostAgent(w http.ResponseWriter, r *http.Request) {
 		Name:            r.FormValue("name"),
 		Title:           r.FormValue("title"),
 		ReportsToID:     r.FormValue("reports_to_id"),
-		Tags:            parseTags(r.FormValue("tags")),
+		Tags:            parseTagsFromForm(r),
 		Type:            agentType,
 		Description:     r.FormValue("description"),
 		SystemPrompt:    r.FormValue("system_prompt"),
@@ -555,7 +555,7 @@ func (s *Server) handleWebUpdateAgent(w http.ResponseWriter, r *http.Request) {
 	name := r.FormValue("name")
 	title := r.FormValue("title")
 	reportsToID := r.FormValue("reports_to_id")
-	tags := parseTags(r.FormValue("tags"))
+	tags := parseTagsFromForm(r)
 	description := r.FormValue("description")
 	systemPrompt := r.FormValue("system_prompt")
 	instructionFile := r.FormValue("instruction_file")
@@ -893,6 +893,23 @@ func parseLines(value string) []string {
 		}
 	}
 	return out
+}
+
+func parseTagsFromForm(r *http.Request) []string {
+	var tags []string
+	if r.Form["tags"] != nil {
+		for _, t := range r.Form["tags"] {
+			t = strings.TrimSpace(t)
+			if t != "" {
+				tags = append(tags, t)
+			}
+		}
+		if len(tags) > 0 {
+			return tags
+		}
+	}
+	// Fallback to legacy textarea behavior
+	return parseTags(r.FormValue("tags"))
 }
 
 func parseTags(value string) []string {

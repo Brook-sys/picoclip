@@ -55,7 +55,10 @@ templ AgentsPage(agents []domain.Agent, projects []domain.Workspace, tasks []tas
 }
 
 templ agentsAction() {
-	<button data-testid="agent-create-button" class="button" type="button" data-open-modal="agent-quick-modal">Novo agente</button>
+	<button data-testid="agent-create-button" class="pc-btn pc-btn-primary" type="button" data-open-modal="agent-quick-modal">
+		@Icon("plus", 16)
+		Novo agente
+	</button>
 }
 
 templ TagFilterLinks(agents []domain.Agent) {

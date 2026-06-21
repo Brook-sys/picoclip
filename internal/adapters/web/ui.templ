@@ -1,93 +1,198 @@
 package web
 
+import "fmt"
+
 templ Card() {
-	<div class="card">
+	<div class="pc-card">
+		{ children... }
+	</div>
+}
+
+templ CardEdit() {
+	<div class="pc-card pc-card-edit">
 		{ children... }
 	</div>
 }
 
 templ SectionHeader(title string, description string) {
-	<div class="section-header">
+	<div class="pc-section-header">
 		<div>
-			<h2>{ title }</h2>
+			<h2 class="pc-title">{ title }</h2>
 			if description != "" {
-				<p class="muted">{ description }</p>
+				<p class="pc-description">{ description }</p>
 			}
 		</div>
-		<div class="actions">
+		<div class="pc-actions">
 			{ children... }
 		</div>
 	</div>
 }
 
+templ Button(text string, variant string, iconName string) {
+	<button class={ "pc-btn", "pc-btn-" + variant }>
+		if iconName != "" {
+			@Icon(iconName, 16)
+		}
+		{ text }
+		{ children... }
+	</button>
+}
+
+templ ButtonLink(text string, href string, variant string, iconName string) {
+	<a href={ templ.URL(href) } class={ "pc-btn", "pc-btn-" + variant }>
+		if iconName != "" {
+			@Icon(iconName, 16)
+		}
+		{ text }
+		{ children... }
+	</a>
+}
+
+templ IconButton(iconName string, variant string, ariaLabel string) {
+	<button class={ "pc-icon-btn", "pc-icon-btn-" + variant } aria-label={ ariaLabel }>
+		@Icon(iconName, 16)
+	</button>
+}
+
+templ Chip(label string, removable bool) {
+	<span class="pc-chip">
+		{ label }
+		if removable {
+			<button type="button" class="pc-chip-remove" aria-label="Remove tag">
+				@Icon("x", 12)
+			</button>
+		}
+	</span>
+}
+
 templ PropertyList() {
-	<dl class="property-list">
+	<dl class="pc-property-list">
 		{ children... }
 	</dl>
 }
 
 templ PropertyItem(label string, value string) {
-	<div>
+	<div class="pc-property-item">
 		<dt>{ label }</dt>
 		<dd>{ value }</dd>
 	</div>
 }
 
 templ PropertyItemHTML(label string) {
-	<div>
+	<div class="pc-property-item">
 		<dt>{ label }</dt>
 		<dd>{ children... }</dd>
 	</div>
 }
 
+templ FieldLabel(forId string, text string) {
+	<label for={ forId } class="pc-field-label">{ text }</label>
+}
+
+templ FieldMessage(text string, isError bool) {
+	<p class={ "pc-field-message", templ.KV("pc-field-error", isError) }>{ text }</p>
+}
+
 templ FormField(name string, label string, helpText string) {
-	<div class="form-field">
+	<div class="pc-form-field">
 		if label != "" {
-			<label for={ name }>{ label }</label>
+			@FieldLabel(name, label)
 		}
 		{ children... }
 		if helpText != "" {
-			<p class="help-text">{ helpText }</p>
+			@FieldMessage(helpText, false)
 		}
 	</div>
 }
 
+templ TextField(name string, value string, placeholder string, readonly bool) {
+	<input type="text" id={ name } name={ name } value={ value } placeholder={ placeholder } class="pc-input" readonly?={ readonly } />
+}
+
+templ TextareaField(name string, value string, placeholder string, rows int, readonly bool) {
+	<textarea id={ name } name={ name } placeholder={ placeholder } class="pc-input" rows={ fmt.Sprintf("%d", rows) } readonly?={ readonly }>{ value }</textarea>
+}
+
+templ TagMultiSelectField(name string, prefilledTags []string, availableTagsJSON string) {
+	<pc-tag-multiselect data-name={ name } data-available={ availableTagsJSON }>
+		for _, t := range prefilledTags {
+			<input type="hidden" name={ name } value={ t } />
+			<span class="pc-chip">
+				{ t }
+				<button type="button" class="pc-chip-remove" aria-label="Remove tag">@Icon("x", 12)</button>
+			</span>
+		}
+		<input type="text" class="pc-multiselect-input" placeholder="Add tag..." autocomplete="off" />
+		<div class="pc-multiselect-dropdown" hidden></div>
+	</pc-tag-multiselect>
+}
+
+templ SelectField(name string, options map[string]string, selected string) {
+	<div class="pc-select-wrapper">
+		<select id={ name } name={ name } class="pc-input pc-select">
+			for val, label := range options {
+				<option value={ val } selected?={ selected == val }>{ label }</option>
+			}
+		</select>
+		<div class="pc-select-icon">
+			@Icon("chevron-down", 16)
+		</div>
+	</div>
+}
+
 templ Badge(text string, variant string) {
-	<span class={ "badge", templ.KV("badge-"+variant, variant != "") }>{ text }</span>
+	<span class={ "pc-badge", templ.KV("pc-badge-"+variant, variant != "") }>{ text }</span>
 }
 
 templ StatusBadge(status string, variant string, isLive bool) {
-	<span class={ "status", "status-"+variant, templ.KV("pulse", isLive) }>{ status }</span>
+	<span class={ "pc-status", "pc-status-"+variant, templ.KV("pulse", isLive) }>{ status }</span>
 }
 
-templ EmptyState(title string, message string) {
-	<div class="empty-state">
-		<strong>{ title }</strong>
-		<p>{ message }</p>
-		<div style="margin-top: 16px;">
+templ EmptyState(title string, message string, iconName string) {
+	<div class="pc-empty-state">
+		if iconName != "" {
+			<div class="pc-empty-icon">
+				@Icon(iconName, 32)
+			</div>
+		}
+		<strong class="pc-empty-title">{ title }</strong>
+		<p class="pc-empty-message">{ message }</p>
+		<div class="pc-empty-actions">
 			{ children... }
 		</div>
 	</div>
 }
 
 templ Tabs() {
-	<nav class="tabs" aria-label="Sections">
+	<nav class="pc-tabs" aria-label="Sections">
 		{ children... }
 	</nav>
 }
 
 templ TabLink(label string, href string, active bool) {
-	<a class={ "tab", templ.KV("active", active) } href={ templ.URL(href) }>{ label }</a>
+	<a class={ "pc-tab", templ.KV("active", active) } href={ templ.URL(href) }>{ label }</a>
 }
 
 templ EntityRow(kind string, title string, description string, href string) {
-	<a class="entity-row" href={ templ.URL(href) }>
-		<span class="entity-row-icon">{ kind }</span>
-		<span class="entity-row-content">
+	<a class="pc-entity-row" href={ templ.URL(href) }>
+		<span class="pc-entity-row-icon">
+			if kind == "Project" || kind == "Workspace" {
+				@Icon("folder", 16)
+			} else if kind == "Agent" {
+				@Icon("cpu", 16)
+			} else if kind == "Task" {
+				@Icon("check-circle", 16)
+			} else if kind == "Skill" {
+				@Icon("zap", 16)
+			} else {
+				@Icon("book", 16)
+			}
+		</span>
+		<span class="pc-entity-row-content">
 			<strong>{ title }</strong>
 			<small>{ description }</small>
 		</span>
-		<span class="entity-row-arrow">→</span>
+		<span class="pc-entity-row-arrow">@Icon("chevron-right", 16)</span>
 	</a>
 }
 

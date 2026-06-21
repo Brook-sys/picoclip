@@ -198,6 +198,37 @@ func agentDisplayTags(agent domain.Agent, projects []domain.Workspace) []string 
 	return tags
 }
 
+func availableAgentTagsJSON(agents []domain.Agent, projects []domain.Workspace) string {
+	seen := map[string]bool{}
+	tags := make([]string, 0)
+	for _, agent := range agents {
+		for _, tag := range agent.Tags {
+			tag = strings.TrimSpace(tag)
+			if tag != "" && !seen[strings.ToLower(tag)] {
+				seen[strings.ToLower(tag)] = true
+				tags = append(tags, tag)
+			}
+		}
+	}
+	for _, project := range projects {
+		tag := "Proj:" + project.Name
+		if !seen[strings.ToLower(tag)] {
+			seen[strings.ToLower(tag)] = true
+			tags = append(tags, tag)
+		}
+	}
+	var b strings.Builder
+	b.WriteString("[")
+	for i, tag := range tags {
+		if i > 0 {
+			b.WriteString(",")
+		}
+		b.WriteString(fmt.Sprintf("%q", tag))
+	}
+	b.WriteString("]")
+	return b.String()
+}
+
 func renderProjectTagSuggestions(w io.Writer, projects []domain.Workspace) error {
 	if len(projects) == 0 {
 		return nil
