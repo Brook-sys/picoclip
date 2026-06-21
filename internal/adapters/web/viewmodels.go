@@ -30,6 +30,7 @@ type DashboardView struct {
 	NeedsAttention   []taskResponse
 	CurrentlyRunning []domain.Run
 	RecentActivity   []domain.Event
+	RuntimeWarnings  []string
 }
 
 func loadDashboardView(ctx context.Context, s *Server, r *http.Request) (DashboardView, error) {
@@ -53,6 +54,24 @@ func loadDashboardView(ctx context.Context, s *Server, r *http.Request) (Dashboa
 	view.Stats.ActiveAgents = activeAgents
 
 	view.SystemHealth.StorageDriver = "SQLite" // We migrated to sqlite explicitly now
+	states, _ := s.runtimes.States(ctx)
+	if len(states) == 0 {
+		view.RuntimeWarnings = append(view.RuntimeWarnings, "No runtime configured. Tasks cannot be executed until Crush or PicoClaw is installed.")
+	} else {
+		for _, state := range states {
+			tested, _, functional, checks, _ := runtimeHealthSummary(state)
+			if tested && !functional {
+				message := string(state.RuntimeID) + " is installed but not functional."
+				for _, check := range checks {
+					if check.Status == "error" {
+						message += " " + check.Name + ": " + check.Message
+						break
+					}
+				}
+				view.RuntimeWarnings = append(view.RuntimeWarnings, message)
+			}
+		}
+	}
 
 	for _, task := range allTasks {
 		switch task.Status {

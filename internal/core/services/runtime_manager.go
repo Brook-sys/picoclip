@@ -2,6 +2,7 @@ package services
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
@@ -139,7 +140,19 @@ func (m *RuntimeManager) Uninstall(ctx context.Context, id domain.RuntimeID) err
 	return m.storage.Runtimes().Delete(ctx, state.ID)
 }
 
-func (m *RuntimeManager) Health(ctx context.Context, id domain.RuntimeID) (domain.RuntimeHealth, error) {
+func (m *RuntimeManager) InstalledRuntimeIDs(ctx context.Context) []domain.RuntimeID {
+	states, err := m.storage.Runtimes().List(ctx)
+	if err != nil {
+		return nil
+	}
+	ids := make([]domain.RuntimeID, 0, len(states))
+	for _, s := range states {
+		ids = append(ids, s.RuntimeID)
+	}
+	return ids
+}
+
+func (m *RuntimeManager) Test(ctx context.Context, id domain.RuntimeID) (domain.RuntimeHealth, error) {
 	adapter, ok := m.Adapter(id)
 	if !ok {
 		return domain.RuntimeHealth{}, domain.ErrDriverUnavailable
@@ -149,9 +162,34 @@ func (m *RuntimeManager) Health(ctx context.Context, id domain.RuntimeID) (domai
 		return domain.RuntimeHealth{Status: "not_configured", CheckedAt: time.Now().UTC()}, nil
 	}
 	health := adapter.Health(ctx, state)
+	if health.CheckedAt.IsZero() {
+		health.CheckedAt = m.clock.Now()
+	}
 	state.LastHealthAt = &health.CheckedAt
+	if raw, err := json.Marshal(health); err == nil {
+		state.LastHealthJSON = string(raw)
+	}
 	_ = m.storage.Runtimes().Save(ctx, state)
 	return health, nil
+}
+
+func (m *RuntimeManager) TestAllConfigured(ctx context.Context, logger ports.Logger) {
+	states, err := m.storage.Runtimes().List(ctx)
+	if err != nil {
+		if logger != nil {
+			logger.Warn("runtime.test_all.list_failed", "err", err)
+		}
+		return
+	}
+	for _, state := range states {
+		if _, err := m.Test(ctx, state.RuntimeID); err != nil && logger != nil {
+			logger.Warn("runtime.test_failed", "runtime_id", state.RuntimeID, "err", err)
+		}
+	}
+}
+
+func (m *RuntimeManager) Health(ctx context.Context, id domain.RuntimeID) (domain.RuntimeHealth, error) {
+	return m.Test(ctx, id)
 }
 
 func (m *RuntimeManager) Execute(ctx context.Context, id domain.RuntimeID, input ports.RuntimeExecutionInput) (ports.RuntimeExecutionResult, error) {

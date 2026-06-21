@@ -99,7 +99,9 @@ func (a *PicoClawAdapter) Health(ctx context.Context, state domain.RuntimeState)
 		return health
 	}
 	health.Checks = append(health.Checks, domain.DiagnosticCheck{Name: "binary_exists", Status: "ok", Message: bin, CheckedAt: now})
-	version, err := commandVersion(ctx, bin, "version")
+	testCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	version, err := commandVersion(testCtx, bin, "version")
 	if err != nil {
 		health.Status = "error"
 		health.Errors = append(health.Errors, err.Error())

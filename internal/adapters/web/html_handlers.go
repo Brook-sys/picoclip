@@ -163,7 +163,7 @@ func (s *Server) handleWebAgentNew(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	if err := AgentNewPage(projects, agents, skills).Render(r.Context(), w); err != nil {
+	if err := AgentNewPage(projects, agents, skills, s.agentRuntimeOptions(r.Context())).Render(r.Context(), w); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
 }
@@ -519,12 +519,17 @@ func (s *Server) handleWebPostAgent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	permissions := services.PermissionsForPreset(r.FormValue("permission_preset"))
+	agentType := domain.AgentType(r.FormValue("type"))
+	if err := s.validateAgentRuntime(r.Context(), agentType); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
 	agent, err := s.agents.CreateFull(r.Context(), services.CreateAgentInput{
 		Name:            r.FormValue("name"),
 		Title:           r.FormValue("title"),
 		ReportsToID:     r.FormValue("reports_to_id"),
 		Tags:            parseTags(r.FormValue("tags")),
-		Type:            domain.AgentType(r.FormValue("type")),
+		Type:            agentType,
 		Description:     r.FormValue("description"),
 		SystemPrompt:    r.FormValue("system_prompt"),
 		InstructionFile: r.FormValue("instruction_file"),

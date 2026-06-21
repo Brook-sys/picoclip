@@ -20,11 +20,12 @@ type Server struct {
 	diagnostics     *services.DiagnosticsService
 	storage         ports.Storage
 	bus             ports.EventBus
+	debugMode       bool
 	adapterSettings map[string]map[string]string
 }
 
-func NewServer(agents *services.AgentService, tasks *services.TaskService, skills *services.SkillService, projects *services.WorkspaceService, runtimes *services.RuntimeManager, diagnostics *services.DiagnosticsService, storage ports.Storage, bus ports.EventBus) *Server {
-	return &Server{agents: agents, tasks: tasks, skills: skills, projects: projects, runtimes: runtimes, diagnostics: diagnostics, storage: storage, bus: bus, adapterSettings: map[string]map[string]string{"noop": {"timeout": "1m"}}}
+func NewServer(agents *services.AgentService, tasks *services.TaskService, skills *services.SkillService, projects *services.WorkspaceService, runtimes *services.RuntimeManager, diagnostics *services.DiagnosticsService, storage ports.Storage, bus ports.EventBus, debugMode bool) *Server {
+	return &Server{agents: agents, tasks: tasks, skills: skills, projects: projects, runtimes: runtimes, diagnostics: diagnostics, storage: storage, bus: bus, debugMode: debugMode, adapterSettings: map[string]map[string]string{"noop": {"timeout": "1m"}}}
 }
 
 func (s *Server) Mount(mux *http.ServeMux) {
@@ -99,6 +100,7 @@ func (s *Server) Mount(mux *http.ServeMux) {
 	mux.HandleFunc("POST /settings/adapters/test", s.handleWebPostSettingsAdaptersTest)
 	mux.HandleFunc("POST /runtimes/{id}/install", s.handleWebPostRuntimeInstall)
 	mux.HandleFunc("POST /runtimes/{id}/existing", s.handleWebPostRuntimeExisting)
+	mux.HandleFunc("POST /runtimes/{id}/test", s.handleWebPostRuntimeTest)
 	mux.HandleFunc("POST /runtimes/{id}/uninstall", s.handleWebPostRuntimeUninstall)
 	mux.HandleFunc("POST /runtimes/{id}/config", s.handleWebPostRuntimeConfig)
 	mux.HandleFunc("POST /settings/environment", s.handleWebPostSettingsEnvironment)

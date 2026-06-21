@@ -14,6 +14,10 @@ import (
 )
 
 func newTestServer(t *testing.T) *httptest.Server {
+	return newTestServerWithDebug(t, true)
+}
+
+func newTestServerWithDebug(t *testing.T, debug bool) *httptest.Server {
 	t.Helper()
 	storage := memory.NewStorage()
 	clock := services.SystemClock{}
@@ -32,7 +36,7 @@ func newTestServer(t *testing.T) *httptest.Server {
 	mux := http.NewServeMux()
 	runtimes := services.NewRuntimeManager(storage, "data/runtimes", clock)
 	diagnostics := services.NewDiagnosticsService(storage, runtimes, services.DiagnosticsConfig{StorageType: "memory", WorkspacePath: "workspaces", RuntimePath: "data/runtimes"})
-	NewServer(agents, tasks, skills, projects, runtimes, diagnostics, storage, bus).Mount(mux)
+	NewServer(agents, tasks, skills, projects, runtimes, diagnostics, storage, bus, debug).Mount(mux)
 	return httptest.NewServer(mux)
 }
 
@@ -111,6 +115,42 @@ func TestAgentTaskLifecycleAPI(t *testing.T) {
 	}
 	if len(detail.Messages) < 2 {
 		t.Fatalf("messages len = %d, want at least 2", len(detail.Messages))
+	}
+}
+
+func TestAgentNewHidesNoopAndShowsRuntimeWarningWhenDebugDisabled(t *testing.T) {
+	ts := newTestServerWithDebug(t, false)
+	defer ts.Close()
+
+	res, err := ts.Client().Get(ts.URL + "/agents/new")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer res.Body.Close()
+	buf := new(bytes.Buffer)
+	if _, err := buf.ReadFrom(res.Body); err != nil {
+		t.Fatal(err)
+	}
+	html := buf.String()
+	if strings.Contains(html, `value="noop"`) {
+		t.Fatalf("noop should not be visible when debug is disabled")
+	}
+	if !strings.Contains(html, "No runtimes installed") {
+		t.Fatalf("expected no runtime warning")
+	}
+}
+
+func TestWebCreateAgentRejectsUnavailableNoop(t *testing.T) {
+	ts := newTestServerWithDebug(t, false)
+	defer ts.Close()
+
+	res, err := ts.Client().Post(ts.URL+"/agents", "application/x-www-form-urlencoded", strings.NewReader("name=Agent&type=noop"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusBadRequest {
+		t.Fatalf("expected bad request, got %d", res.StatusCode)
 	}
 }
 

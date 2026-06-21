@@ -9,7 +9,7 @@ export default defineConfig({
   expect: { timeout: 5_000 },
   reporter: [['list'], ['html', { outputFolder: 'e2e/playwright-report', open: 'never' }]],
   webServer: {
-    command: `mkdir -p data && rm -f data/e2e-picoclip.db && BIND=127.0.0.1 PORT=${port} PICOCLIP_DB_PATH=data/e2e-picoclip.db go run cmd/picoclip/main.go`,
+    command: `mkdir -p data && rm -f data/e2e-picoclip.db && BIND=127.0.0.1 PORT=${port} PICOCLIP_DEBUG=true PICOCLIP_DB_PATH=data/e2e-picoclip.db go run cmd/picoclip/main.go`,
     cwd: '..',
     url: baseURL,
     reuseExistingServer: false,

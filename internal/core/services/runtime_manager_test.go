@@ -44,3 +44,9 @@ func TestRuntimeManagerUninstallRemovesRuntimeState(t *testing.T) {
 		t.Fatalf("expected runtime directory to be removed, got %v", err)
 	}
 }
+
+func TestRuntimeManagerTestAllConfiguredWithoutRuntimes(t *testing.T) {
+	storage := memory.NewStorage()
+	manager := NewRuntimeManager(storage, t.TempDir(), SystemClock{})
+	manager.TestAllConfigured(context.Background(), NoopLogger{})
+}

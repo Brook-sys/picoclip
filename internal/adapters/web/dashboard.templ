@@ -17,6 +17,17 @@ templ DashboardPage(view DashboardView, agents []domain.Agent, projects []domain
 
 		<section class="content-grid">
 			<div class="stack">
+				if len(view.RuntimeWarnings) > 0 {
+					<div class="panel border-danger">
+						<div class="section-header">
+							<h2 class="text-danger">Runtime Warning</h2>
+							<a href="/settings#runtimes">Configure runtimes</a>
+						</div>
+						for _, warning := range view.RuntimeWarnings {
+							<p class="muted">{ warning }</p>
+						}
+					</div>
+				}
 				if len(view.NeedsAttention) > 0 {
 					<div class="panel border-danger">
 						<div class="section-header">

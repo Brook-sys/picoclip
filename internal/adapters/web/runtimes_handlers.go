@@ -20,6 +20,10 @@ type RuntimeCardView struct {
 	Health      domain.RuntimeHealth
 	ConfigFiles []domain.RuntimeConfigFile
 	Versions    []domain.RuntimeVersion
+	Tested      bool
+	TestedAt    string
+	Functional  bool
+	Checks      []domain.DiagnosticCheck
 }
 
 func (s *Server) runtimeCards(r *http.Request) []RuntimeCardView {
@@ -30,8 +34,11 @@ func (s *Server) runtimeCards(r *http.Request) []RuntimeCardView {
 		health := domain.RuntimeHealth{Status: "not_configured"}
 		var configFiles []domain.RuntimeConfigFile
 		var versions []domain.RuntimeVersion
+		tested, testedAt, functional, checks, savedHealth := runtimeHealthSummary(state)
 		if configured {
-			health, _ = s.runtimes.Health(r.Context(), manifest.ID)
+			if tested {
+				health = savedHealth
+			}
 			if adapter, ok := s.runtimes.Adapter(manifest.ID); ok {
 				configFiles, _ = adapter.ReadConfig(r.Context(), state)
 			}
@@ -52,6 +59,10 @@ func (s *Server) runtimeCards(r *http.Request) []RuntimeCardView {
 			Health:      health,
 			ConfigFiles: configFiles,
 			Versions:    versions,
+			Tested:      tested,
+			TestedAt:    testedAt,
+			Functional:  functional,
+			Checks:      checks,
 		})
 	}
 	return cards
@@ -59,6 +70,19 @@ func (s *Server) runtimeCards(r *http.Request) []RuntimeCardView {
 
 func (s *Server) handleAPIRuntimes(w http.ResponseWriter, r *http.Request) {
 	s.jsonResponse(w, s.runtimeCards(r))
+}
+
+func runtimeHealthSummary(state domain.RuntimeState) (tested bool, testedAt string, functional bool, checks []domain.DiagnosticCheck, health domain.RuntimeHealth) {
+	if state.LastHealthAt == nil || state.LastHealthJSON == "" || state.LastHealthJSON == "{}" {
+		return false, "", false, nil, health
+	}
+	if err := json.Unmarshal([]byte(state.LastHealthJSON), &health); err != nil {
+		return false, "", false, nil, health
+	}
+	functional = health.Status == "ok"
+	testedAt = timeSince(*state.LastHealthAt)
+	checks = health.Checks
+	return true, testedAt, functional, checks, health
 }
 
 func (s *Server) handleWebPostRuntimeExisting(w http.ResponseWriter, r *http.Request) {
@@ -76,6 +100,7 @@ func (s *Server) handleWebPostRuntimeExisting(w http.ResponseWriter, r *http.Req
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
+	_, _ = s.runtimes.Test(r.Context(), runtimeID)
 	s.handleWebSettings(w, r)
 }
 
@@ -94,6 +119,7 @@ func (s *Server) handleWebPostRuntimeInstall(w http.ResponseWriter, r *http.Requ
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
+	_, _ = s.runtimes.Test(r.Context(), runtimeID)
 	s.handleWebSettings(w, r)
 }
 
@@ -129,6 +155,16 @@ func (s *Server) handleWebPostRuntimeConfig(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	if err := adapter.WriteConfig(r.Context(), state, fileName, content); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	_, _ = s.runtimes.Test(r.Context(), runtimeID)
+	s.handleWebSettings(w, r)
+}
+
+func (s *Server) handleWebPostRuntimeTest(w http.ResponseWriter, r *http.Request) {
+	runtimeID := domain.RuntimeID(r.PathValue("id"))
+	if _, err := s.runtimes.Test(r.Context(), runtimeID); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}

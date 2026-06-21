@@ -144,16 +144,36 @@ templ SettingsPage(view SettingsView) {
 											if r.State.ConfigPath != "" {
 												<strong>Config:</strong> <code style="word-break: break-all;">{ r.State.ConfigPath }</code><br/>
 											}
-											<strong>Health:</strong> 
-											if r.Health.Status == "ok" {
-												<span style="color: var(--success);">{ r.Health.Version }</span>
+											<strong>Functional status:</strong> 
+											if !r.Tested {
+												<span class="muted">Not tested yet</span>
+											} else if r.Functional {
+												<span style="color: var(--success);">Functional</span>
 											} else {
-												<span class="text-danger">{ r.Health.Status }</span>
+												<span class="text-danger">Not functional</span>
+											}
+											if r.TestedAt != "" {
+												<br/><strong>Last tested:</strong> <span class="muted">{ r.TestedAt }</span>
+											}
+											if r.Health.Version != "" {
+												<br/><strong>Version:</strong> <span>{ r.Health.Version }</span>
+											}
+											if len(r.Checks) > 0 && !r.Functional {
+												<div class="stack-sm" style="margin-top: var(--space-2);">
+													for _, check := range r.Checks {
+														<small class={ templ.KV("text-danger", check.Status == "error") }>{ check.Name + ": " + check.Status + " — " + check.Message }</small>
+													}
+												</div>
 											}
 										</div>
-										<form hx-post={ "/runtimes/" + string(r.ID) + "/uninstall" } hx-confirm="Are you sure you want to uninstall this runtime? Configuration files will be deleted if installed exclusively." hx-target="body" hx-swap="outerHTML">
-											<button class="button button-danger text-danger" type="submit" style="background: transparent; border-color: transparent; padding-left: 0;">Uninstall Runtime</button>
-										</form>
+										<div class="actions" style="gap: var(--space-2); align-items: center;">
+											<form hx-post={ "/runtimes/" + string(r.ID) + "/test" } hx-target="body" hx-swap="outerHTML">
+												<button class="button secondary" type="submit">Test Runtime</button>
+											</form>
+											<form hx-post={ "/runtimes/" + string(r.ID) + "/uninstall" } hx-confirm="Are you sure you want to uninstall this runtime? Configuration files will be deleted if installed exclusively." hx-target="body" hx-swap="outerHTML">
+												<button class="button button-danger text-danger" type="submit" style="background: transparent; border-color: transparent; padding-left: 0;">Uninstall Runtime</button>
+											</form>
+										</div>
 										if len(r.ConfigFiles) > 0 {
 											for _, file := range r.ConfigFiles {
 												<form hx-post={ "/runtimes/" + string(r.ID) + "/config" } hx-target="body" hx-swap="outerHTML" class="stacked" data-success="Runtime config saved." style="margin-top: var(--space-3);">
