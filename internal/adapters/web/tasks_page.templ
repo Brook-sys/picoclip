@@ -27,5 +27,5 @@ templ TasksPage(tasks []taskResponse, agents []domain.Agent, projects []domain.W
 }
 
 templ tasksAction() {
-	<button class="button" type="button" data-open-modal="task-create-modal">Nova task</button>
+	<button data-testid="task-create-button" class="button" type="button" data-open-modal="task-create-modal">Nova task</button>
 }

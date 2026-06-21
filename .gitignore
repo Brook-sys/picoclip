@@ -15,6 +15,7 @@ tmp/
 .air/
 *.swp
 *.log
+coverage.out
 .playwright-mcp/
 
 # Node / Playwright

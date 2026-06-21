@@ -25,7 +25,7 @@ templ AgentQuickModal(id string, agents []domain.Agent) {
 				<select name="permission_preset">
 					@PermissionPresetOptions(nil)
 				</select>
-				<button type="submit">Criar agente</button>
+				<button data-testid="agent-create-submit" type="submit">Criar agente</button>
 				<a class="button secondary" href="/agents/new">Configuração avançada</a>
 			</form>
 		</div>
@@ -46,7 +46,7 @@ templ TaskModal(id string, projectID string, projects []domain.Workspace, agents
 				}
 				@AgentPicker(agents, "agent_id", "", "Buscar agente por nome, cargo ou tag...")
 				<textarea name="prompt" placeholder="Objetivo, contexto e critérios de aceite" required></textarea>
-				<button type="submit">Criar task</button>
+				<button data-testid="task-create-submit" type="submit">Criar task</button>
 			</form>
 		</div>
 	</div>

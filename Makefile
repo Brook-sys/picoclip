@@ -9,7 +9,7 @@ DEV_BIN := $(TMP_DIR)/$(APP)
 AIR := ./bin/air
 TEMPL := ./bin/templ
 
-.PHONY: help tools templ-generate build build-dev run dev seed test test-go test-e2e test-e2e-headed vet fmt lint check clean kill-8080
+.PHONY: help tools templ-generate build build-dev run dev seed test test-go test-coverage test-e2e test-e2e-headed vet fmt lint check clean kill-8080
 
 help:
 	@printf '%s\n' \
@@ -22,6 +22,7 @@ help:
 	  '  make seed           Load demo data through the public API' \
 	  '  make build          Build ./picoclip' \
 	  '  make test-go        Run Go tests' \
+	  '  make test-coverage  Run Go tests with coverage report' \
 	  '  make test-e2e       Run Playwright E2E tests' \
 	  '  make check          Run full validation' \
 	  '  make kill-8080      Kill process bound to port 8080'
@@ -63,6 +64,9 @@ seed:
 
 test-go:
 	go test ./...
+
+test-coverage:
+	go test -coverprofile=coverage.out ./... && go tool cover -func=coverage.out
 
 test-e2e:
 	BASE_URL=$(BASE_URL) ./scripts/run-e2e.sh

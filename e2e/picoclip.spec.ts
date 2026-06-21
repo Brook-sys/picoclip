@@ -32,20 +32,20 @@ test.describe('PicoClip smoke UI', () => {
     const agentName = `E2E Agent ${Date.now()}`;
 
     await page.goto('/agents');
-    await page.getByRole('button', { name: 'Novo agente' }).click();
+    await page.getByTestId('agent-create-button').click();
     await page.locator('[data-modal="agent-quick-modal"]').getByPlaceholder('Nome').fill(agentName);
     await page.locator('[data-modal="agent-quick-modal"] select[name="type"]').selectOption('noop');
-    await page.locator('[data-modal="agent-quick-modal"]').getByRole('button', { name: 'Criar agente' }).click();
+    await page.getByTestId('agent-create-submit').click();
     await expect(page.getByRole('heading', { name: agentName })).toBeVisible();
 
     await page.goto('/tasks');
-    await page.getByRole('button', { name: 'Nova task' }).click();
+    await page.getByTestId('task-create-button').click();
     const taskModal = page.locator('[data-modal="task-create-modal"]');
     await taskModal.locator('.agent-search').fill(agentName);
     await taskModal.locator('[data-agent-option]').first().click();
     const taskPrompt = `Validate task detail polling stability ${Date.now()}`;
     await taskModal.getByPlaceholder('Objetivo, contexto e critérios de aceite').fill(taskPrompt);
-    await taskModal.getByRole('button', { name: 'Criar task' }).click();
+    await page.getByTestId('task-create-submit').click();
     await expect(page.getByText(taskPrompt).first()).toBeVisible();
 
     await page.getByRole('row').filter({ hasText: taskPrompt }).getByRole('link', { name: /^tsk_/ }).click();
@@ -123,21 +123,21 @@ test.describe('PicoClip smoke UI', () => {
     // Create an agent to verify it gets deleted
     const testAgent = `Doomed Agent ${Date.now()}`;
     await page.goto('/agents');
-    await page.getByRole('button', { name: 'Novo agente' }).click();
+    await page.getByTestId('agent-create-button').click();
     await page.locator('[data-modal="agent-quick-modal"]').getByPlaceholder('Nome').fill(testAgent);
     await page.locator('[data-modal="agent-quick-modal"] select[name="type"]').selectOption('noop');
-    await page.locator('[data-modal="agent-quick-modal"]').getByRole('button', { name: 'Criar agente' }).click();
+    await page.getByTestId('agent-create-submit').click();
     await expect(page.getByRole('heading', { name: testAgent })).toBeVisible();
 
     // Navigate to settings and open reset modal
     await page.goto('/settings');
-    await page.getByRole('button', { name: 'Reset All Data' }).click();
+    await page.getByTestId('settings-reset-all').click();
     const modal = page.locator('[data-modal="reset-modal"]');
     await expect(modal).toBeVisible();
 
     // Fill confirm and submit
     await modal.getByLabel(/Please type/i).fill('RESET');
-    await modal.getByRole('button', { name: 'Yes, Reset Data' }).click();
+    await page.getByTestId('settings-reset-confirm').click();
 
     // Should redirect to dashboard and show empty or default state
     await expect(page).toHaveURL('/');

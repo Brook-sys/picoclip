@@ -199,7 +199,7 @@ templ SettingsPage(view SettingsView) {
 					<div class="card bg-danger-light" style="margin-top: 16px;">
 						<h3>Factory Reset</h3>
 						<p>This will permanently delete all agents, tasks, runs, messages, projects, custom skills and history. Built-in skills will be restored. This action cannot be undone.</p>
-						<button class="button button-danger" type="button" data-open-modal="reset-modal" style="margin-top: var(--space-2);">Reset All Data</button>
+						<button data-testid="settings-reset-all" class="button button-danger" type="button" data-open-modal="reset-modal" style="margin-top: var(--space-2);">Reset All Data</button>
 					</div>
 				</div>
 			</div>
@@ -220,7 +220,7 @@ templ ResetModal(id string) {
 				<input id="confirm_text" name="confirm_text" type="text" autocomplete="off" required pattern="RESET" title="Type RESET to confirm" />
 				<div class="actions" style="margin-top: var(--space-4);">
 					<button class="button" type="button" data-close-modal={ id }>Cancel</button>
-					<button class="button button-danger" type="submit">Yes, Reset Data</button>
+					<button data-testid="settings-reset-confirm" class="button button-danger" type="submit">Yes, Reset Data</button>
 				</div>
 			</form>
 		</div>
