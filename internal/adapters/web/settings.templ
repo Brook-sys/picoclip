@@ -4,8 +4,8 @@ import "strconv"
 
 templ SettingsPage(view SettingsView) {
 	@PageShell("settings", "Settings", "Global configuration, environment variables, and system administration.", nil) {
-		<section class="detail-grid">
-			<aside class="side-column">
+		<section class="settings-layout">
+			<aside class="settings-sidebar">
 				<nav class="side-nav">
 					<a class="nav-link" href="#general">General</a>
 					<a class="nav-link" href="#appearance">Appearance</a>
@@ -15,7 +15,7 @@ templ SettingsPage(view SettingsView) {
 					<a class="nav-link text-danger" href="#danger-zone">Danger Zone</a>
 				</nav>
 				
-				<div class="panel">
+				<div class="settings-panel">
 					<h2>Diagnostics</h2>
 					<p class="muted">System health checks.</p>
 					@PropertyList() {
@@ -31,7 +31,7 @@ templ SettingsPage(view SettingsView) {
 					}
 				</div>
 
-				<div class="panel">
+				<div class="settings-panel">
 					<h2>System Status</h2>
 					@PropertyList() {
 						@PropertyItem("Agents", strconv.Itoa(view.Stats.Agents))
@@ -42,8 +42,8 @@ templ SettingsPage(view SettingsView) {
 				</div>
 			</aside>
 			
-			<div class="main-column">
-				<div id="general" class="panel">
+			<div class="settings-content">
+				<div id="general" class="settings-panel">
 					<h2>General Settings</h2>
 					<p class="muted">Basic application behaviors.</p>
 					<form hx-post="/settings/general" hx-target="body" hx-swap="outerHTML" data-success="General settings saved." class="stacked">
@@ -74,7 +74,7 @@ templ SettingsPage(view SettingsView) {
 					</form>
 				</div>
 				
-				<div id="appearance" class="panel">
+				<div id="appearance" class="settings-panel">
 					<h2>Appearance</h2>
 					<p class="muted">Visual defaults and interaction density.</p>
 					<div class="grid-cols-2">
@@ -89,7 +89,7 @@ templ SettingsPage(view SettingsView) {
 					</div>
 				</div>
 				
-				<div id="storage" class="panel">
+				<div id="storage" class="settings-panel">
 					<h2>Storage</h2>
 					<p class="muted">Database and file management.</p>
 					@PropertyList() {
@@ -99,7 +99,7 @@ templ SettingsPage(view SettingsView) {
 					}
 				</div>
 				
-				<div id="runtimes" class="panel">
+				<div id="runtimes" class="settings-panel">
 					<h2>Agent Runtimes</h2>
 					<p class="muted">Manage the execution backends (like Crush or PicoClaw) used by agents to run tasks.</p>
 					
@@ -168,7 +168,7 @@ templ SettingsPage(view SettingsView) {
 					</div>
 				</div>
 				
-				<div id="environment" class="panel">
+				<div id="environment" class="settings-panel">
 					<h2>Environment Variables</h2>
 					<p class="muted">Global variables injected into task execution (e.g., API keys). One per line (KEY=value).</p>
 					<form hx-post="/settings/environment" hx-target="body" hx-swap="outerHTML" data-success="Environment saved." class="stacked">

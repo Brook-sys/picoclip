@@ -45,22 +45,24 @@ func installFromGitHubRelease(ctx context.Context, owner string, repo string, as
 	if err := json.NewDecoder(resp.Body).Decode(&release); err != nil {
 		return "", "", err
 	}
-	assetName := runtimeAssetName(assetPrefix)
-	for _, asset := range release.Assets {
-		if asset.Name == assetName {
-			if asset.Size > 250*1024*1024 {
-				return "", "", errors.New("runtime asset is too large")
+	assetNames := runtimeAssetNames(assetPrefix, release.TagName)
+	for _, expected := range assetNames {
+		for _, asset := range release.Assets {
+			if asset.Name == expected {
+				if asset.Size > 250*1024*1024 {
+					return "", "", errors.New("runtime asset is too large")
+				}
+				if err := downloadAndExtract(ctx, asset.BrowserDownloadURL, asset.Name, binaryName, dst); err != nil {
+					return "", "", err
+				}
+				return release.TagName, asset.BrowserDownloadURL, nil
 			}
-			if err := downloadAndExtract(ctx, asset.BrowserDownloadURL, asset.Name, binaryName, dst); err != nil {
-				return "", "", err
-			}
-			return release.TagName, asset.BrowserDownloadURL, nil
 		}
 	}
-	return "", "", fmt.Errorf("release asset %s not found", assetName)
+	return "", "", fmt.Errorf("release asset not found, tried %s", strings.Join(assetNames, ", "))
 }
 
-func runtimeAssetName(prefix string) string {
+func runtimeAssetNames(prefix string, version string) []string {
 	osName := runtime.GOOS
 	arch := runtime.GOARCH
 	if arch == "amd64" {
@@ -70,7 +72,11 @@ func runtimeAssetName(prefix string) string {
 	if runtime.GOOS == "windows" {
 		ext = ".zip"
 	}
-	return fmt.Sprintf("%s_%s_%s%s", prefix, titleOS(osName), arch, ext)
+	cleanVersion := strings.TrimPrefix(version, "v")
+	return []string{
+		fmt.Sprintf("%s_%s_%s_%s%s", prefix, cleanVersion, titleOS(osName), arch, ext),
+		fmt.Sprintf("%s_%s_%s%s", prefix, titleOS(osName), arch, ext),
+	}
 }
 
 func titleOS(osName string) string {

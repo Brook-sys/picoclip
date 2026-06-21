@@ -848,3 +848,45 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monos
   .metrics { grid-template-columns: 1fr; }
   .main { padding: 16px 20px; }
 }
+
+.settings-layout {
+  display: grid;
+  grid-template-columns: 240px minmax(0, 1fr);
+  gap: 32px;
+  align-items: start;
+}
+
+.settings-sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  position: sticky;
+  top: 24px;
+}
+
+.settings-content {
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+  max-width: 860px;
+}
+
+.settings-panel {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.settings-panel h2 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.settings-panel > p.muted {
+  margin: -12px 0 0;
+}
