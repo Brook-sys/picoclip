@@ -85,7 +85,15 @@ func (a *CrushAdapter) Health(ctx context.Context, state domain.RuntimeState) do
 	if bin == "" {
 		bin = a.FallbackBinary
 	}
-	health := domain.RuntimeHealth{Status: "ok", CheckedAt: time.Now().UTC()}
+	now := time.Now().UTC()
+	health := domain.RuntimeHealth{Status: "ok", CheckedAt: now}
+	if _, err := os.Stat(bin); err != nil {
+		health.Status = "error"
+		health.Errors = append(health.Errors, err.Error())
+		health.Checks = append(health.Checks, domain.DiagnosticCheck{Name: "binary_exists", Status: "error", Message: err.Error(), CheckedAt: now})
+		return health
+	}
+	health.Checks = append(health.Checks, domain.DiagnosticCheck{Name: "binary_exists", Status: "ok", Message: bin, CheckedAt: now})
 	version, err := commandVersion(ctx, bin, "--version")
 	if err != nil {
 		version, err = commandVersion(ctx, bin, "version")
@@ -93,9 +101,18 @@ func (a *CrushAdapter) Health(ctx context.Context, state domain.RuntimeState) do
 	if err != nil {
 		health.Status = "error"
 		health.Errors = append(health.Errors, err.Error())
+		health.Checks = append(health.Checks, domain.DiagnosticCheck{Name: "version_command", Status: "error", Message: err.Error(), CheckedAt: now})
 		return health
 	}
 	health.Version = version
+	health.Checks = append(health.Checks, domain.DiagnosticCheck{Name: "version_command", Status: "ok", Message: version, CheckedAt: now})
+	if state.ConfigPath != "" {
+		if _, err := os.Stat(state.ConfigPath); err != nil {
+			health.Checks = append(health.Checks, domain.DiagnosticCheck{Name: "config_exists", Status: "warning", Message: err.Error(), CheckedAt: now})
+		} else {
+			health.Checks = append(health.Checks, domain.DiagnosticCheck{Name: "config_exists", Status: "ok", Message: state.ConfigPath, CheckedAt: now})
+		}
+	}
 	return health
 }
 

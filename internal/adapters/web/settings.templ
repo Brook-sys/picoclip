@@ -16,6 +16,22 @@ templ SettingsPage(view SettingsView) {
 				</nav>
 				
 				<div class="panel">
+					<h2>Diagnostics</h2>
+					<p class="muted">System health checks.</p>
+					@PropertyList() {
+						for _, check := range view.Diagnostics.Checks {
+							@PropertyItemHTML(check.Name) {
+								if check.Status == "ok" {
+									<span style="color: var(--success);">{ check.Status }</span>
+								} else {
+									<span class="text-danger">{ check.Status }</span>
+								}
+							}
+						}
+					}
+				</div>
+
+				<div class="panel">
 					<h2>System Status</h2>
 					@PropertyList() {
 						@PropertyItem("Agents", strconv.Itoa(view.Stats.Agents))

@@ -2,17 +2,19 @@ package services
 
 import (
 	"context"
-	"log"
 	"time"
+
+	"picoclip/internal/core/ports"
 )
 
 type Scheduler struct {
 	interval   time.Duration
 	dispatcher *Dispatcher
+	logger     ports.Logger
 }
 
-func NewScheduler(interval time.Duration, dispatcher *Dispatcher) *Scheduler {
-	return &Scheduler{interval: interval, dispatcher: dispatcher}
+func NewScheduler(interval time.Duration, dispatcher *Dispatcher, logger ports.Logger) *Scheduler {
+	return &Scheduler{interval: interval, dispatcher: dispatcher, logger: logger}
 }
 
 func (s *Scheduler) Start(ctx context.Context) {
@@ -25,7 +27,7 @@ func (s *Scheduler) Start(ctx context.Context) {
 		case <-ticker.C:
 			s.dispatcher.Dispatch(ctx)
 		case <-ctx.Done():
-			log.Println("scheduler stopped")
+			s.logger.Info("scheduler.stopped")
 			return
 		}
 	}

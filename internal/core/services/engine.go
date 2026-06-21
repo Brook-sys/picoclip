@@ -11,15 +11,16 @@ type Engine struct {
 	scheduler *Scheduler
 	cancel    context.CancelFunc
 	wg        sync.WaitGroup
+	logger    ports.Logger
 }
 
-func NewEngine(storage ports.Storage, bus ports.EventBus, runtimes *RuntimeManager, memory ports.MemoryProvider, config Config) *Engine {
+func NewEngine(storage ports.Storage, bus ports.EventBus, runtimes *RuntimeManager, memory ports.MemoryProvider, logger ports.Logger, config Config) *Engine {
 	clock := SystemClock{}
 	idGen := &TimeIDGenerator{}
-	runner := NewRunner(storage, clock, idGen, bus, runtimes, memory, config)
-	dispatcher := NewDispatcher(storage, runner, config.MaxConcurrentRuns)
-	scheduler := NewScheduler(config.PollInterval, dispatcher)
-	return &Engine{scheduler: scheduler}
+	runner := NewRunner(storage, clock, idGen, bus, runtimes, memory, logger, config)
+	dispatcher := NewDispatcher(storage, runner, logger, config.MaxConcurrentRuns)
+	scheduler := NewScheduler(config.PollInterval, dispatcher, logger)
+	return &Engine{scheduler: scheduler, logger: logger}
 }
 
 func (e *Engine) Start(ctx context.Context) {

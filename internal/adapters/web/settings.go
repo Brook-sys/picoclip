@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"sort"
 	"strings"
+
+	"picoclip/internal/core/domain"
 )
 
 type SettingsView struct {
@@ -11,6 +13,7 @@ type SettingsView struct {
 	Adapters    map[string]map[string]string
 	Environment map[string]string
 	Runtimes    []RuntimeCardView
+	Diagnostics domain.DiagnosticsReport
 	Stats       SettingsStats
 }
 

@@ -150,7 +150,7 @@ func (r *TaskRepository) ClaimNextPending(ctx context.Context) (domain.Task, err
 	row := tx.QueryRowContext(ctx, query)
 	task, err := scanTask(row)
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
+		if errors.Is(err, sql.ErrNoRows) || errors.Is(err, domain.ErrNotFound) {
 			return domain.Task{}, domain.ErrNoPendingTasks
 		}
 		return domain.Task{}, err

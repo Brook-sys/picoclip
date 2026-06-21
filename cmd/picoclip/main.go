@@ -3,12 +3,12 @@ package main
 import (
 	"context"
 	"database/sql"
-	"log"
 	"net/http"
 	"os"
 	"path/filepath"
 
 	"picoclip/internal/adapters/events"
+	"picoclip/internal/adapters/logger"
 	"picoclip/internal/adapters/runtimes"
 	"picoclip/internal/adapters/storage/memory"
 	"picoclip/internal/adapters/storage/sqlite"
@@ -19,33 +19,49 @@ import (
 
 func main() {
 	ctx := context.Background()
+	debugMode := os.Getenv("PICOCLIP_DEBUG") == "true" || os.Getenv("PICOCLIP_DEBUG") == "1"
+	logLevel := os.Getenv("PICOCLIP_LOG_LEVEL")
+	if logLevel == "" {
+		logLevel = "info"
+	}
+	appLogger := logger.NewSlogLogger(logLevel, debugMode)
 
 	var storage ports.Storage
 	storageType := os.Getenv("PICOCLIP_STORAGE")
+	storageTypeForDiagnostics := storageType
+	if storageTypeForDiagnostics == "" {
+		storageTypeForDiagnostics = "sqlite"
+	}
+	dbPathForDiagnostics := os.Getenv("PICOCLIP_DB_PATH")
 	if storageType == "memory" {
-		log.Println("Using memory storage")
+		appLogger.Info("storage.selected", "type", "memory")
 		storage = memory.NewStorage()
 	} else {
 		dbPath := os.Getenv("PICOCLIP_DB_PATH")
 		if dbPath == "" {
 			err := os.MkdirAll("data", 0755)
 			if err != nil {
-				log.Fatalf("Failed to create data dir: %v", err)
+				appLogger.Error("storage.mkdir_failed", "err", err)
+				os.Exit(1)
 			}
 			dbPath = filepath.Join("data", "picoclip.db")
 		}
-		log.Printf("Using SQLite storage at %s", dbPath)
+		dbPathForDiagnostics = dbPath
+		appLogger.Info("storage.selected", "type", "sqlite", "path", dbPath)
 		db, err := sql.Open("sqlite", dbPath)
 		if err != nil {
-			log.Fatalf("Failed to open db: %v", err)
+			appLogger.Error("storage.open_failed", "err", err)
+			os.Exit(1)
 		}
 		db.SetMaxOpenConns(1)
 		if _, err := db.ExecContext(ctx, "PRAGMA busy_timeout = 5000; PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON;"); err != nil {
-			log.Fatalf("Failed to configure db: %v", err)
+			appLogger.Error("storage.pragma_failed", "err", err)
+			os.Exit(1)
 		}
 		sqliteStorage := sqlite.NewStorage(db)
 		if err := sqliteStorage.Migrate(ctx); err != nil {
-			log.Fatalf("Failed to migrate db: %v", err)
+			appLogger.Error("storage.migrate_failed", "err", err)
+			os.Exit(1)
 		}
 		storage = sqliteStorage
 	}
@@ -71,7 +87,7 @@ func main() {
 	runtimeManager.Register(runtimes.NewPicoClawAdapter(picoclawPath))
 
 	config := services.DefaultConfig()
-	engine := services.NewEngine(storage, bus, runtimeManager, services.NoopMemoryProvider{}, config)
+	engine := services.NewEngine(storage, bus, runtimeManager, services.NoopMemoryProvider{}, appLogger, config)
 	engine.Start(ctx)
 	defer engine.Stop()
 
@@ -85,7 +101,8 @@ func main() {
 	_, _ = workspaceService.EnsureDefault(ctx)
 	skillService := services.NewSkillService(storage, clock, idGen)
 	_ = skillService.InstallBuiltins(ctx)
-	server := web.NewServer(agentService, taskService, skillService, workspaceService, runtimeManager, storage, bus)
+	diagnostics := services.NewDiagnosticsService(storage, runtimeManager, services.DiagnosticsConfig{StorageType: storageTypeForDiagnostics, DatabasePath: dbPathForDiagnostics, WorkspacePath: workspaceBase, RuntimePath: runtimeBase, LogLevel: logLevel, DebugMode: debugMode})
+	server := web.NewServer(agentService, taskService, skillService, workspaceService, runtimeManager, diagnostics, storage, bus)
 
 	mux := http.NewServeMux()
 	server.Mount(mux)
@@ -100,6 +117,9 @@ func main() {
 	}
 
 	listenAddr := bind + ":" + addr
-	log.Printf("PicoClip running at http://%s", listenAddr)
-	log.Fatal(http.ListenAndServe(listenAddr, mux))
+	appLogger.Info("server.start", "addr", listenAddr, "debug", debugMode, "log_level", logLevel, "runtime_path", runtimeBase, "workspace_path", workspaceBase)
+	if err := http.ListenAndServe(listenAddr, mux); err != nil {
+		appLogger.Error("server.failed", "err", err)
+		os.Exit(1)
+	}
 }

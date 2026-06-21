@@ -51,10 +51,18 @@ type RuntimeConfigFile struct {
 	Sensitive bool   `json:"sensitive"`
 }
 
-type RuntimeHealth struct {
+type DiagnosticCheck struct {
+	Name      string    `json:"name"`
 	Status    string    `json:"status"`
-	Version   string    `json:"version"`
-	Warnings  []string  `json:"warnings"`
-	Errors    []string  `json:"errors"`
+	Message   string    `json:"message"`
 	CheckedAt time.Time `json:"checked_at"`
+}
+
+type RuntimeHealth struct {
+	Status    string            `json:"status"`
+	Version   string            `json:"version"`
+	Warnings  []string          `json:"warnings"`
+	Errors    []string          `json:"errors"`
+	Checks    []DiagnosticCheck `json:"checks"`
+	CheckedAt time.Time         `json:"checked_at"`
 }

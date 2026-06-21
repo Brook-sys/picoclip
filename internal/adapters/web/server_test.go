@@ -31,7 +31,8 @@ func newTestServer(t *testing.T) *httptest.Server {
 	}
 	mux := http.NewServeMux()
 	runtimes := services.NewRuntimeManager(storage, "data/runtimes", clock)
-	NewServer(agents, tasks, skills, projects, runtimes, storage, bus).Mount(mux)
+	diagnostics := services.NewDiagnosticsService(storage, runtimes, services.DiagnosticsConfig{StorageType: "memory", WorkspacePath: "workspaces", RuntimePath: "data/runtimes"})
+	NewServer(agents, tasks, skills, projects, runtimes, diagnostics, storage, bus).Mount(mux)
 	return httptest.NewServer(mux)
 }
 

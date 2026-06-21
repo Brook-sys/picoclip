@@ -18,10 +18,11 @@ type Runner struct {
 	bus      ports.EventBus
 	runtimes *RuntimeManager
 	memory   ports.MemoryProvider
+	logger   ports.Logger
 	config   Config
 }
 
-func NewRunner(storage ports.Storage, clock ports.Clock, idGen ports.IDGenerator, bus ports.EventBus, runtimes *RuntimeManager, memory ports.MemoryProvider, config Config) *Runner {
+func NewRunner(storage ports.Storage, clock ports.Clock, idGen ports.IDGenerator, bus ports.EventBus, runtimes *RuntimeManager, memory ports.MemoryProvider, logger ports.Logger, config Config) *Runner {
 	return &Runner{
 		storage:  storage,
 		clock:    clock,
@@ -29,6 +30,7 @@ func NewRunner(storage ports.Storage, clock ports.Clock, idGen ports.IDGenerator
 		bus:      bus,
 		runtimes: runtimes,
 		memory:   memory,
+		logger:   logger,
 		config:   config,
 	}
 }
@@ -56,6 +58,7 @@ func (r *Runner) Run(ctx context.Context, task domain.Task) {
 	}
 
 	if _, ok := r.runtimes.Adapter(domain.RuntimeID(agent.Type)); !ok && agent.Type != "noop" {
+		r.logger.Warn("runner.runtime_unavailable", "task_id", task.ID, "agent_id", agent.ID, "type", agent.Type)
 		_ = r.bus.Publish(ctx, domain.Event{ID: r.idGen.NewID("evt"), Type: domain.EventDriverMissing, TaskID: task.ID, AgentID: agent.ID, Message: "Runtime not available", CreatedAt: r.clock.Now()})
 		r.failTask(ctx, task, "runtime not available")
 		return
@@ -102,6 +105,7 @@ func (r *Runner) Run(ctx context.Context, task domain.Task) {
 	}
 	task.Prompt = strings.Join(conversation, "\n\n")
 
+	r.logger.Debug("runner.run_started", "task_id", task.ID, "agent_id", agent.ID, "run_id", run.ID, "runtime", agent.Type)
 	_ = r.bus.Publish(ctx, domain.Event{ID: r.idGen.NewID("evt"), Type: domain.EventRunStarted, TaskID: task.ID, AgentID: agent.ID, RunID: run.ID, Message: "Run started", CreatedAt: r.clock.Now()})
 
 	runCtx, cancel := context.WithTimeout(ctx, r.config.TaskTimeout)
@@ -122,6 +126,7 @@ func (r *Runner) Run(ctx context.Context, task domain.Task) {
 	run.FinishedAt = &finishedAt
 	latest, latestErr := r.storage.Tasks().Get(ctx, task.ID)
 	if latestErr == nil && latest.Status == domain.TaskStatusCancelled {
+		r.logger.Warn("runner.task_canceled", "task_id", task.ID, "run_id", run.ID, "reason", latest.CancelReason)
 		run.Status = domain.RunStatusCanceled
 		run.Error = latest.CancelReason
 		_ = r.storage.Runs().Update(ctx, run)
@@ -134,11 +139,13 @@ func (r *Runner) Run(ctx context.Context, task domain.Task) {
 			run.Status = domain.RunStatusTimeout
 		}
 		run.Error = err.Error()
+		r.logger.Warn("runner.run_failed", "task_id", task.ID, "run_id", run.ID, "runtime", agent.Type, "err", err)
 		_ = r.storage.Runs().Update(ctx, run)
 		r.failTask(ctx, task, fmt.Sprintf("%v", err))
 		return
 	}
 
+	r.logger.Debug("runner.run_completed", "task_id", task.ID, "run_id", run.ID, "runtime", agent.Type)
 	run.Status = domain.RunStatusSucceeded
 	run.Output = result.Output
 	_ = r.storage.Runs().Update(ctx, run)

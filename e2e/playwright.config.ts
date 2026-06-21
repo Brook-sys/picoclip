@@ -12,7 +12,7 @@ export default defineConfig({
     command: `mkdir -p data && rm -f data/e2e-picoclip.db && BIND=127.0.0.1 PORT=${port} PICOCLIP_DB_PATH=data/e2e-picoclip.db go run cmd/picoclip/main.go`,
     cwd: '..',
     url: baseURL,
-    reuseExistingServer: true,
+    reuseExistingServer: false,
     timeout: 30_000,
     stdout: 'pipe',
     stderr: 'pipe',

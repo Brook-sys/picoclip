@@ -73,6 +73,14 @@ test.describe('PicoClip smoke UI', () => {
     await expect(page).toHaveURL('/settings');
   });
 
+  test('diagnostics API exposes health checks', async ({ request }) => {
+    const response = await request.get('/api/diagnostics');
+    expect(response.ok()).toBeTruthy();
+    const diagnostics = await response.json();
+    expect(diagnostics.checks.length).toBeGreaterThan(0);
+    expect(diagnostics.checks.some((check: { name: string }) => check.name === 'storage_read')).toBeTruthy();
+  });
+
   test('agent API exposes Paperclip-like task workflow', async ({ request }) => {
     const agentResponse = await request.post('/api/agents', {
       data: { name: `API Agent ${Date.now()}`, type: 'noop' },

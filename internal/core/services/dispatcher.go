@@ -3,7 +3,6 @@ package services
 import (
 	"context"
 	"errors"
-	"log"
 	"sync"
 
 	"picoclip/internal/core/domain"
@@ -15,9 +14,10 @@ type Dispatcher struct {
 	runner    *Runner
 	semaphore chan struct{}
 	wg        sync.WaitGroup
+	logger    ports.Logger
 }
 
-func NewDispatcher(storage ports.Storage, runner *Runner, maxConcurrentRuns int) *Dispatcher {
+func NewDispatcher(storage ports.Storage, runner *Runner, logger ports.Logger, maxConcurrentRuns int) *Dispatcher {
 	if maxConcurrentRuns < 1 {
 		maxConcurrentRuns = 1
 	}
@@ -25,6 +25,7 @@ func NewDispatcher(storage ports.Storage, runner *Runner, maxConcurrentRuns int)
 		storage:   storage,
 		runner:    runner,
 		semaphore: make(chan struct{}, maxConcurrentRuns),
+		logger:    logger,
 	}
 }
 
@@ -33,11 +34,14 @@ func (d *Dispatcher) Dispatch(ctx context.Context) {
 		task, err := d.storage.Tasks().ClaimNextPending(ctx)
 		if err != nil {
 			if !errors.Is(err, domain.ErrNoPendingTasks) {
-				log.Printf("dispatch failed: %v", err)
+				d.logger.Warn("dispatcher.claim_failed", "err", err)
+			} else {
+				d.logger.Debug("dispatcher.no_pending_tasks")
 			}
 			return
 		}
 
+		d.logger.Debug("dispatcher.task_claimed", "task_id", task.ID, "agent_id", task.AgentID)
 		select {
 		case d.semaphore <- struct{}{}:
 			d.wg.Add(1)

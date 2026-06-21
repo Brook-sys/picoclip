@@ -17,13 +17,14 @@ type Server struct {
 	skills          *services.SkillService
 	projects        *services.WorkspaceService
 	runtimes        *services.RuntimeManager
+	diagnostics     *services.DiagnosticsService
 	storage         ports.Storage
 	bus             ports.EventBus
 	adapterSettings map[string]map[string]string
 }
 
-func NewServer(agents *services.AgentService, tasks *services.TaskService, skills *services.SkillService, projects *services.WorkspaceService, runtimes *services.RuntimeManager, storage ports.Storage, bus ports.EventBus) *Server {
-	return &Server{agents: agents, tasks: tasks, skills: skills, projects: projects, runtimes: runtimes, storage: storage, bus: bus, adapterSettings: map[string]map[string]string{"noop": {"timeout": "1m"}}}
+func NewServer(agents *services.AgentService, tasks *services.TaskService, skills *services.SkillService, projects *services.WorkspaceService, runtimes *services.RuntimeManager, diagnostics *services.DiagnosticsService, storage ports.Storage, bus ports.EventBus) *Server {
+	return &Server{agents: agents, tasks: tasks, skills: skills, projects: projects, runtimes: runtimes, diagnostics: diagnostics, storage: storage, bus: bus, adapterSettings: map[string]map[string]string{"noop": {"timeout": "1m"}}}
 }
 
 func (s *Server) Mount(mux *http.ServeMux) {
@@ -48,6 +49,7 @@ func (s *Server) Mount(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/capabilities", s.handleGetCapabilities)
 	mux.HandleFunc("GET /api/search", s.handleAPISearch)
 	mux.HandleFunc("GET /api/runtimes", s.handleAPIRuntimes)
+	mux.HandleFunc("GET /api/diagnostics", s.handleAPIDiagnostics)
 	mux.HandleFunc("GET /agent-api/docs", s.handleAgentDocs)
 	mux.HandleFunc("GET /agent-api/me", s.handleAgentMe)
 	mux.HandleFunc("GET /agent-api/agents", s.handleGetAgents)
