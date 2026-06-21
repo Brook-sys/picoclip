@@ -14,6 +14,133 @@ templ SystemStatusCard(label string, value string, iconName string, variant stri
 	</div>
 }
 
+templ RuntimeStatusTile(label string, status string, testedAt string, ok bool, tested bool) {
+	<div class={ "runtime-status-tile", runtimeStatusClass(ok, tested) }>
+		<span class="runtime-status-icon" aria-hidden="true">
+			if ok {
+				@Icon("check", 16)
+			} else if tested {
+				@Icon("x", 16)
+			} else {
+				@Icon("settings", 16)
+			}
+		</span>
+		<span class="runtime-status-copy">
+			<small>{ label }</small>
+			<strong>{ status }</strong>
+			if testedAt != "" {
+				<em>{ "Last tested: " + testedAt }</em>
+			} else {
+				<em>Awaiting first test</em>
+			}
+		</span>
+	</div>
+}
+
+templ RuntimePathRow(label string, value string) {
+	if value != "" {
+		<div class="runtime-path-row">
+			<span>
+				<small>{ label }</small>
+				<code>{ value }</code>
+			</span>
+			<button class="runtime-copy-button" type="button" data-copy-text={ value }>Copy</button>
+		</div>
+	}
+}
+
+templ RuntimeConfiguredCard(r RuntimeCardView) {
+	<div class={ "runtime-health-card", runtimeOverallClass(r) }>
+		<div class="runtime-health-header">
+			<div>
+				<h3>{ r.Name }</h3>
+				<p>{ r.Description }</p>
+			</div>
+			<div class="runtime-health-badges">
+				<span class={ "runtime-overall-badge", runtimeOverallBadgeClass(r) }>{ runtimeOverallLabel(r) }</span>
+				if r.Health.Version != "" {
+					<span class="runtime-version-badge">{ r.Health.Version }</span>
+				}
+			</div>
+		</div>
+		<div class="runtime-status-grid">
+			@RuntimeStatusTile("CLI", runtimeCLIStatusLabel(r), r.TestedAt, r.Functional, r.Tested)
+			@RuntimeStatusTile("AI", runtimeAIStatusLabel(r), r.AITestedAt, r.AIOk, r.AITested)
+		</div>
+		<div class="runtime-path-list">
+			@RuntimePathRow("Binary", r.State.BinPath)
+			@RuntimePathRow("Config", r.State.ConfigPath)
+		</div>
+		if r.AIMessage != "" || r.AIOutput != "" {
+			<div class={ "runtime-ai-result", runtimeAIResultClass(r) }>
+				<div class="runtime-ai-result-header">
+					<span class="runtime-ai-result-icon">
+						if r.AIOk {
+							@Icon("check", 16)
+						} else {
+							@Icon("x", 16)
+						}
+					</span>
+					<strong>{ runtimeAIMessage(r) }</strong>
+				</div>
+				if r.AIOutput != "" {
+					<details class="runtime-raw-output">
+						<summary>Raw AI test output</summary>
+						<pre>{ r.AIOutput }</pre>
+					</details>
+				}
+			</div>
+		}
+		if len(r.Checks) > 0 && !r.Functional {
+			<div class="runtime-check-list">
+				for _, check := range r.Checks {
+					<div class={ "runtime-check-item", templ.KV("runtime-check-error", check.Status == "error") }>
+						<strong>{ check.Name }</strong>
+						<span>{ check.Status }</span>
+						<small>{ check.Message }</small>
+					</div>
+				}
+			</div>
+		}
+		<div class="runtime-action-bar">
+			<form hx-post={ "/runtimes/" + string(r.ID) + "/test" } data-no-toast="true" hx-target="body" hx-swap="outerHTML">
+				<button class="pc-btn pc-btn-secondary" type="submit" data-loading-text="Testing CLI...">@Icon("play", 16) Test CLI</button>
+			</form>
+			<form hx-post={ "/runtimes/" + string(r.ID) + "/test-ai" } hx-confirm="This will send a real test request to the configured AI provider. It may consume tokens. Continue?" data-no-toast="true" hx-target="body" hx-swap="outerHTML">
+				<button class="pc-btn pc-btn-secondary" type="submit" data-loading-text="Testing AI...">@Icon("zap", 16) Test AI</button>
+			</form>
+			<form hx-post={ "/runtimes/" + string(r.ID) + "/uninstall" } hx-confirm="Are you sure you want to uninstall this runtime? Configuration files will be deleted if installed exclusively." hx-target="body" hx-swap="outerHTML">
+				<button class="pc-btn pc-btn-ghost runtime-danger-action" type="submit">@Icon("trash", 16) Uninstall</button>
+			</form>
+		</div>
+	</div>
+}
+
+templ RuntimeConfigEditors(r RuntimeCardView) {
+	if len(r.ConfigFiles) > 0 {
+		for _, file := range r.ConfigFiles {
+			<form hx-post={ "/runtimes/" + string(r.ID) + "/config" } hx-target="body" hx-swap="outerHTML" class="runtime-config-editor" data-success="Runtime config saved.">
+				<div class="runtime-config-header">
+					<strong>{ file.Name }</strong>
+					if file.Sensitive {
+						<span class="pc-badge pc-badge-bad">Sensitive</span>
+					}
+				</div>
+				<input type="hidden" name="file_name" value={ file.Name } />
+				<textarea name="content" spellcheck="false">{ string(file.Content) }</textarea>
+				<button class="pc-btn pc-btn-secondary" type="submit">Save { file.Name }</button>
+			</form>
+		}
+	} else if r.State.ConfigPath != "" {
+		<form hx-post={ "/runtimes/" + string(r.ID) + "/config" } hx-target="body" hx-swap="outerHTML" class="runtime-config-editor" data-success="Runtime config saved.">
+			<div class="runtime-config-header"><strong>config.json</strong></div>
+			<input type="hidden" name="file_name" value="config.json" />
+			<textarea name="content" spellcheck="false"></textarea>
+			<button class="pc-btn pc-btn-secondary" type="submit">Save Config</button>
+		</form>
+	}
+}
+
 templ SettingsPage(view SettingsView) {
 	@PageShell("settings", "Settings", "Global configuration, environment variables, and system administration.", nil) {
 		<section class="settings-layout">
@@ -136,107 +263,31 @@ templ SettingsPage(view SettingsView) {
 								<p class="muted" style="margin-top: 0; font-size: 0.9em;">{ r.Description }</p>
 								
 								<div style="margin-top: var(--space-3); padding-top: var(--space-3); border-top: 1px solid var(--border);">
-									if !r.Configured {
-										<form hx-post={ "/runtimes/" + string(r.ID) + "/install" } hx-target="body" hx-swap="outerHTML" data-success="Runtime installed." data-error="Runtime install failed." class="stacked">
-											<select name="mode">
-												<option value="exclusive">Install Exclusive (Sandboxed)</option>
-												<option value="global">Install Global (~/.local/bin)</option>
-											</select>
-											<input type="text" name="version_alias" value="latest" list={ "versions-" + string(r.ID) } placeholder="latest, nightly, or tag" required />
-											<datalist id={ "versions-" + string(r.ID) }>
-												<option value="latest">latest</option>
-												<option value="nightly">nightly/prerelease</option>
-												for _, v := range r.Versions {
-													<option value={ v.Tag }>{ v.Label }</option>
-												}
-											</datalist>
-											<p class="muted">Choose latest, nightly, one of the latest 10 releases, or type an exact tag.</p>
-											<button class="button secondary" type="submit" data-loading-disable>Install</button>
-										</form>
-										<form hx-post={ "/runtimes/" + string(r.ID) + "/existing" } hx-target="body" hx-swap="outerHTML" data-success="Existing runtime configured." data-error="Failed to configure existing runtime." style="display: flex; gap: var(--space-2); margin-top: var(--space-2);">
-											<input type="text" name="bin_path" placeholder="/usr/bin/..." style="flex: 1;" required />
-											<button class="button secondary" type="submit">Use Existing</button>
-										</form>
-									} else {
-										<div style="font-size: 0.9em; margin-bottom: var(--space-3);">
-											<strong>Path:</strong> <code style="word-break: break-all;">{ r.State.BinPath }</code><br/>
-											if r.State.ConfigPath != "" {
-												<strong>Config:</strong> <code style="word-break: break-all;">{ r.State.ConfigPath }</code><br/>
+									if r.Configured {
+									@RuntimeConfiguredCard(r)
+									@RuntimeConfigEditors(r)
+								} else {
+									<form hx-post={ "/runtimes/" + string(r.ID) + "/install" } hx-target="body" hx-swap="outerHTML" data-success="Runtime installed." data-error="Runtime install failed." class="stacked">
+										<select name="mode">
+											<option value="exclusive">Install Exclusive (Sandboxed)</option>
+											<option value="global">Install Global (~/.local/bin)</option>
+										</select>
+										<input type="text" name="version_alias" value="latest" list={ "versions-" + string(r.ID) } placeholder="latest, nightly, or tag" required />
+										<datalist id={ "versions-" + string(r.ID) }>
+											<option value="latest">latest</option>
+											<option value="nightly">nightly/prerelease</option>
+											for _, v := range r.Versions {
+												<option value={ v.Tag }>{ v.Label }</option>
 											}
-											<strong>CLI Status:</strong> 
-											if !r.Tested {
-												<span class="muted">Not tested yet</span>
-											} else if r.Functional {
-												<span style="color: var(--success);">Functional</span>
-											} else {
-												<span class="text-danger">Not functional</span>
-											}
-											if r.TestedAt != "" {
-												<span class="muted" style="margin-left: var(--space-2);">Last tested: { r.TestedAt }</span>
-											}
-											<br/>
-											<strong>AI Status:</strong>
-											if !r.AITested {
-												<span class="muted">Not tested yet</span>
-											} else if r.AIOk {
-												<span style="color: var(--success);">Functional</span>
-											} else {
-												<span class="text-danger">Failed</span>
-											}
-											if r.AITestedAt != "" {
-												<span class="muted" style="margin-left: var(--space-2);">Last tested: { r.AITestedAt }</span>
-											}
-											if r.AIMessage != "" {
-												<br/><small class="muted">{ r.AIMessage }</small>
-											}
-											if r.AIOutput != "" {
-												<details style="margin-top: var(--space-2);">
-													<summary>Raw AI test output</summary>
-													<pre style="white-space: pre-wrap; max-height: 220px; overflow: auto; font-size: 12px;">{ r.AIOutput }</pre>
-												</details>
-											}
-											if r.Health.Version != "" {
-												<br/><strong>Version:</strong> <span>{ r.Health.Version }</span>
-											}
-											if len(r.Checks) > 0 && !r.Functional {
-												<div class="stack-sm" style="margin-top: var(--space-2);">
-													for _, check := range r.Checks {
-														<small class={ templ.KV("text-danger", check.Status == "error") }>{ check.Name + ": " + check.Status + " — " + check.Message }</small>
-													}
-												</div>
-											}
-										</div>
-										<div class="actions" style="gap: var(--space-2); align-items: center; margin-bottom: var(--space-3);">
-											<form hx-post={ "/runtimes/" + string(r.ID) + "/test" } data-no-toast="true" hx-target="body" hx-swap="outerHTML">
-												<button class="button secondary" type="submit" data-loading-text="Testing CLI...">Test CLI</button>
-											</form>
-											<form hx-post={ "/runtimes/" + string(r.ID) + "/test-ai" } hx-confirm="This will send a real test request to the configured AI provider. It may consume tokens. Continue?" data-no-toast="true" hx-target="body" hx-swap="outerHTML">
-												<button class="button secondary" type="submit" data-loading-text="Testing AI...">Test AI Request</button>
-											</form>
-											<form hx-post={ "/runtimes/" + string(r.ID) + "/uninstall" } hx-confirm="Are you sure you want to uninstall this runtime? Configuration files will be deleted if installed exclusively." hx-target="body" hx-swap="outerHTML" style="margin-left: auto;">
-												<button class="button button-danger text-danger" type="submit" style="background: transparent; border-color: transparent; padding-left: 0;">Uninstall Runtime</button>
-											</form>
-										</div>
-										if len(r.ConfigFiles) > 0 {
-											for _, file := range r.ConfigFiles {
-												<form hx-post={ "/runtimes/" + string(r.ID) + "/config" } hx-target="body" hx-swap="outerHTML" class="stacked" data-success="Runtime config saved." style="margin-top: var(--space-3);">
-													<strong>{ file.Name }</strong>
-													if file.Sensitive {
-														<span class="badge text-danger" style="margin-left: 8px;">Sensitive</span>
-													}
-													<input type="hidden" name="file_name" value={ file.Name } />
-													<textarea name="content" spellcheck="false" style="font-family: monospace; min-height: 120px; font-size: 12px; white-space: pre;">{ string(file.Content) }</textarea>
-													<button class="button secondary" type="submit">Save { file.Name }</button>
-												</form>
-											}
-										} else if r.State.ConfigPath != "" {
-											<form hx-post={ "/runtimes/" + string(r.ID) + "/config" } hx-target="body" hx-swap="outerHTML" class="stacked" data-success="Runtime config saved.">
-												<input type="hidden" name="file_name" value="config.json" />
-												<textarea name="content" spellcheck="false" style="font-family: monospace; min-height: 120px; font-size: 12px;"></textarea>
-												<button class="button secondary" type="submit">Save Config</button>
-											</form>
-										}
-									}
+										</datalist>
+										<p class="muted">Choose latest, nightly, one of the latest 10 releases, or type an exact tag.</p>
+										<button class="pc-btn pc-btn-secondary" type="submit" data-loading-disable>@Icon("plus", 16) Install</button>
+									</form>
+									<form hx-post={ "/runtimes/" + string(r.ID) + "/existing" } hx-target="body" hx-swap="outerHTML" data-success="Existing runtime configured." data-error="Failed to configure existing runtime." class="runtime-existing-form">
+										<input type="text" name="bin_path" placeholder="/usr/bin/..." required />
+										<button class="pc-btn pc-btn-secondary" type="submit">Use Existing</button>
+									</form>
+								}
 								</div>
 							</div>
 						}
@@ -300,6 +351,83 @@ templ ResetModal(id string) {
 			</form>
 		</div>
 	</div>
+}
+
+func runtimeStatusClass(ok bool, tested bool) string {
+	if !tested {
+		return "runtime-status-warn"
+	}
+	if ok {
+		return "runtime-status-ok"
+	}
+	return "runtime-status-error"
+}
+
+func runtimeCLIStatusLabel(r RuntimeCardView) string {
+	if !r.Tested {
+		return "Not tested"
+	}
+	if r.Functional {
+		return "Functional"
+	}
+	return "Not functional"
+}
+
+func runtimeAIStatusLabel(r RuntimeCardView) string {
+	if !r.AITested {
+		return "Not tested"
+	}
+	if r.AIOk {
+		return "Functional"
+	}
+	return "Failed"
+}
+
+func runtimeOverallClass(r RuntimeCardView) string {
+	if !r.Tested || !r.AITested {
+		return "runtime-health-warn"
+	}
+	if r.Functional && r.AIOk {
+		return "runtime-health-ok"
+	}
+	return "runtime-health-error"
+}
+
+func runtimeOverallBadgeClass(r RuntimeCardView) string {
+	if !r.Tested || !r.AITested {
+		return "runtime-overall-warn"
+	}
+	if r.Functional && r.AIOk {
+		return "runtime-overall-ok"
+	}
+	return "runtime-overall-error"
+}
+
+func runtimeOverallLabel(r RuntimeCardView) string {
+	if !r.Tested || !r.AITested {
+		return "Needs test"
+	}
+	if r.Functional && r.AIOk {
+		return "Healthy"
+	}
+	return "Attention needed"
+}
+
+func runtimeAIResultClass(r RuntimeCardView) string {
+	if r.AIOk {
+		return "runtime-ai-ok"
+	}
+	return "runtime-ai-error"
+}
+
+func runtimeAIMessage(r RuntimeCardView) string {
+	if r.AIMessage != "" {
+		return r.AIMessage
+	}
+	if r.AIOk {
+		return "AI request successful"
+	}
+	return "AI request failed"
 }
 
 func adapterSetting(settings map[string]map[string]string, adapter string, key string) string {
