@@ -136,7 +136,7 @@ func (m *RuntimeManager) Uninstall(ctx context.Context, id domain.RuntimeID) err
 	if state.Mode == domain.InstallModeExclusive {
 		_ = os.RemoveAll(filepath.Join(m.baseDir, string(id)))
 	}
-	return m.storage.Runtimes().Delete(ctx, string(state.RuntimeID))
+	return m.storage.Runtimes().Delete(ctx, state.ID)
 }
 
 func (m *RuntimeManager) Health(ctx context.Context, id domain.RuntimeID) (domain.RuntimeHealth, error) {
