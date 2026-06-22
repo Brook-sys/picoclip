@@ -35,6 +35,10 @@ templ Icon(name string, size int) {
 		<svg xmlns="http://www.w3.org/2000/svg" width={ stringifyInt(size) } height={ stringifyInt(size) } viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="pc-icon pc-icon-book"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path></svg>
 	} else if name == "bar-chart" {
 		<svg xmlns="http://www.w3.org/2000/svg" width={ stringifyInt(size) } height={ stringifyInt(size) } viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="pc-icon pc-icon-bar-chart"><line x1="12" y1="20" x2="12" y2="10"></line><line x1="18" y1="20" x2="18" y2="4"></line><line x1="6" y1="20" x2="6" y2="16"></line></svg>
+	} else if name == "eye" {
+		<svg xmlns="http://www.w3.org/2000/svg" width={ stringifyInt(size) } height={ stringifyInt(size) } viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="pc-icon pc-icon-eye"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+	} else if name == "eye-off" {
+		<svg xmlns="http://www.w3.org/2000/svg" width={ stringifyInt(size) } height={ stringifyInt(size) } viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="pc-icon pc-icon-eye-off"><path d="m15 18-.722-3.25"></path><path d="M2 8a10.645 10.645 0 0 0 20 0"></path><path d="m20 15-1.726-2.05"></path><path d="m4 15 1.726-2.05"></path><path d="m9 18 .722-3.25"></path></svg>
 	}
 }
 

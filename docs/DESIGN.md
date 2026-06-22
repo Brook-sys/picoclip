@@ -57,6 +57,7 @@ Defined in `internal/adapters/web/ui.templ` and `internal/adapters/web/icons.tem
 - `FieldLabel`, `FieldMessage`, `FormField`: accessible form wrapper and helper text.
 - `TextField`, `TextareaField`, `SelectField`: styled form controls.
 - `TagMultiSelectField`: chip-based tag editor backed by a lightweight custom element.
+- `EnvEditorField`: dynamic environment variable editor with key validation, masked values, reveal buttons and add/remove rows.
 - `Chip`, `Badge`, `StatusBadge`: compact metadata/status display.
 - `EmptyState`: icon-based empty content state.
 - `Tabs`, `TabLink`: page-level tabs.

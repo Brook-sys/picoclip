@@ -275,6 +275,61 @@ templ PageShell(active string, title string, subtitle string, action templ.Compo
 								customElements.define('pc-tag-multiselect', TagMultiSelect);
 							}
 
+							class EnvEditor extends HTMLElement {
+								connectedCallback() {
+									this.rows = this.querySelector('.pc-env-rows');
+									this.addButton = this.querySelector('.pc-env-add-btn');
+									if (!this.rows || !this.addButton) return;
+									this.addButton.addEventListener('click', () => this.addRow('', ''));
+									this.addEventListener('input', (e) => {
+										if (e.target.matches('.pc-env-key')) {
+											e.target.value = this.normalizeKey(e.target.value);
+											this.validateKeys();
+										}
+									});
+									this.addEventListener('click', (e) => {
+										const remove = e.target.closest('.pc-env-remove-btn');
+										if (remove) {
+											const row = remove.closest('.pc-env-row');
+											if (this.rows.querySelectorAll('.pc-env-row').length > 1) row.remove();
+											else row.querySelectorAll('input').forEach(input => input.value = '');
+											this.validateKeys();
+										}
+										const toggle = e.target.closest('.pc-env-toggle-btn');
+										if (toggle) {
+											const input = toggle.closest('.pc-env-value-wrapper').querySelector('.pc-env-value');
+											input.type = input.type === 'password' ? 'text' : 'password';
+											toggle.classList.toggle('is-visible', input.type === 'text');
+										}
+									});
+									this.validateKeys();
+								}
+								normalizeKey(value) {
+									return value.toUpperCase().replace(/\s+/g, '_').replace(/[^A-Z0-9_]/g, '').replace(/^\d+/, '');
+								}
+								addRow(key, value) {
+									const row = document.createElement('div');
+									row.className = 'pc-env-row';
+									row.innerHTML = `<input type="text" name="env_key" value="${key}" placeholder="KEY" class="pc-input pc-env-key" autocomplete="off" spellcheck="false" /><div class="pc-env-value-wrapper"><input type="password" name="env_value" value="${value}" placeholder="value" class="pc-input pc-env-value" autocomplete="off" spellcheck="false" /><button type="button" class="pc-env-toggle-btn" aria-label="Toggle visibility"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="pc-icon pc-icon-eye"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"></path><circle cx="12" cy="12" r="3"></circle></svg></button></div><button type="button" class="pc-icon-btn pc-icon-btn-ghost pc-env-remove-btn" aria-label="Remove variable" tabindex="-1"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="pc-icon pc-icon-trash"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg></button>`;
+									this.rows.appendChild(row);
+									row.querySelector('.pc-env-key').focus();
+									this.validateKeys();
+								}
+								validateKeys() {
+									const counts = {};
+									this.querySelectorAll('.pc-env-key').forEach(input => {
+										const key = input.value.trim();
+										if (key) counts[key] = (counts[key] || 0) + 1;
+									});
+									this.querySelectorAll('.pc-env-row').forEach(row => {
+										const input = row.querySelector('.pc-env-key');
+										const key = input.value.trim();
+										row.classList.toggle('has-error', !!key && counts[key] > 1);
+									});
+								}
+							}
+							if (!customElements.get('pc-env-editor')) customElements.define('pc-env-editor', EnvEditor);
+
 							document.addEventListener('click', function(e) {
 								if (e.target.matches('.runtime-copy-button')) {
 									const text = e.target.dataset.copyText;

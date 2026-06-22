@@ -60,7 +60,9 @@ templ AgentDetailPage(agent domain.Agent, agents []domain.Agent, tasks []taskRes
 						<h3>Adapter parameters</h3>
 						<textarea name="extra_args" placeholder="Extra args, one per line&#10;--foo&#10;--bar=value">{ strings.Join(agent.ExtraArgs, "\n") }</textarea>
 						<textarea name="config" placeholder="Adapter config (key=value per line)">{ mapToLines(agent.Config) }</textarea>
-						<textarea name="env" placeholder="Environment variables (key=value per line)">{ mapToLines(agent.Env) }</textarea>
+						@FormField("env", "Environment variables", "Values are hidden by default and injected only into this agent runtime.") {
+							@EnvEditorField(agent.Env)
+						}
 						<button type="submit">Save configuration</button>
 					</form>
 				</div>

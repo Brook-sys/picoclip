@@ -277,15 +277,7 @@ func (s *Server) handleWebPostSettingsEnvironment(w http.ResponseWriter, r *http
 		return
 	}
 	view, _ := s.loadSettingsView(r)
-	view.Environment = make(map[string]string)
-	for _, line := range strings.Split(r.FormValue("environment"), "\n") {
-		line = strings.TrimSpace(line)
-		if line == "" || strings.HasPrefix(line, "#") || !strings.Contains(line, "=") {
-			continue
-		}
-		parts := strings.SplitN(line, "=", 2)
-		view.Environment[strings.TrimSpace(parts[0])] = strings.TrimSpace(parts[1])
-	}
+	view.Environment = parseEnvMapFromForm(r, "environment")
 	s.storage.Settings().Set(r.Context(), "environment", encodeSettingsValue(view.Environment))
 	s.handleWebSettings(w, r)
 }
@@ -535,7 +527,7 @@ func (s *Server) handleWebPostAgent(w http.ResponseWriter, r *http.Request) {
 		InstructionFile: r.FormValue("instruction_file"),
 		SkillIDs:        r.Form["skill_ids"],
 		Config:          parseKeyValueLines(r.FormValue("config")),
-		Env:             parseKeyValueLines(r.FormValue("env")),
+		Env:             parseEnvMapFromForm(r, "env"),
 		ExtraArgs:       parseLines(r.FormValue("extra_args")),
 		Capability:      domain.CapabilityWorker,
 		Permissions:     permissions,
@@ -564,7 +556,7 @@ func (s *Server) handleWebUpdateAgent(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	_, _ = s.agents.UpdateConfig(r.Context(), r.PathValue("id"), parseKeyValueLines(r.FormValue("config")), parseKeyValueLines(r.FormValue("env")))
+	_, _ = s.agents.UpdateConfig(r.Context(), r.PathValue("id"), parseKeyValueLines(r.FormValue("config")), parseEnvMapFromForm(r, "env"))
 	s.handleWebAgentDetail(w, r)
 }
 
@@ -915,4 +907,36 @@ func parseTagsFromForm(r *http.Request) []string {
 func parseTags(value string) []string {
 	value = strings.ReplaceAll(value, ",", "\n")
 	return parseLines(value)
+}
+
+func parseEnvMapFromForm(r *http.Request, legacyFieldName string) map[string]string {
+	env := make(map[string]string)
+	keys := r.Form["env_key"]
+	values := r.Form["env_value"]
+
+	if len(keys) > 0 && len(keys) == len(values) {
+		for i, k := range keys {
+			k = strings.TrimSpace(k)
+			if k != "" {
+				env[k] = strings.TrimSpace(values[i])
+			}
+		}
+		if len(env) > 0 {
+			return env
+		}
+	}
+
+	legacyVal := r.FormValue(legacyFieldName)
+	if legacyVal != "" {
+		for _, line := range strings.Split(legacyVal, "\n") {
+			line = strings.TrimSpace(line)
+			if line == "" || strings.HasPrefix(line, "#") || !strings.Contains(line, "=") {
+				continue
+			}
+			parts := strings.SplitN(line, "=", 2)
+			env[strings.TrimSpace(parts[0])] = strings.TrimSpace(parts[1])
+		}
+	}
+
+	return env
 }

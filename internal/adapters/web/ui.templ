@@ -1,6 +1,9 @@
 package web
 
-import "fmt"
+import (
+	"fmt"
+	"sort"
+)
 
 templ Card() {
 	<div class="pc-card">
@@ -111,6 +114,46 @@ templ TextField(name string, value string, placeholder string, readonly bool) {
 
 templ TextareaField(name string, value string, placeholder string, rows int, readonly bool) {
 	<textarea id={ name } name={ name } placeholder={ placeholder } class="pc-input" rows={ fmt.Sprintf("%d", rows) } readonly?={ readonly }>{ value }</textarea>
+}
+
+templ EnvEditorField(envMap map[string]string) {
+	<pc-env-editor class="pc-env-editor">
+		<div class="pc-env-rows">
+			if len(envMap) == 0 {
+				<div class="pc-env-row">
+					<input type="text" name="env_key" placeholder="KEY" class="pc-input pc-env-key" autocomplete="off" spellcheck="false" />
+					<div class="pc-env-value-wrapper">
+						<input type="password" name="env_value" placeholder="value" class="pc-input pc-env-value" autocomplete="off" spellcheck="false" />
+						<button type="button" class="pc-env-toggle-btn" aria-label="Toggle visibility">@Icon("eye", 14)</button>
+					</div>
+					<button type="button" class="pc-icon-btn pc-icon-btn-ghost pc-env-remove-btn" aria-label="Remove variable" tabindex="-1">@Icon("trash", 14)</button>
+				</div>
+			} else {
+				for _, k := range sortedEnvKeys(envMap) {
+					<div class="pc-env-row">
+						<input type="text" name="env_key" value={ k } placeholder="KEY" class="pc-input pc-env-key" autocomplete="off" spellcheck="false" />
+						<div class="pc-env-value-wrapper">
+							<input type="password" name="env_value" value={ envMap[k] } placeholder="value" class="pc-input pc-env-value" autocomplete="off" spellcheck="false" />
+							<button type="button" class="pc-env-toggle-btn" aria-label="Toggle visibility">@Icon("eye", 14)</button>
+						</div>
+						<button type="button" class="pc-icon-btn pc-icon-btn-ghost pc-env-remove-btn" aria-label="Remove variable" tabindex="-1">@Icon("trash", 14)</button>
+					</div>
+				}
+			}
+		</div>
+		<button type="button" class="pc-btn pc-btn-ghost pc-env-add-btn">
+			@Icon("plus", 14) Add Variable
+		</button>
+	</pc-env-editor>
+}
+
+func sortedEnvKeys(env map[string]string) []string {
+	var keys []string
+	for k := range env {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	return keys
 }
 
 templ TagMultiSelectField(name string, prefilledTags []string, availableTagsJSON string) {

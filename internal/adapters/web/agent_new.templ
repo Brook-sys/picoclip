@@ -46,7 +46,9 @@ templ AgentNewPage(projects []domain.Workspace, agents []domain.Agent, skills []
 						@RuntimeSelect(runtimeOptions, "")
 						<textarea name="extra_args" placeholder="Extra args, um por linha&#10;--foo&#10;--bar=value"></textarea>
 						<textarea name="config" placeholder="Configuração (key=value por linha)"></textarea>
-						<textarea name="env" placeholder="Variáveis de ambiente (key=value por linha)"></textarea>
+						@FormField("env", "Environment variables", "Values are hidden by default and injected only into this agent runtime.") {
+							@EnvEditorField(nil)
+						}
 					</div>
 				</div>
 			</div>

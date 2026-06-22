@@ -296,10 +296,10 @@ templ SettingsPage(view SettingsView) {
 				
 				<div id="environment" class="settings-panel">
 					<h2>Environment Variables</h2>
-					<p class="muted">Global variables injected into task execution (e.g., API keys). One per line (KEY=value).</p>
+					<p class="muted">Global variables injected into task execution. Values are hidden by default because they often contain secrets.</p>
 					<form hx-post="/settings/environment" hx-target="body" hx-swap="outerHTML" data-success="Environment saved." class="stacked">
-						<textarea name="environment" placeholder="OPENAI_API_KEY=sk-...\nDATABASE_URL=postgres://..." spellcheck="false" style="font-family: monospace; min-height: 140px;">{ formatEnvText(view.Environment) }</textarea>
-						<button type="submit">Save Environment</button>
+						@EnvEditorField(view.Environment)
+						<button class="pc-btn pc-btn-primary" type="submit">@Icon("check", 16) Save Environment</button>
 					</form>
 				</div>
 				
