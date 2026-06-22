@@ -2,7 +2,9 @@ package web
 
 import (
 	"fmt"
+	"sort"
 	"strings"
+	"time"
 
 	"picoclip/internal/core/domain"
 )
@@ -48,60 +50,98 @@ templ TaskLive(task taskResponse, messages []domain.Message, runs []domain.Run, 
 	</div>
 }
 
+type timelineItem struct {
+	Time    time.Time
+	Event   *domain.Event
+	Run     *domain.Run
+	Message *domain.Message
+}
+
 templ IssueThread(messages []domain.Message, runs []domain.Run, events []domain.Event) {
 	<div class="issue-thread">
 		if len(messages) == 0 && len(runs) == 0 && len(events) == 0 {
 			@EmptyState("No activity yet", "Comments, status changes and runs will appear here.", "message-square") {}
+		} else {
+			@renderTimelineItems(buildTimeline(messages, runs, events))
 		}
-		
-		for _, event := range events {
-			<div class="issue-timeline-item">
-				<div class="issue-timeline-icon"><i data-lucide="activity"></i></div>
-				<div class="issue-timeline-content">
-					<div class="issue-timeline-header">
-						<strong>System</strong>
-						<span>{ string(event.Type) }</span>
-						<small>{ event.CreatedAt.Format("15:04:05") }</small>
-					</div>
-					<div class="issue-timeline-body">
-						{ event.Message }
-					</div>
-				</div>
+	</div>
+}
+
+func buildTimeline(messages []domain.Message, runs []domain.Run, events []domain.Event) []timelineItem {
+	items := make([]timelineItem, 0, len(messages)+len(runs)+len(events))
+	for i := range events {
+		items = append(items, timelineItem{Time: events[i].CreatedAt, Event: &events[i]})
+	}
+	for i := range runs {
+		items = append(items, timelineItem{Time: runs[i].StartedAt, Run: &runs[i]})
+	}
+	for i := range messages {
+		items = append(items, timelineItem{Time: messages[i].CreatedAt, Message: &messages[i]})
+	}
+	sort.Slice(items, func(i, j int) bool {
+		return items[i].Time.Before(items[j].Time)
+	})
+	return items
+}
+
+templ renderTimelineItems(items []timelineItem) {
+	for _, item := range items {
+		if item.Event != nil {
+			@TimelineEventItem(item)
+		} else if item.Run != nil {
+			@TimelineRunItem(item)
+		} else if item.Message != nil {
+			@TimelineMessageItem(item)
+		}
+	}
+}
+
+templ TimelineEventItem(item timelineItem) {
+	<div class="issue-timeline-item">
+		<div class="issue-timeline-icon"><i data-lucide="activity"></i></div>
+		<div class="issue-timeline-content">
+			<div class="issue-timeline-header">
+				<strong>System</strong>
+				<span>{ string(item.Event.Type) }</span>
+				<small>{ item.Time.Format("15:04:05") }</small>
 			</div>
-		}
-		
-		for _, run := range runs {
-			<div class="issue-timeline-item">
-				<div class="issue-timeline-icon"><i data-lucide="play-circle"></i></div>
-				<div class="issue-timeline-content">
-					<div class="issue-timeline-header">
-						<strong>Agent Run</strong>
-						<span class={ "status " + runStatusClass(run.Status) }>{ string(run.Status) }</span>
-						<small><a href={ templ.URL("/runs/" + run.ID) }>{ run.ID }</a> · attempt { fmt.Sprintf("%d", run.Attempt) }</small>
-					</div>
-					if run.Error != "" {
-						<div class="issue-timeline-body text-danger">
-							{ run.Error }
-						</div>
-					}
-				</div>
+			<div class="issue-timeline-body">
+				{ item.Event.Message }
 			</div>
-		}
-		
-		for _, message := range messages {
-			<div class="issue-timeline-item">
-				<div class="issue-timeline-icon"><i data-lucide={ messageIcon(message.Role) }></i></div>
-				<div class="issue-timeline-content">
-					<div class="issue-timeline-header">
-						<strong class="capitalize">{ string(message.Role) }</strong>
-						<small>{ message.CreatedAt.Format("15:04:05") }</small>
-					</div>
-					<div class="issue-timeline-body">
-						{ message.Body }
-					</div>
-				</div>
+		</div>
+	</div>
+}
+
+templ TimelineRunItem(item timelineItem) {
+	<div class="issue-timeline-item">
+		<div class="issue-timeline-icon"><i data-lucide="play-circle"></i></div>
+		<div class="issue-timeline-content">
+			<div class="issue-timeline-header">
+				<strong>Agent Run</strong>
+				<span class={ "status " + runStatusClass(item.Run.Status) }>{ string(item.Run.Status) }</span>
+				<small><a href={ templ.URL("/runs/" + item.Run.ID) }>{ item.Run.ID }</a> · attempt { fmt.Sprintf("%d", item.Run.Attempt) }</small>
 			</div>
-		}
+			if item.Run.Error != "" {
+				<div class="issue-timeline-body text-danger">
+					{ item.Run.Error }
+				</div>
+			}
+		</div>
+	</div>
+}
+
+templ TimelineMessageItem(item timelineItem) {
+	<div class="issue-timeline-item">
+		<div class="issue-timeline-icon"><i data-lucide={ messageIcon(item.Message.Role) }></i></div>
+		<div class="issue-timeline-content">
+			<div class="issue-timeline-header">
+				<strong class="capitalize">{ string(item.Message.Role) }</strong>
+				<small>{ item.Time.Format("15:04:05") }</small>
+			</div>
+			<div class="issue-timeline-body">
+				{ item.Message.Body }
+			</div>
+		</div>
 	</div>
 }
 
