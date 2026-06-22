@@ -222,7 +222,7 @@ func TestTaskDetailUsesPartialPollingOnly(t *testing.T) {
 	if _, err := partial.ReadFrom(partialRes.Body); err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(partial.String(), "Conversation") || strings.Contains(partial.String(), "<html") {
+	if !strings.Contains(partial.String(), "Thread") || strings.Contains(partial.String(), "<html") {
 		t.Fatalf("partial should render live fragment only")
 	}
 }

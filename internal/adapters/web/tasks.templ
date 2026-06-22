@@ -8,84 +8,133 @@ import (
 )
 
 templ TaskTable(tasks []taskResponse, agents []domain.Agent, projects []domain.Workspace) {
-	<div class="table-wrapper">
-		<table>
-		<thead>
-			<tr>
-				<th>Task</th>
-				<th>Status</th>
-				<th>Agente</th>
-				<th>Projeto</th>
-				<th>Atualizada</th>
-			</tr>
-		</thead>
-		<tbody>
-			if len(tasks) == 0 {
-				<tr><td colspan="5" class="empty">Nenhuma task.</td></tr>
-			}
-			for _, task := range tasks {
-				<tr>
-					<td>
-						<a class="primary-link" href={ templ.URL("/tasks/" + task.ID) }>{ taskDisplayTitle(task) }</a>
+	<div class="issue-list">
+		if len(tasks) == 0 {
+			@EmptyState("No tasks", "Create a task to start tracking work.", "check-circle") {}
+		}
+		for _, task := range tasks {
+			<a class="issue-list-row" href={ templ.URL("/tasks/" + task.ID) }>
+				<span class={ "status " + statusClass(task.Status) }></span>
+				<div class="issue-list-main">
+					<div class="issue-list-title-row">
+						<span class="badge">{ task.ID }</span>
+						<strong>{ taskDisplayTitle(task) }</strong>
+					</div>
+					if taskExcerpt(task.Prompt) != "" {
 						<small>{ taskExcerpt(task.Prompt) }</small>
-					</td>
-					<td><span class={ "status " + statusClass(task.Status) }>{ string(task.Status) }</span></td>
-					<td>{ agentName(agents, task.AgentID) }</td>
-					<td>{ projectName(projects, task.ProjectID) }</td>
-					<td>{ task.UpdatedAt }</td>
-				</tr>
-			}
-		</tbody>
-		</table>
+					}
+				</div>
+				<div class="issue-list-meta">
+					<span>{ agentName(agents, task.AgentID) }</span>
+					<span>{ projectName(projects, task.ProjectID) }</span>
+					<span>{ task.UpdatedAt }</span>
+				</div>
+				<span class="issue-list-status">{ string(task.Status) }</span>
+			</a>
+		}
 	</div>
 }
 
 templ TaskLive(task taskResponse, messages []domain.Message, runs []domain.Run, events []domain.Event, children []taskResponse, agents []domain.Agent, projects []domain.Workspace) {
-	<div class="panel">
-		@SectionHeader("Conversation", "Comments and intentional messages left on this task.")
-		@Messages(messages)
+	if len(children) > 0 {
+		<div class="panel">
+			@SectionHeader("Subtasks", "Breakdown of work into child tasks.")
+			@SubtaskTree(children, agents, projects)
+		</div>
+	}
+	<div class="panel issue-thread-panel">
+		@SectionHeader("Thread", "Timeline of comments, actions and runs.")
+		@IssueThread(messages, runs, events)
 	</div>
-	<div class="panel">
-		@SectionHeader("Subtask Tree", "Delegated child tasks linked to this task.")
-		@SubtaskTree(children, agents, projects)
+}
+
+templ IssueThread(messages []domain.Message, runs []domain.Run, events []domain.Event) {
+	<div class="issue-thread">
+		if len(messages) == 0 && len(runs) == 0 && len(events) == 0 {
+			@EmptyState("No activity yet", "Comments, status changes and runs will appear here.", "message-square") {}
+		}
+		
+		for _, event := range events {
+			<div class="issue-timeline-item">
+				<div class="issue-timeline-icon"><i data-lucide="activity"></i></div>
+				<div class="issue-timeline-content">
+					<div class="issue-timeline-header">
+						<strong>System</strong>
+						<span>{ string(event.Type) }</span>
+						<small>{ event.CreatedAt.Format("15:04:05") }</small>
+					</div>
+					<div class="issue-timeline-body">
+						{ event.Message }
+					</div>
+				</div>
+			</div>
+		}
+		
+		for _, run := range runs {
+			<div class="issue-timeline-item">
+				<div class="issue-timeline-icon"><i data-lucide="play-circle"></i></div>
+				<div class="issue-timeline-content">
+					<div class="issue-timeline-header">
+						<strong>Agent Run</strong>
+						<span class={ "status " + runStatusClass(run.Status) }>{ string(run.Status) }</span>
+						<small><a href={ templ.URL("/runs/" + run.ID) }>{ run.ID }</a> · attempt { fmt.Sprintf("%d", run.Attempt) }</small>
+					</div>
+					if run.Error != "" {
+						<div class="issue-timeline-body text-danger">
+							{ run.Error }
+						</div>
+					}
+				</div>
+			</div>
+		}
+		
+		for _, message := range messages {
+			<div class="issue-timeline-item">
+				<div class="issue-timeline-icon"><i data-lucide={ messageIcon(message.Role) }></i></div>
+				<div class="issue-timeline-content">
+					<div class="issue-timeline-header">
+						<strong class="capitalize">{ string(message.Role) }</strong>
+						<small>{ message.CreatedAt.Format("15:04:05") }</small>
+					</div>
+					<div class="issue-timeline-body">
+						{ message.Body }
+					</div>
+				</div>
+			</div>
+		}
 	</div>
-	<div class="panel">
-		@SectionHeader("Runs", "Agent executions are kept separate from task comments.")
-		@Runs(runs)
-	</div>
-	<div class="panel">
-		@SectionHeader("Activity", "Audit trail and status transitions.")
-		@EventTimeline(events)
-	</div>
+}
+
+func messageIcon(role domain.MessageRole) string {
+	if role == domain.MessageRoleUser {
+		return "user"
+	}
+	if role == domain.MessageRoleSystem {
+		return "hexagon"
+	}
+	return "bot"
 }
 
 templ SubtaskTree(children []taskResponse, agents []domain.Agent, projects []domain.Workspace) {
 	if len(children) == 0 {
-		@EmptyState("No subtasks", "Delegated child tasks will appear here.", "check-circle") {}
+		@EmptyState("No subtasks", "Delegated child tasks will appear here.", "list-tree") {}
 	} else {
-		<div class="subtask-tree">
+		<div class="issue-subtasks-list">
 			for _, child := range children {
-				<a class="subtask-node" href={ templ.URL("/tasks/" + child.ID) }>
-					<span class={ "status " + statusClass(child.Status) }>{ string(child.Status) }</span>
-					<strong>{ taskDisplayTitle(child) }</strong>
-					<small>{ taskExcerpt(child.Prompt) }</small>
-					<small>{ agentName(agents, child.AgentID) + " · " + projectName(projects, child.ProjectID) }</small>
+				<a class="issue-subtask-row" href={ templ.URL("/tasks/" + child.ID) }>
+					<span class={ "status " + statusClass(child.Status) }></span>
+					<div class="issue-subtask-content">
+						<strong>{ taskDisplayTitle(child) }</strong>
+						<div class="issue-subtask-meta">
+							<span>{ child.ID }</span>
+							<span>·</span>
+							<span>{ agentName(agents, child.AgentID) }</span>
+						</div>
+					</div>
+					<span class="issue-subtask-status-label">{ string(child.Status) }</span>
 				</a>
 			}
 		</div>
-	}
-}
-
-templ Messages(messages []domain.Message) {
-	if len(messages) == 0 {
-		<p class="empty">Nenhuma mensagem.</p>
-	}
-	for _, message := range messages {
-		<article class="message">
-			<strong>{ string(message.Role) }</strong>
-			<p>{ message.Body }</p>
-			<small>{ message.CreatedAt.Format("2006-01-02 15:04:05") }</small>
-		</article>
 	}
 }
 

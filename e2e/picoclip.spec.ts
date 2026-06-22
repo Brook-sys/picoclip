@@ -49,7 +49,7 @@ test.describe('PicoClip smoke UI', () => {
     await page.getByTestId('task-create-submit').click();
     await expect(page.getByText(taskPrompt).first()).toBeVisible();
 
-    await page.getByRole('row').filter({ hasText: taskPrompt }).getByRole('link', { name: taskPrompt }).click();
+    await page.getByRole('link', { name: taskPrompt }).first().click();
     await expect(page.locator('#task-live')).toBeVisible();
     await expect(page.getByRole('button', { name: 'Wake agent' })).toBeVisible();
     await page.waitForTimeout(3500);
@@ -57,9 +57,9 @@ test.describe('PicoClip smoke UI', () => {
     await expect(page.locator('#task-live')).toBeVisible();
 
     const commentBody = `Please revise with more detail ${Date.now()}.`;
-    await page.getByPlaceholder('Add comment or command...').fill(commentBody);
+    await page.getByPlaceholder('Add a comment or instruction...').fill(commentBody);
     await page.getByRole('button', { name: 'Post comment' }).click();
-    await expect(page.locator('#task-live article.message').filter({ hasText: commentBody })).toBeVisible();
+    await expect(page.locator('#task-live .issue-timeline-item').filter({ hasText: commentBody })).toBeVisible();
 
     expect(consoleErrors).toEqual([]);
   });

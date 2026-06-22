@@ -4,24 +4,26 @@ import "picoclip/internal/core/domain"
 import "fmt"
 
 templ TaskDetailPage(task taskResponse, rawTask domain.Task, agents []domain.Agent, projects []domain.Workspace, messages []domain.Message, runs []domain.Run, events []domain.Event, children []taskResponse) {
-	@PageShell("tasks", taskDisplayTitle(task), "Task detail: conversation, subtasks, runs and activity.", taskDetailAction()) {
-		<section class="detail-grid">
-			<div class="main-column">
-				<div class="card task-hero-card">
-					<div class="task-hero-header">
-						<div>
-							<div class="task-hero-status">
-								@StatusBadge(string(task.Status), statusClass(task.Status), isLiveTask(task, rawTask))
-								if isLiveTask(task, rawTask) {
-									<span class="muted">Agent running</span>
-								}
-							</div>
-							<h2>{ taskDisplayTitle(task) }</h2>
-							<small>{ task.ID }</small>
+	@PageShell("tasks", taskDisplayTitle(task), "Issue-style task detail with thread, subtasks, runs and properties.", taskDetailAction()) {
+		<section class="issue-detail-grid">
+			<div class="issue-main-column">
+				<div class="card issue-hero-card">
+					<div class="issue-hero-topline">
+						<div class="issue-hero-badges">
+							@StatusBadge(string(task.Status), statusClass(task.Status), isLiveTask(task, rawTask))
+							<span class="badge">{ task.ID }</span>
+							if isLiveTask(task, rawTask) {
+								<span class="badge badge-warn">Agent running</span>
+							}
 						</div>
 					</div>
-					<div class="prompt task-description">
-						{ task.Prompt }
+					<h2>{ taskDisplayTitle(task) }</h2>
+					<div class="issue-description">
+						if task.Prompt != "" {
+							{ task.Prompt }
+						} else {
+							<span class="muted">No description provided.</span>
+						}
 					</div>
 				</div>
 
@@ -29,70 +31,96 @@ templ TaskDetailPage(task taskResponse, rawTask domain.Task, agents []domain.Age
 					@TaskLive(task, messages, runs, events, children, agents, projects)
 				</div>
 
-				<div class="panel">
-					@SectionHeader("Post Comment", "Add context, answer questions, or intervene.") {}
+				<div class="panel issue-composer-card">
+					@SectionHeader("Comment", "Add context, answer questions, or intervene in the task thread.") {}
 					<form hx-post={ "/tasks/" + task.ID + "/messages" } hx-target="#task-live" hx-swap="innerHTML" class="stacked">
 						<input name="role" value="user" type="hidden"/>
-						<textarea name="body" placeholder="Add comment or command..."></textarea>
+						<textarea name="body" placeholder="Add a comment or instruction..." required></textarea>
 						<button type="submit">Post comment</button>
 					</form>
 				</div>
 			</div>
 			
-			<aside class="side-column">
-				<div class="panel">
-					<h2>Properties</h2>
-					@PropertyList() {
-						@PropertyItem("Task ID", task.ID)
-						@PropertyItemHTML("Assignee") {
-							<a class="primary-link" href={ templ.URL("/agents/" + task.AgentID) }>{ agentName(agents, task.AgentID) }</a>
-						}
-						@PropertyItemHTML("Workspace") {
-							<a class="primary-link" href={ templ.URL("/projects/" + task.ProjectID) }>{ projectName(projects, task.ProjectID) }</a>
-						}
-						if task.ParentID != "" {
-							@PropertyItemHTML("Parent") {
-								<a class="primary-link" href={ templ.URL("/tasks/" + task.ParentID) }>{ task.ParentID }</a>
-							}
-						}
-						@PropertyItem("Attempts", fmt.Sprintf("%d / %d", rawTask.Attempts, rawTask.MaxAttempts))
-						@PropertyItem("Created", task.CreatedAt)
-						@PropertyItem("Updated", task.UpdatedAt)
-					}
-				</div>
-				
-				<div class="panel">
-					<h2>Workflow</h2>
-					<form hx-post={ "/tasks/" + task.ID + "/status" } hx-target="body" hx-swap="outerHTML" data-success="Status updated." class="stacked">
-						@TaskStatusSelect(task.Status)
-						<textarea name="comment" placeholder="Required comment when transitioning to done/blocked..."></textarea>
-						<button type="submit">Update status</button>
-					</form>
-					<form hx-post={ "/tasks/" + task.ID + "/wake" } hx-target="body" hx-swap="outerHTML" data-success="Agent triggered." class="stacked" style="margin-top: 12px;">
-						<button class="button secondary" type="submit">Wake agent</button>
-					</form>
-				</div>
-				
-				<div class="panel">
-					<h2>Delegate</h2>
-					<form hx-post={ "/tasks/" + task.ID + "/delegate" } hx-target="body" hx-swap="outerHTML" data-success="Subtask created." class="stacked">
-						@AgentSelect(agents, "")
-						<input name="title" class="pc-input" placeholder="Subtask title (optional)..." />
-						<textarea name="prompt" placeholder="Subtask goal..." required></textarea>
-						<button class="pc-btn pc-btn-primary" type="submit">Create subtask</button>
-					</form>
-				</div>
-				
-				<div class="panel border-danger">
-					<h2 class="text-danger">Danger Zone</h2>
-					<form hx-post={ "/tasks/" + task.ID + "/cancel" } hx-confirm="Are you sure you want to cancel this task?" data-success="Task cancelled." hx-target="body" hx-swap="outerHTML" class="stacked">
-						<input name="reason" placeholder="Reason for cancellation..." required />
-						<button class="button button-danger" type="submit">Cancel task</button>
-					</form>
-				</div>
+			<aside class="issue-side-rail">
+				@TaskPropertiesRail(task, rawTask, agents, projects)
 			</aside>
 		</section>
 	}
+}
+
+templ TaskPropertiesRail(task taskResponse, rawTask domain.Task, agents []domain.Agent, projects []domain.Workspace) {
+	<div class="panel issue-properties-panel">
+		<h2>Properties</h2>
+		<div class="issue-property-list">
+			@IssuePropertyRow("Status") {
+				@StatusBadge(string(task.Status), statusClass(task.Status), isLiveTask(task, rawTask))
+			}
+			@IssuePropertyRow("Assignee") {
+				<a class="primary-link" href={ templ.URL("/agents/" + task.AgentID) }>{ agentName(agents, task.AgentID) }</a>
+			}
+			@IssuePropertyRow("Workspace") {
+				<a class="primary-link" href={ templ.URL("/projects/" + task.ProjectID) }>{ projectName(projects, task.ProjectID) }</a>
+			}
+			if task.ParentID != "" {
+				@IssuePropertyRow("Parent") {
+					<a class="primary-link" href={ templ.URL("/tasks/" + task.ParentID) }>{ task.ParentID }</a>
+				}
+			}
+			@IssuePropertyRow("Attempts") {
+				<span>{ fmt.Sprintf("%d / %d", rawTask.Attempts, rawTask.MaxAttempts) }</span>
+			}
+			@IssuePropertyRow("Created") {
+				<small>{ task.CreatedAt }</small>
+			}
+			@IssuePropertyRow("Updated") {
+				<small>{ task.UpdatedAt }</small>
+			}
+			if rawTask.CheckoutRunID != "" {
+				@IssuePropertyRow("Checkout") {
+					<a class="primary-link" href={ templ.URL("/runs/" + rawTask.CheckoutRunID) }>{ rawTask.CheckoutRunID }</a>
+				}
+			}
+		</div>
+	</div>
+
+	<div class="panel issue-action-panel">
+		<h2>Workflow</h2>
+		<form hx-post={ "/tasks/" + task.ID + "/status" } hx-target="body" hx-swap="outerHTML" data-success="Status updated." class="stacked">
+			@TaskStatusSelect(task.Status)
+			<textarea name="comment" placeholder="Add context for this status change..."></textarea>
+			<button type="submit">Update status</button>
+		</form>
+		<form hx-post={ "/tasks/" + task.ID + "/wake" } hx-target="body" hx-swap="outerHTML" data-success="Agent triggered." class="stacked">
+			<button class="button secondary" type="submit">Wake agent</button>
+		</form>
+	</div>
+	
+	<div class="panel issue-action-panel">
+		<h2>Create subtask</h2>
+		<form hx-post={ "/tasks/" + task.ID + "/delegate" } hx-target="body" hx-swap="outerHTML" data-success="Subtask created." class="stacked">
+			@AgentSelect(agents, "")
+			<input name="title" class="pc-input" placeholder="Subtask title..." />
+			<textarea name="prompt" placeholder="Describe the subtask goal..." required></textarea>
+			<button class="pc-btn pc-btn-primary" type="submit">Create subtask</button>
+		</form>
+	</div>
+	
+	<div class="panel border-danger issue-action-panel">
+		<h2 class="text-danger">Danger Zone</h2>
+		<form hx-post={ "/tasks/" + task.ID + "/cancel" } hx-confirm="Are you sure you want to cancel this task?" data-success="Task cancelled." hx-target="body" hx-swap="outerHTML" class="stacked">
+			<input name="reason" placeholder="Reason for cancellation..." required />
+			<button class="button button-danger" type="submit">Cancel task</button>
+		</form>
+	</div>
+}
+
+templ IssuePropertyRow(label string) {
+	<div class="issue-property-row">
+		<span>{ label }</span>
+		<div>
+			{ children... }
+		</div>
+	</div>
 }
 
 func isLiveTask(task taskResponse, raw domain.Task) bool {
