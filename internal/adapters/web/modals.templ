@@ -33,18 +33,40 @@ templ AgentQuickModal(id string, agents []domain.Agent, runtimeOptions []Runtime
 templ TaskModal(id string, projectID string, projects []domain.Workspace, agents []domain.Agent) {
 	<div class="modal-backdrop" data-modal={ id } hidden style="display: none;">
 		<div class="modal-card">
-			<button class="modal-close" type="button" data-close-modal={ id }>×</button>
-			<h2>Nova task</h2>
-			<form hx-post="/tasks" hx-target="body" hx-swap="outerHTML" data-success="Task criada." class="stacked">
-				if projectID != "" {
-					<input type="hidden" name="project_id" value={ projectID }/>
-					<p class="muted">Task vinculada ao projeto.</p>
-				} else {
-					@ProjectSelect(projects, "Sem projeto", "")
-				}
-				@AgentPicker(agents, "agent_id", "", "Buscar agente por nome, cargo ou tag...")
-				<textarea name="prompt" placeholder="Objetivo, contexto e critérios de aceite" required></textarea>
-				<button data-testid="task-create-submit" type="submit">Criar task</button>
+			<div class="modal-header">
+				<div class="modal-header-title">
+					<span class="modal-icon">@Icon("check-circle", 20)</span>
+					<h2>Create new task</h2>
+				</div>
+				<button class="modal-close" type="button" data-close-modal={ id } aria-label="Close">@Icon("x", 20)</button>
+			</div>
+			
+			<form hx-post="/tasks" hx-target="body" hx-swap="outerHTML" data-success="Task created successfully." class="modal-form">
+				<div class="modal-body">
+					if projectID != "" {
+						<input type="hidden" name="project_id" value={ projectID }/>
+						<div class="modal-info-block">
+							@Icon("folder", 16)
+							<span>This task will be automatically linked to the current project.</span>
+						</div>
+					} else {
+						@FormField("project_id", "Project", "Optional. Group tasks by workspace.") {
+							@ProjectSelect(projects, "No project (Standalone)", "")
+						}
+					}
+					
+					@FormField("agent_id", "Assignee", "Search and select the agent to handle this task.") {
+						@AgentPicker(agents, "agent_id", "", "Search by name, title, or tag...")
+					}
+					
+					@FormField("prompt", "Task Prompt", "Describe the objective, context, and acceptance criteria. Markdown is supported.") {
+						@TextareaField("prompt", "", "Objetivo, contexto e critérios de aceite", 5, false)
+					}
+				</div>
+				<div class="modal-footer">
+					<button class="pc-btn pc-btn-ghost" type="button" data-close-modal={ id }>Cancel</button>
+					<button class="pc-btn pc-btn-primary" data-testid="task-create-submit" type="submit">Create task</button>
+				</div>
 			</form>
 		</div>
 	</div>
@@ -71,14 +93,20 @@ templ SkillModal(id string, projects []domain.Workspace) {
 
 templ AgentPicker(agents []domain.Agent, fieldName string, selectedID string, placeholder string) {
 	<div class="agent-picker" data-agent-picker>
-		<input class="agent-search" type="search" placeholder={ placeholder } autocomplete="off"/>
+		<div class="agent-search-shell">
+			@Icon("users", 16)
+			<input class="agent-search" type="search" placeholder={ placeholder } autocomplete="off"/>
+		</div>
 		<input type="hidden" name={ fieldName } value={ selectedID } data-agent-value/>
 		<div class="agent-options">
 			for _, agent := range agents {
 				<button type="button" class={ agentOptionClass(agent.ID, selectedID) } data-agent-option data-agent-id={ agent.ID } data-agent-search={ agentSearchText(agent) }>
-					<strong>{ agent.Name }</strong>
-					<small>{ agent.Title } · { string(agent.Type) }</small>
-					<span>@TagChips(agent.Tags)</span>
+					<span class="agent-option-avatar">@Icon("cpu", 16)</span>
+					<span class="agent-option-content">
+						<strong>{ agent.Name }</strong>
+						<small>{ agentOptionSubtitle(agent) }</small>
+						<span class="agent-option-tags">@TagChips(agent.Tags)</span>
+					</span>
 				</button>
 			}
 		</div>
@@ -86,12 +114,15 @@ templ AgentPicker(agents []domain.Agent, fieldName string, selectedID string, pl
 }
 
 templ ProjectSelect(projects []domain.Workspace, emptyLabel string, selected string) {
-	<select name="project_id">
-		<option value="">{ emptyLabel }</option>
-		for _, project := range projects {
-			<option value={ project.ID } selected?={ project.ID == selected }>{ project.Name }</option>
-		}
-	</select>
+	<div class="pc-select-wrapper">
+		<select name="project_id" class="pc-input pc-select">
+			<option value="">{ emptyLabel }</option>
+			for _, project := range projects {
+				<option value={ project.ID } selected?={ project.ID == selected }>{ project.Name }</option>
+			}
+		</select>
+		<div class="pc-select-icon">@Icon("chevron-down", 16)</div>
+	</div>
 }
 
 templ PermissionPresetOptions(selected []domain.AgentPermission) {
@@ -109,4 +140,12 @@ func agentOptionClass(agentID string, selectedID string) string {
 
 func agentSearchText(agent domain.Agent) string {
 	return strings.ToLower(strings.Join([]string{agent.Name, agent.Title, agent.Description, string(agent.Type), strings.Join(agent.Tags, " ")}, " "))
+}
+
+func agentOptionSubtitle(agent domain.Agent) string {
+	title := strings.TrimSpace(agent.Title)
+	if title == "" {
+		title = "No title set"
+	}
+	return title + " · " + string(agent.Type)
 }
