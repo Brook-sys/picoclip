@@ -229,7 +229,7 @@ func (s *Server) handleWebPostSettingsGeneral(w http.ResponseWriter, r *http.Req
 	view.General.LogLevel = r.FormValue("log_level")
 	view.General.MaxTaskRetries = r.FormValue("max_task_retries")
 	view.General.DefaultTaskProtocol = r.FormValue("default_task_protocol")
-	if strings.TrimSpace(view.General.DefaultTaskProtocol) == "" {
+	if r.FormValue("reset_default_protocol") == "true" || strings.TrimSpace(view.General.DefaultTaskProtocol) == "" {
 		view.General.DefaultTaskProtocol = services.DefaultTaskProtocolPrompt()
 	}
 
@@ -664,6 +664,59 @@ func (s *Server) handleWebWakeTask(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.handleWebTaskDetail(w, r)
+}
+
+func (s *Server) handleWebPostTaskInlineEdit(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	task, err := s.tasks.Get(r.Context(), r.PathValue("id"))
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusNotFound)
+		return
+	}
+	if title := strings.TrimSpace(r.FormValue("title")); title != "" {
+		task.Title = title
+	}
+	if r.Form.Has("prompt") {
+		task.Prompt = strings.TrimSpace(r.FormValue("prompt"))
+	}
+	task.UpdatedAt = services.SystemClock{}.Now()
+	if err := s.storage.Tasks().Update(r.Context(), task); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	w.Header().Set("HX-Trigger", `{"picoclip-toast":{"message":"Task saved.","type":"success"}}`)
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (s *Server) handleWebPostAgentInlineEdit(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	agent, err := s.agents.Get(r.Context(), r.PathValue("id"))
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusNotFound)
+		return
+	}
+	if name := strings.TrimSpace(r.FormValue("name")); name != "" {
+		agent.Name = name
+	}
+	if r.Form.Has("title") {
+		agent.Title = strings.TrimSpace(r.FormValue("title"))
+	}
+	if r.Form.Has("description") {
+		agent.Description = strings.TrimSpace(r.FormValue("description"))
+	}
+	agent.UpdatedAt = services.SystemClock{}.Now()
+	if err := s.storage.Agents().Update(r.Context(), agent); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	w.Header().Set("HX-Trigger", `{"picoclip-toast":{"message":"Agent saved.","type":"success"}}`)
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func (s *Server) handleWebPostMessage(w http.ResponseWriter, r *http.Request) {

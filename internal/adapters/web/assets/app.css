@@ -902,6 +902,17 @@ pc-tag-multiselect { position: relative; display: flex; flex-wrap: wrap; align-i
 .pc-badge-bad { background: var(--bad-bg); color: var(--bad); }
 .pc-badge-warn { background: var(--warn-bg); color: var(--warn); }
 .pc-badge-info { background: var(--info-bg); color: var(--info); }
+.pc-checkbox-row { display: inline-flex; align-items: center; gap: 8px; color: var(--muted); font-size: 13px; }
+.pc-checkbox-row input { width: auto; }
+
+.inline-edit-form { display: block; width: 100%; }
+.inline-edit-input, .inline-edit-textarea { width: 100%; border-color: transparent; background: transparent; padding: 2px 4px; margin: -2px -4px; box-shadow: none; }
+.inline-edit-input:hover, .inline-edit-textarea:hover { background: var(--surface-soft); border-color: var(--border); }
+.inline-edit-input:focus, .inline-edit-textarea:focus { background: var(--surface); border-color: var(--info); box-shadow: 0 0 0 3px color-mix(in srgb, var(--info) 16%, transparent); }
+.inline-edit-textarea { min-height: 96px; resize: vertical; line-height: 1.6; }
+.issue-hero-card h2 .inline-edit-input { font-size: clamp(24px, 3vw, 34px); font-weight: 850; letter-spacing: -0.04em; line-height: 1.1; color: var(--text); }
+.agent-profile-name .inline-edit-input, .agent-profile-title-row .inline-edit-input { font-size: 20px; font-weight: 800; letter-spacing: -0.02em; }
+
 .pc-toggle { position: relative; display: inline-flex; width: 42px; height: 24px; vertical-align: middle; cursor: pointer; }
 .pc-toggle input { position: absolute; opacity: 0; width: 0; height: 0; }
 .pc-toggle-slider { position: absolute; inset: 0; border-radius: 999px; background: var(--border-strong); transition: background 0.15s; }

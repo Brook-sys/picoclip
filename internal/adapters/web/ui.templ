@@ -5,6 +5,18 @@ import (
 	"sort"
 )
 
+templ InlineTextField(url, name, value, placeholder string) {
+	<form hx-post={ url } hx-trigger="blur from:find input, submit" hx-swap="none" class="inline-edit-form">
+		<input type="text" name={ name } value={ value } placeholder={ placeholder } class="inline-edit-input" autocomplete="off" />
+	</form>
+}
+
+templ InlineTextareaField(url, name, value, placeholder string) {
+	<form hx-post={ url } hx-trigger="blur from:find textarea, submit" hx-swap="none" class="inline-edit-form">
+		<textarea name={ name } placeholder={ placeholder } class="inline-edit-textarea" rows="4">{ value }</textarea>
+	</form>
+}
+
 templ Card() {
 	<div class="pc-card">
 		{ children... }

@@ -116,14 +116,25 @@ func (s *TaskService) AddMessage(ctx context.Context, taskID, fromID, toID strin
 	}
 	if task, err := s.storage.Tasks().Get(ctx, taskID); err == nil {
 		if role == domain.MessageRoleUser && task.Status != domain.TaskStatusCancelled {
-			task.NeedsRun = true
-			if task.Status == domain.TaskStatusDone || task.Status == domain.TaskStatusInReview || task.Status == domain.TaskStatusBlocked {
-				task.Status = domain.TaskStatusTodo
+			if task.Status == domain.TaskStatusDone {
+				subPrompt := fmt.Sprintf("Follow-up on completed task %s:\nOriginal objective: %s\nUser follow-up: %s", task.ID, task.Prompt, body)
+				childTitle := "Follow-up: " + firstLine(body)
+				if len(childTitle) > 100 {
+					childTitle = childTitle[:100] + "..."
+				}
+				if child, childErr := s.CreateChildInWorkspace(ctx, task.WorkspaceID, task.ID, task.AgentID, childTitle, subPrompt); childErr == nil {
+					_ = s.storage.Messages().Create(ctx, domain.Message{ID: s.idGen.NewID("msg"), TaskID: task.ID, FromID: fromID, ToID: toID, Role: domain.MessageRoleSystem, Body: "Created follow-up subtask " + child.ID + " from this comment.", CreatedAt: now})
+				}
+			} else {
+				task.NeedsRun = true
+				if task.Status == domain.TaskStatusInReview || task.Status == domain.TaskStatusBlocked {
+					task.Status = domain.TaskStatusTodo
+				}
+				task.FinishedAt = nil
+				task.CompletedAt = nil
+				task.UpdatedAt = now
+				_ = s.storage.Tasks().Update(ctx, task)
 			}
-			task.FinishedAt = nil
-			task.CompletedAt = nil
-			task.UpdatedAt = now
-			_ = s.storage.Tasks().Update(ctx, task)
 		}
 	}
 	event := domain.Event{ID: s.idGen.NewID("evt"), Type: domain.EventMessageCreated, TaskID: taskID, AgentID: toID, Message: "Message created", CreatedAt: now}

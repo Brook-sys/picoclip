@@ -272,12 +272,13 @@ func joinPermissions(permissions []domain.AgentPermission) string {
 func DefaultTaskProtocolPrompt() string {
 	return strings.Join([]string{
 		"PicoClip Task Protocol:",
+		"Your goal is to satisfy the task title, description, and the latest user comment.",
 		"1. You are running one task heartbeat.",
 		"2. Before work: checkout the task using POST /agent-api/tasks/{id}/checkout if not already in_progress.",
-		"3. During work: leave comments via POST /agent-api/tasks/{id}/comments for meaningful progress.",
-		"4. If complete: PATCH /agent-api/tasks/{id} with status=done and a clear comment.",
-		"5. If blocked: PATCH /agent-api/tasks/{id} with status=blocked, explaining the blocker and owner.",
-		"6. If work should be delegated: POST /agent-api/tasks/{id}/delegate with child task title and acceptance criteria.",
+		"3. During work: do useful work and leave a progress comment via POST /agent-api/tasks/{id}/comments.",
+		"4. If satisfied/completed: PATCH /agent-api/tasks/{id} with status=done and a clear final comment.",
+		"5. If blocked: PATCH /agent-api/tasks/{id} with status=blocked, explaining the blocker and owner/next action.",
+		"6. If work should be split: POST /agent-api/tasks/{id}/delegate with child task title and acceptance criteria.",
 		"7. Do not stay silent. Every run must leave a final comment or status update.",
 	}, "\n")
 }
@@ -317,6 +318,15 @@ func (r *Runner) taskProtocolPrompt(ctx context.Context) string {
 	return DefaultTaskProtocolPrompt()
 }
 
+func latestCommentByRole(messages []domain.Message, role domain.MessageRole) string {
+	for i := len(messages) - 1; i >= 0; i-- {
+		if messages[i].Role == role && strings.TrimSpace(messages[i].Body) != "" {
+			return messages[i].Body
+		}
+	}
+	return ""
+}
+
 func (r *Runner) taskProtocolContext(ctx context.Context, task domain.Task, run domain.Run, messages []domain.Message) string {
 	var sb strings.Builder
 	sb.WriteString(r.taskProtocolPrompt(ctx))
@@ -327,6 +337,12 @@ func (r *Runner) taskProtocolContext(ctx context.Context, task domain.Task, run 
 	sb.WriteString(fmt.Sprintf("- Run ID: %s\n", run.ID))
 	if task.ParentID != "" {
 		sb.WriteString(fmt.Sprintf("- Parent Task ID: %s\n", task.ParentID))
+	}
+
+	latestUserComment := latestCommentByRole(messages, domain.MessageRoleUser)
+	if latestUserComment != "" {
+		sb.WriteString("\nLatest User Comment:\n")
+		sb.WriteString(latestUserComment + "\n")
 	}
 
 	sb.WriteString("\nRecent Comments:\n")

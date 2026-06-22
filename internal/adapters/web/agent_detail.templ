@@ -21,14 +21,16 @@ templ AgentDetailPage(agent domain.Agent, agents []domain.Agent, tasks []taskRes
 						</div>
 						<div class="agent-profile-heading">
 							<div class="agent-profile-title-row">
-								<strong class="agent-profile-name">{ agent.Name }</strong>
+								<div style="flex:1;">
+									@InlineTextField("/agents/" + agent.ID + "/edit-inline", "name", agent.Name, "Agent name")
+								</div>
 								if agent.Enabled {
 									<span class="pc-badge pc-badge-good">Enabled</span>
 								} else {
 									<span class="pc-badge pc-badge-bad">Disabled</span>
 								}
 							</div>
-							<p>{ agentDescriptionText(agent.Description) }</p>
+							@InlineTextareaField("/agents/" + agent.ID + "/edit-inline", "description", agentDescriptionText(agent.Description), "Agent description")
 						</div>
 					</div>
 					<div class="agent-overview-grid">
@@ -44,7 +46,7 @@ templ AgentDetailPage(agent domain.Agent, agents []domain.Agent, tasks []taskRes
 							<span class="agent-overview-icon">@Icon("users", 16)</span>
 							<span class="agent-overview-content">
 								<small>Title</small>
-								<strong>{ agentFallbackText(agent.Title, "No title set") }</strong>
+								@InlineTextField("/agents/" + agent.ID + "/edit-inline", "title", agentFallbackText(agent.Title, ""), "No title set")
 							</span>
 						</div>
 						<div class="agent-overview-tile">

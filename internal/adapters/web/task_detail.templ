@@ -17,13 +17,9 @@ templ TaskDetailPage(task taskResponse, rawTask domain.Task, agents []domain.Age
 							}
 						</div>
 					</div>
-					<h2>{ taskDisplayTitle(task) }</h2>
+					<h2>@InlineTextField("/tasks/" + task.ID + "/edit-inline", "title", taskDisplayTitle(task), "Task title")</h2>
 					<div class="issue-description">
-						if task.Prompt != "" {
-							{ task.Prompt }
-						} else {
-							<span class="muted">No description provided.</span>
-						}
+						@InlineTextareaField("/tasks/" + task.ID + "/edit-inline", "prompt", task.Prompt, "Task description")
 					</div>
 				</div>
 

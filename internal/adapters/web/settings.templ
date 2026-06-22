@@ -225,6 +225,7 @@ templ SettingsPage(view SettingsView) {
 						<label>Default Task Protocol Prompt</label>
 						<textarea name="default_task_protocol" rows="8" placeholder="Leave empty and save to restore the default task protocol.">{ view.General.DefaultTaskProtocol }</textarea>
 						<p class="muted">Injected into every agent run before the task context. Leave empty and save to restore the PicoClip default.</p>
+						<label class="pc-checkbox-row"><input type="checkbox" name="reset_default_protocol" value="true" /> Restore default protocol on save</label>
 						
 						<button type="submit">Save General</button>
 					</form>
