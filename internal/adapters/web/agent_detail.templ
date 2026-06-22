@@ -14,20 +14,61 @@ templ AgentDetailPage(agent domain.Agent, agents []domain.Agent, tasks []taskRes
 		}
 		<section class="content-grid">
 			<div class="main-column">
-				<div id="overview" class="card">
-					@SectionHeader("Overview", "Agent identity and profile.")
-					<dl>
-						<dt>ID</dt>
-						<dd><code>{ agent.ID }</code></dd>
-						<dt>Title</dt>
-						<dd>{ agent.Title }</dd>
-						<dt>Reports to</dt>
-						<dd>{ agentName(agents, agent.ReportsToID) }</dd>
-						<dt>Runtime</dt>
-						<dd>{ string(agent.Type) }</dd>
-						<dt>Tags</dt>
-						<dd>@TagChips(agentDisplayTags(agent, projects))</dd>
-					</dl>
+				<div id="overview" class="agent-profile-card">
+					<div class="agent-profile-header">
+						<div class="agent-avatar" aria-hidden="true">
+							@Icon("cpu", 24)
+						</div>
+						<div class="agent-profile-heading">
+							<div class="agent-profile-title-row">
+								<strong class="agent-profile-name">{ agent.Name }</strong>
+								if agent.Enabled {
+									<span class="pc-badge pc-badge-good">Enabled</span>
+								} else {
+									<span class="pc-badge pc-badge-bad">Disabled</span>
+								}
+							</div>
+							<p>{ agentDescriptionText(agent.Description) }</p>
+						</div>
+					</div>
+					<div class="agent-overview-grid">
+						<div class="agent-overview-tile agent-overview-wide">
+							<span class="agent-overview-icon">@Icon("book", 16)</span>
+							<span class="agent-overview-content">
+								<small>Agent ID</small>
+								<code>{ agent.ID }</code>
+							</span>
+							<button class="runtime-copy-button" type="button" data-copy-text={ agent.ID }>Copy</button>
+						</div>
+						<div class="agent-overview-tile">
+							<span class="agent-overview-icon">@Icon("users", 16)</span>
+							<span class="agent-overview-content">
+								<small>Title</small>
+								<strong>{ agentFallbackText(agent.Title, "No title set") }</strong>
+							</span>
+						</div>
+						<div class="agent-overview-tile">
+							<span class="agent-overview-icon">@Icon("chevron-right", 16)</span>
+							<span class="agent-overview-content">
+								<small>Reports to</small>
+								<strong>{ agentReportsToText(agents, agent.ReportsToID) }</strong>
+							</span>
+						</div>
+						<div class="agent-overview-tile">
+							<span class="agent-overview-icon runtime-icon">@Icon("cpu", 16)</span>
+							<span class="agent-overview-content">
+								<small>Runtime</small>
+								<span class="agent-runtime-badge">{ string(agent.Type) }</span>
+							</span>
+						</div>
+						<div class="agent-overview-tile agent-overview-wide">
+							<span class="agent-overview-icon">@Icon("zap", 16)</span>
+							<span class="agent-overview-content">
+								<small>Tags</small>
+								<div class="agent-tag-list">@TagChips(agentDisplayTags(agent, projects))</div>
+							</span>
+						</div>
+					</div>
 				</div>
 				<div id="tasks" class="card">
 					@SectionHeader("Assigned Tasks", "Current and historical work assigned to this agent.")
@@ -118,4 +159,29 @@ func agentSkillFormHTML(agentID string, skills []domain.Skill, selected []string
 	var b strings.Builder
 	_ = renderAgentSkillForm(&b, agentID, skills, selected)
 	return b.String()
+}
+
+func agentDescriptionText(value string) string {
+	if strings.TrimSpace(value) == "" {
+		return "No description provided yet."
+	}
+	return value
+}
+
+func agentFallbackText(value string, fallback string) string {
+	if strings.TrimSpace(value) == "" {
+		return fallback
+	}
+	return value
+}
+
+func agentReportsToText(agents []domain.Agent, reportsToID string) string {
+	if strings.TrimSpace(reportsToID) == "" {
+		return "Top-level agent"
+	}
+	name := agentName(agents, reportsToID)
+	if strings.TrimSpace(name) == "" {
+		return "Unknown agent"
+	}
+	return name
 }
