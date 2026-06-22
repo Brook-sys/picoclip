@@ -1035,6 +1035,14 @@ pc-tag-multiselect { position: relative; display: flex; flex-wrap: wrap; align-i
 .agent-tag-list { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
 .agent-tag-list .muted { font-size: 13px; color: var(--muted); }
 
+.task-hero-card { display: flex; flex-direction: column; gap: 16px; padding: 24px; }
+.task-hero-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; border-bottom: 1px solid var(--border); padding-bottom: 16px; }
+.task-hero-status { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.task-hero-status .muted { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
+.task-hero-header h2 { margin: 0; font-size: 22px; font-weight: 850; letter-spacing: -0.02em; color: var(--text); }
+.task-hero-header small { display: block; margin-top: 4px; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 13px; color: var(--muted); }
+.task-description { font-size: 15px; line-height: 1.6; color: var(--text); white-space: pre-wrap; word-break: break-word; }
+
 .agent-config-card { display: grid; gap: 18px; padding: 18px; border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface); box-shadow: var(--shadow-sm); }
 .agent-config-form { display: grid; gap: 16px; }
 .agent-config-section { display: grid; gap: 14px; padding: 16px; border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface-soft); }

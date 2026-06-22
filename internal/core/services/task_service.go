@@ -25,21 +25,24 @@ func NewTaskService(storage ports.Storage, clock ports.Clock, idGen ports.IDGene
 	}
 }
 
-func (s *TaskService) Create(ctx context.Context, agentID, prompt string) (domain.Task, error) {
-	return s.CreateInWorkspace(ctx, "", agentID, prompt)
+func (s *TaskService) Create(ctx context.Context, agentID, title, prompt string) (domain.Task, error) {
+	return s.CreateInWorkspace(ctx, "", agentID, title, prompt)
 }
 
-func (s *TaskService) CreateInWorkspace(ctx context.Context, workspaceID, agentID, prompt string) (domain.Task, error) {
-	return s.CreateChildInWorkspace(ctx, workspaceID, "", agentID, prompt)
+func (s *TaskService) CreateInWorkspace(ctx context.Context, workspaceID, agentID, title, prompt string) (domain.Task, error) {
+	return s.CreateChildInWorkspace(ctx, workspaceID, "", agentID, title, prompt)
 }
 
-func (s *TaskService) CreateChild(ctx context.Context, parentID, agentID, prompt string) (domain.Task, error) {
-	return s.CreateChildInWorkspace(ctx, "", parentID, agentID, prompt)
+func (s *TaskService) CreateChild(ctx context.Context, parentID, agentID, title, prompt string) (domain.Task, error) {
+	return s.CreateChildInWorkspace(ctx, "", parentID, agentID, title, prompt)
 }
 
-func (s *TaskService) CreateChildInWorkspace(ctx context.Context, workspaceID, parentID, agentID, prompt string) (domain.Task, error) {
+func (s *TaskService) CreateChildInWorkspace(ctx context.Context, workspaceID, parentID, agentID, title, prompt string) (domain.Task, error) {
 	if agentID == "" || prompt == "" {
 		return domain.Task{}, fmt.Errorf("%w: agent_id and prompt are required", domain.ErrInvalidInput)
+	}
+	if title == "" {
+		title = firstLine(prompt)
 	}
 
 	now := s.clock.Now()
@@ -48,7 +51,7 @@ func (s *TaskService) CreateChildInWorkspace(ctx context.Context, workspaceID, p
 		ParentID:    parentID,
 		WorkspaceID: workspaceID,
 		AgentID:     agentID,
-		Title:       firstLine(prompt),
+		Title:       title,
 		Prompt:      prompt,
 		Status:      domain.TaskStatusTodo,
 		MaxAttempts: 1,
@@ -134,7 +137,7 @@ func (s *TaskService) Delegate(ctx context.Context, parentID, fromAgentID, toAge
 	if err != nil {
 		return domain.Task{}, err
 	}
-	task, err := s.CreateChildInWorkspace(ctx, parent.WorkspaceID, parentID, toAgentID, prompt)
+	task, err := s.CreateChildInWorkspace(ctx, parent.WorkspaceID, parentID, toAgentID, "", prompt)
 	if err != nil {
 		return domain.Task{}, err
 	}

@@ -44,11 +44,12 @@ test.describe('PicoClip smoke UI', () => {
     await taskModal.locator('.agent-search').fill(agentName);
     await taskModal.locator('[data-agent-option]').first().click();
     const taskPrompt = `Validate task detail polling stability ${Date.now()}`;
+    await taskModal.getByPlaceholder('e.g., Update database schema').fill(taskPrompt);
     await taskModal.getByPlaceholder('Objetivo, contexto e critérios de aceite').fill(taskPrompt);
     await page.getByTestId('task-create-submit').click();
     await expect(page.getByText(taskPrompt).first()).toBeVisible();
 
-    await page.getByRole('row').filter({ hasText: taskPrompt }).getByRole('link', { name: /^tsk_/ }).click();
+    await page.getByRole('row').filter({ hasText: taskPrompt }).getByRole('link', { name: taskPrompt }).click();
     await expect(page.locator('#task-live')).toBeVisible();
     await expect(page.getByRole('button', { name: 'Wake agent' })).toBeVisible();
     await page.waitForTimeout(3500);

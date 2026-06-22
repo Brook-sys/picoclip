@@ -59,7 +59,11 @@ templ TaskModal(id string, projectID string, projects []domain.Workspace, agents
 						@AgentPicker(agents, "agent_id", "", "Search by name, title, or tag...")
 					}
 					
-					@FormField("prompt", "Task Prompt", "Describe the objective, context, and acceptance criteria. Markdown is supported.") {
+					@FormField("title", "Task Title", "Short summary of what needs to be done.") {
+						<input id="title" name="title" class="pc-input" placeholder="e.g., Update database schema" required />
+					}
+					
+					@FormField("prompt", "Description & Criteria", "Describe the objective, context, and acceptance criteria. Markdown is supported.") {
 						@TextareaField("prompt", "", "Objetivo, contexto e critérios de aceite", 5, false)
 					}
 				</div>

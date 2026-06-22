@@ -26,7 +26,7 @@ templ TaskTable(tasks []taskResponse, agents []domain.Agent, projects []domain.W
 			for _, task := range tasks {
 				<tr>
 					<td>
-						<a class="primary-link" href={ templ.URL("/tasks/" + task.ID) }>{ task.ID }</a>
+						<a class="primary-link" href={ templ.URL("/tasks/" + task.ID) }>{ taskDisplayTitle(task) }</a>
 						<small>{ taskExcerpt(task.Prompt) }</small>
 					</td>
 					<td><span class={ "status " + statusClass(task.Status) }>{ string(task.Status) }</span></td>
@@ -67,7 +67,7 @@ templ SubtaskTree(children []taskResponse, agents []domain.Agent, projects []dom
 			for _, child := range children {
 				<a class="subtask-node" href={ templ.URL("/tasks/" + child.ID) }>
 					<span class={ "status " + statusClass(child.Status) }>{ string(child.Status) }</span>
-					<strong>{ child.ID }</strong>
+					<strong>{ taskDisplayTitle(child) }</strong>
 					<small>{ taskExcerpt(child.Prompt) }</small>
 					<small>{ agentName(agents, child.AgentID) + " · " + projectName(projects, child.ProjectID) }</small>
 				</a>
@@ -138,6 +138,13 @@ templ TagChips(tags []string) {
 
 templ TagChipsHTML(tags []string) {
 	@TagChips(tags)
+}
+
+func taskDisplayTitle(task taskResponse) string {
+	if strings.TrimSpace(task.Title) != "" {
+		return task.Title
+	}
+	return task.ID
 }
 
 func taskExcerpt(prompt string) string {

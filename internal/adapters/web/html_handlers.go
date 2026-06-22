@@ -618,7 +618,7 @@ func (s *Server) handleWebPostTask(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	_, err := s.tasks.CreateInWorkspace(r.Context(), r.FormValue("project_id"), r.FormValue("agent_id"), r.FormValue("prompt"))
+	_, err := s.tasks.CreateInWorkspace(r.Context(), r.FormValue("project_id"), r.FormValue("agent_id"), r.FormValue("title"), r.FormValue("prompt"))
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -679,9 +679,14 @@ func (s *Server) handleWebPostDelegate(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	if _, err := s.tasks.Delegate(r.Context(), r.PathValue("id"), "", r.FormValue("agent_id"), r.FormValue("prompt")); err != nil {
+	task, err := s.tasks.Delegate(r.Context(), r.PathValue("id"), "", r.FormValue("agent_id"), r.FormValue("prompt"))
+	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
+	}
+	if r.FormValue("title") != "" {
+		task.Title = r.FormValue("title")
+		_ = s.storage.Tasks().Update(r.Context(), task)
 	}
 	s.handleWebTaskDetail(w, r)
 }

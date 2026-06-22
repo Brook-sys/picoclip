@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"strings"
 
+	"picoclip/internal/core/domain"
 	"picoclip/internal/core/ports"
 )
 
@@ -13,6 +14,13 @@ type SearchResult struct {
 	Title string `json:"title"`
 	URL   string `json:"url"`
 	Extra string `json:"extra,omitempty"`
+}
+
+func taskSearchTitle(task domain.Task) string {
+	if strings.TrimSpace(task.Title) != "" {
+		return task.Title
+	}
+	return task.ID
 }
 
 func (s *Server) handleAPISearch(w http.ResponseWriter, r *http.Request) {
@@ -75,7 +83,7 @@ func (s *Server) handleAPISearch(w http.ResponseWriter, r *http.Request) {
 				results = append(results, SearchResult{
 					ID:    t.ID,
 					Type:  "Task",
-					Title: taskExcerpt(t.Prompt),
+					Title: taskSearchTitle(t),
 					URL:   "/tasks/" + t.ID,
 					Extra: string(t.Status),
 				})

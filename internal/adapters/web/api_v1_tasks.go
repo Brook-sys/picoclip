@@ -18,6 +18,7 @@ func (s *Server) handleAPIV1CreateTask(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		ProjectID string `json:"project_id"`
 		AgentID   string `json:"agent_id"`
+		Title     string `json:"title"`
 		Prompt    string `json:"prompt"`
 		Message   string `json:"message"`
 	}
@@ -28,7 +29,7 @@ func (s *Server) handleAPIV1CreateTask(w http.ResponseWriter, r *http.Request) {
 	if req.Prompt == "" {
 		req.Prompt = req.Message
 	}
-	task, err := s.tasks.CreateInWorkspace(r.Context(), req.ProjectID, req.AgentID, req.Prompt)
+	task, err := s.tasks.CreateInWorkspace(r.Context(), req.ProjectID, req.AgentID, req.Title, req.Prompt)
 	if err != nil {
 		s.apiError(w, err)
 		return
@@ -75,6 +76,7 @@ func (s *Server) handleAPIV1DelegateTask(w http.ResponseWriter, r *http.Request)
 	var req struct {
 		FromAgentID string `json:"from_agent_id"`
 		ToAgentID   string `json:"to_agent_id"`
+		Title       string `json:"title"`
 		Prompt      string `json:"prompt"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -82,6 +84,10 @@ func (s *Server) handleAPIV1DelegateTask(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	task, err := s.tasks.Delegate(r.Context(), r.PathValue("id"), req.FromAgentID, req.ToAgentID, req.Prompt)
+	if req.Title != "" {
+		task.Title = req.Title
+		_ = s.storage.Tasks().Update(r.Context(), task)
+	}
 	if err != nil {
 		s.apiError(w, err)
 		return

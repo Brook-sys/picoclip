@@ -4,19 +4,23 @@ import "picoclip/internal/core/domain"
 import "fmt"
 
 templ TaskDetailPage(task taskResponse, rawTask domain.Task, agents []domain.Agent, projects []domain.Workspace, messages []domain.Message, runs []domain.Run, events []domain.Event, children []taskResponse) {
-	@PageShell("tasks", taskExcerpt(task.Prompt), "Task detail: conversation, subtasks, runs and activity.", taskDetailAction()) {
+	@PageShell("tasks", taskDisplayTitle(task), "Task detail: conversation, subtasks, runs and activity.", taskDetailAction()) {
 		<section class="detail-grid">
 			<div class="main-column">
-				<div class="card">
-					<div class="card-header" style="margin-bottom: 8px;">
-						<div style="display: flex; gap: 8px; align-items: center;">
-							@StatusBadge(string(task.Status), statusClass(task.Status), isLiveTask(task, rawTask))
-							if isLiveTask(task, rawTask) {
-								<span class="muted" style="font-size: 13px;">Agent running</span>
-							}
+				<div class="card task-hero-card">
+					<div class="task-hero-header">
+						<div>
+							<div class="task-hero-status">
+								@StatusBadge(string(task.Status), statusClass(task.Status), isLiveTask(task, rawTask))
+								if isLiveTask(task, rawTask) {
+									<span class="muted">Agent running</span>
+								}
+							</div>
+							<h2>{ taskDisplayTitle(task) }</h2>
+							<small>{ task.ID }</small>
 						</div>
 					</div>
-					<div class="prompt" style="font-size: 15px;">
+					<div class="prompt task-description">
 						{ task.Prompt }
 					</div>
 				</div>
@@ -73,8 +77,9 @@ templ TaskDetailPage(task taskResponse, rawTask domain.Task, agents []domain.Age
 					<h2>Delegate</h2>
 					<form hx-post={ "/tasks/" + task.ID + "/delegate" } hx-target="body" hx-swap="outerHTML" data-success="Subtask created." class="stacked">
 						@AgentSelect(agents, "")
-						<textarea name="prompt" placeholder="Subtask goal..."></textarea>
-						<button type="submit">Create subtask</button>
+						<input name="title" class="pc-input" placeholder="Subtask title (optional)..." />
+						<textarea name="prompt" placeholder="Subtask goal..." required></textarea>
+						<button class="pc-btn pc-btn-primary" type="submit">Create subtask</button>
 					</form>
 				</div>
 				

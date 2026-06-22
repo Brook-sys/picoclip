@@ -191,6 +191,7 @@ func (s *Server) handleCreateTask(w http.ResponseWriter, r *http.Request) {
 		ParentID        string `json:"parent_id"`
 		AgentID         string `json:"agent_id"`
 		AssigneeAgentID string `json:"assignee_agent_id"`
+		Title           string `json:"title"`
 		Message         string `json:"message"`
 		Prompt          string `json:"prompt"`
 	}
@@ -205,7 +206,7 @@ func (s *Server) handleCreateTask(w http.ResponseWriter, r *http.Request) {
 	if req.AgentID == "" {
 		req.AgentID = req.AssigneeAgentID
 	}
-	task, err := s.tasks.CreateChildInWorkspace(r.Context(), req.ProjectID, req.ParentID, req.AgentID, req.Prompt)
+	task, err := s.tasks.CreateChildInWorkspace(r.Context(), req.ProjectID, req.ParentID, req.AgentID, req.Title, req.Prompt)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -394,6 +395,7 @@ func (s *Server) handleDelegateTask(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		FromAgentID string `json:"from_agent_id"`
 		ToAgentID   string `json:"to_agent_id"`
+		Title       string `json:"title"`
 		Prompt      string `json:"prompt"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -406,6 +408,10 @@ func (s *Server) handleDelegateTask(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
+	if req.Title != "" {
+		task.Title = req.Title
+		_ = s.storage.Tasks().Update(r.Context(), task)
+	}
 	s.jsonResponse(w, s.taskResponse(r, task))
 }
 
@@ -414,6 +420,7 @@ type taskResponse struct {
 	ParentID      string            `json:"parent_id,omitempty"`
 	ProjectID     string            `json:"project_id,omitempty"`
 	AgentID       string            `json:"agent_id"`
+	Title         string            `json:"title"`
 	Status        domain.TaskStatus `json:"status"`
 	Message       string            `json:"message"`
 	Prompt        string            `json:"prompt"`
@@ -439,6 +446,7 @@ func (s *Server) taskResponse(r *http.Request, task domain.Task) taskResponse {
 		ParentID:      task.ParentID,
 		ProjectID:     task.WorkspaceID,
 		AgentID:       task.AgentID,
+		Title:         task.Title,
 		Message:       task.Prompt,
 		Prompt:        task.Prompt,
 		Response:      response,
