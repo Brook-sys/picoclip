@@ -78,33 +78,80 @@ templ AgentDetailPage(agent domain.Agent, agents []domain.Agent, tasks []taskRes
 					@SectionHeader("Run History", "Execution history, logs and raw agent output.")
 					@Runs(runs)
 				</div>
-				<div id="configuration" class="card">
+				<div id="configuration" class="agent-config-card">
 					@SectionHeader("Configuration", "Adapter, environment and prompt settings.")
-					<form hx-post={ "/agents/" + agent.ID + "/edit" } data-success="Agent configuration saved." hx-target="body" hx-swap="outerHTML" class="stacked">
-						<input name="name" value={ agent.Name } required/>
-						<input name="title" value={ agent.Title } placeholder="Job title / role"/>
-						<select name="reports_to_id">
-							<option value="">Reports to no one</option>
-							for _, optionAgent := range agents {
-								if optionAgent.ID != agent.ID {
-									<option value={ optionAgent.ID } selected?={ optionAgent.ID == agent.ReportsToID }>{ optionAgent.Name + " — " + optionAgent.Title }</option>
+					<form hx-post={ "/agents/" + agent.ID + "/edit" } data-success="Agent configuration saved." hx-target="body" hx-swap="outerHTML" class="agent-config-form">
+						<section class="agent-config-section">
+							<div class="agent-config-section-header">
+								<span class="agent-config-section-icon">@Icon("users", 16)</span>
+								<div>
+									<h3>Identity</h3>
+									<p>Name, role, hierarchy and organization tags.</p>
+								</div>
+							</div>
+							<div class="agent-config-grid">
+								@FormField("name", "Name", "Public display name for this agent.") {
+									@TextField("name", agent.Name, "Agent name", false)
 								}
+								@FormField("title", "Title", "Role shown in listings and profile cards.") {
+									@TextField("title", agent.Title, "Job title / role", false)
+								}
+								@FormField("reports_to_id", "Reports to", "Optional parent agent in the organization chart.") {
+									<select id="reports_to_id" name="reports_to_id" class="pc-input pc-select">
+										<option value="">Top-level agent</option>
+										for _, optionAgent := range agents {
+											if optionAgent.ID != agent.ID {
+												<option value={ optionAgent.ID } selected?={ optionAgent.ID == agent.ReportsToID }>{ optionAgent.Name + " — " + optionAgent.Title }</option>
+											}
+										}
+									</select>
+								}
+								@FormField("description", "Description", "Responsibilities, scope and expected behavior.") {
+									@TextareaField("description", agent.Description, "Description and responsibilities", 4, false)
+								}
+							</div>
+							@FormField("tags", "Tags", "Use tags to organize agents and project affinity.") {
+								@TagMultiSelectField("tags", agent.Tags, availableAgentTagsJSON(agents, projects))
 							}
-						</select>
-						<textarea name="description" placeholder="Description and responsibilities">{ agent.Description }</textarea>
-						@FormField("tags", "Tags", "Use tags to organize agents and project affinity.") {
-							@TagMultiSelectField("tags", agent.Tags, availableAgentTagsJSON(agents, projects))
-						}
-						<label>Agent instruction file</label>
-						<input name="instruction_file" value={ agent.InstructionFile } placeholder="/absolute/path/AGENTS.md" title="Absolute path to a markdown file (e.g. AGENTS.md) that defines this agent's behavior. Injected into the system prompt at runtime."/>
-						<textarea name="system_prompt" placeholder="Optional custom agent prompt">{ agent.SystemPrompt }</textarea>
-						<h3>Adapter parameters</h3>
-						<textarea name="extra_args" placeholder="Extra args, one per line&#10;--foo&#10;--bar=value">{ strings.Join(agent.ExtraArgs, "\n") }</textarea>
-						<textarea name="config" placeholder="Adapter config (key=value per line)">{ mapToLines(agent.Config) }</textarea>
-						@FormField("env", "Environment variables", "Values are hidden by default and injected only into this agent runtime.") {
-							@EnvEditorField(agent.Env)
-						}
-						<button type="submit">Save configuration</button>
+						</section>
+						<section class="agent-config-section">
+							<div class="agent-config-section-header">
+								<span class="agent-config-section-icon">@Icon("book", 16)</span>
+								<div>
+									<h3>Prompt & instructions</h3>
+									<p>Attach an instruction file or add a focused system prompt.</p>
+								</div>
+							</div>
+							@FormField("instruction_file", "Instruction file", "Absolute path to a markdown file injected into the system prompt at runtime.") {
+								@TextField("instruction_file", agent.InstructionFile, "/absolute/path/AGENTS.md", false)
+							}
+							@FormField("system_prompt", "System prompt", "Optional custom behavior layered on top of skills and capabilities.") {
+								@TextareaField("system_prompt", agent.SystemPrompt, "Optional custom agent prompt", 6, false)
+							}
+						</section>
+						<section class="agent-config-section">
+							<div class="agent-config-section-header">
+								<span class="agent-config-section-icon">@Icon("cpu", 16)</span>
+								<div>
+									<h3>Adapter parameters</h3>
+									<p>Runtime arguments, configuration overrides and environment variables.</p>
+								</div>
+							</div>
+							<div class="agent-config-grid">
+								@FormField("extra_args", "Extra arguments", "One argument per line. Example: --foo or --bar=value.") {
+									@TextareaField("extra_args", strings.Join(agent.ExtraArgs, "\n"), "--foo\n--bar=value", 4, false)
+								}
+								@FormField("config", "Adapter config", "Key-value overrides for this agent runtime.") {
+									@TextareaField("config", mapToLines(agent.Config), "key=value", 4, false)
+								}
+							</div>
+							@FormField("env", "Environment variables", "Values are hidden by default and injected only into this agent runtime.") {
+								@EnvEditorField(agent.Env)
+							}
+						</section>
+						<div class="agent-config-actions">
+							<button class="pc-btn pc-btn-primary" type="submit">@Icon("check", 16) Save configuration</button>
+						</div>
 					</form>
 				</div>
 			</div>
