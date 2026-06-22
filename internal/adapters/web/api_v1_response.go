@@ -38,7 +38,7 @@ func (s *Server) apiError(w http.ResponseWriter, err error) {
 	} else if errors.Is(err, domain.ErrNotFound) {
 		status = http.StatusNotFound
 		code = "not_found"
-	} else if errors.Is(err, domain.ErrDriverUnavailable) {
+	} else if errors.Is(err, domain.ErrDriverUnavailable) || errors.Is(err, domain.ErrRuntimeUnavailable) {
 		status = http.StatusConflict
 		code = "driver_unavailable"
 	} else if errors.Is(err, domain.ErrNoPendingTasks) {

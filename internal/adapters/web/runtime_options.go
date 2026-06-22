@@ -2,7 +2,6 @@ package web
 
 import (
 	"context"
-	"fmt"
 
 	"picoclip/internal/core/domain"
 )
@@ -17,7 +16,7 @@ func (s *Server) agentRuntimeOptions(ctx context.Context) []RuntimeOption {
 	options := make([]RuntimeOption, 0, len(states)+1)
 	for _, manifest := range s.runtimes.Catalog() {
 		state, ok := states[manifest.ID]
-		if !ok {
+		if !ok || !state.Enabled {
 			continue
 		}
 		adapter, ok := s.runtimes.Adapter(manifest.ID)
@@ -37,17 +36,17 @@ func (s *Server) validateAgentRuntime(ctx context.Context, agentType domain.Agen
 		if s.debugMode {
 			return nil
 		}
-		return fmt.Errorf("runtime not available: noop")
+		return domain.ErrRuntimeUnavailable
 	}
 	if agentType == "crush" || agentType == "picoclaw" {
 		runtimeID := domain.RuntimeID(agentType)
 		state, err := s.runtimes.State(ctx, runtimeID)
-		if err != nil {
-			return fmt.Errorf("runtime not installed: %s", agentType)
+		if err != nil || !state.Enabled {
+			return domain.ErrRuntimeUnavailable
 		}
 		adapter, ok := s.runtimes.Adapter(runtimeID)
 		if !ok || adapter.Resolve(ctx, state) != nil {
-			return fmt.Errorf("runtime not installed or not available: %s", agentType)
+			return domain.ErrRuntimeUnavailable
 		}
 	}
 	return nil

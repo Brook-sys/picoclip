@@ -174,6 +174,26 @@ func TestAgentNewHidesRuntimeWithMissingBinary(t *testing.T) {
 	}
 }
 
+func TestAgentNewHidesDisabledRuntime(t *testing.T) {
+	storage := memory.NewStorage()
+	state := domain.RuntimeState{ID: "runtime_picoclaw", RuntimeID: "picoclaw", Mode: domain.InstallModeExisting, Enabled: false, BinPath: "/bin/sh", SettingsJSON: "{}", MetadataJSON: "{}"}
+	if err := storage.Runtimes().Save(t.Context(), state); err != nil {
+		t.Fatal(err)
+	}
+	ts := newTestServerWithStorage(t, storage, false)
+	defer ts.Close()
+
+	html := readHTML(t, ts.Client(), ts.URL+"/agents/new")
+	if strings.Contains(html, `value="picoclaw"`) {
+		t.Fatalf("picoclaw should not be visible when it is disabled")
+	}
+
+	htmlModal := readHTML(t, ts.Client(), ts.URL+"/agents")
+	if strings.Contains(htmlModal, `value="picoclaw"`) {
+		t.Fatalf("picoclaw should not be visible in modal when it is disabled")
+	}
+}
+
 func TestWebCreateAgentRejectsUnavailableNoop(t *testing.T) {
 	ts := newTestServerWithDebug(t, false)
 	defer ts.Close()

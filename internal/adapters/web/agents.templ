@@ -41,7 +41,13 @@ templ AgentsPage(agents []domain.Agent, projects []domain.Workspace, tasks []tas
 								</td>
 								<td>{ agent.Title }</td>
 								<td>@TagChips(agentDisplayTags(agent, projects))</td>
-								<td>{ string(agent.Type) }</td>
+								<td>
+									if agent.Type != "noop" && !isRuntimeValid(string(agent.Type), runtimeOptions) {
+										<span class="agent-runtime-warning" title="Runtime indisponível ou desabilitado">{ string(agent.Type) } · Runtime unavailable</span>
+									} else {
+										{ string(agent.Type) }
+									}
+								</td>
 								<td><span class="badge">{ len(agent.Permissions) }</span></td>
 								<td>{ countTasksForAgent(tasks, agent.ID) }</td>
 							</tr>
@@ -63,4 +69,13 @@ templ agentsAction() {
 
 templ TagFilterLinks(agents []domain.Agent) {
 	@templ.Raw(renderTagFilterLinks(agents))
+}
+
+func isRuntimeValid(id string, options []RuntimeOption) bool {
+	for _, opt := range options {
+		if string(opt.ID) == id {
+			return true
+		}
+	}
+	return false
 }

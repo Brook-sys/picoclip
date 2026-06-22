@@ -147,6 +147,19 @@ func (m *RuntimeManager) Uninstall(ctx context.Context, id domain.RuntimeID) err
 	return m.storage.Runtimes().Delete(ctx, state.ID)
 }
 
+func (m *RuntimeManager) SetEnabled(ctx context.Context, id domain.RuntimeID, enabled bool) (domain.RuntimeState, error) {
+	state, err := m.State(ctx, id)
+	if err != nil {
+		return domain.RuntimeState{}, err
+	}
+	state.Enabled = enabled
+	state.UpdatedAt = m.clock.Now()
+	if err := m.storage.Runtimes().Save(ctx, state); err != nil {
+		return domain.RuntimeState{}, err
+	}
+	return state, nil
+}
+
 func (m *RuntimeManager) InstalledRuntimeIDs(ctx context.Context) []domain.RuntimeID {
 	states, err := m.storage.Runtimes().List(ctx)
 	if err != nil {
@@ -245,6 +258,8 @@ func (m *RuntimeManager) Execute(ctx context.Context, id domain.RuntimeID, input
 	state, err := m.State(ctx, id)
 	if err != nil {
 		state = domain.RuntimeState{ID: "runtime_" + string(id), RuntimeID: id, Mode: domain.InstallModeExisting, Enabled: true}
+	} else if !state.Enabled {
+		return ports.RuntimeExecutionResult{}, errors.New("runtime is disabled")
 	}
 	return adapter.Execute(ctx, state, input)
 }

@@ -162,6 +162,25 @@ func (s *Server) handleWebPostRuntimeUninstall(w http.ResponseWriter, r *http.Re
 	s.handleWebSettings(w, r)
 }
 
+func (s *Server) handleWebPostRuntimeToggle(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	runtimeID := domain.RuntimeID(r.PathValue("id"))
+	enabled := r.FormValue("enabled") == "true"
+	if _, err := s.runtimes.SetEnabled(r.Context(), runtimeID, enabled); err != nil {
+		http.Error(w, "runtime unavailable", http.StatusBadRequest)
+		return
+	}
+	if enabled {
+		w.Header().Set("HX-Trigger", `{"picoclip-toast":{"message":"Runtime enabled.","type":"success"}}`)
+	} else {
+		w.Header().Set("HX-Trigger", `{"picoclip-toast":{"message":"Runtime disabled.","type":"success"}}`)
+	}
+	s.handleWebSettings(w, r)
+}
+
 func (s *Server) handleWebPostRuntimeConfig(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)

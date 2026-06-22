@@ -411,7 +411,8 @@ func (s *Server) handleWebAgentDetail(w http.ResponseWriter, r *http.Request) {
 			runs = append(runs, taskRuns...)
 		}
 	}
-	if err := AgentDetailPage(agent, agents, agentTasks, projects, runs, skills).Render(r.Context(), w); err != nil {
+	runtimeOptions := s.agentRuntimeOptions(r.Context())
+	if err := AgentDetailPage(agent, agents, agentTasks, projects, runs, skills, runtimeOptions).Render(r.Context(), w); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
 }

@@ -104,6 +104,7 @@ func (s *Server) Mount(mux *http.ServeMux) {
 	mux.HandleFunc("POST /runtimes/{id}/test-ai", s.handleWebPostRuntimeTestAI)
 	mux.HandleFunc("POST /runtimes/{id}/uninstall", s.handleWebPostRuntimeUninstall)
 	mux.HandleFunc("POST /runtimes/{id}/config", s.handleWebPostRuntimeConfig)
+	mux.HandleFunc("POST /runtimes/{id}/toggle", s.handleWebPostRuntimeToggle)
 	mux.HandleFunc("POST /settings/environment", s.handleWebPostSettingsEnvironment)
 	mux.HandleFunc("GET /settings/export", s.handleWebSettingsExport)
 	mux.HandleFunc("POST /settings/import", s.handleWebSettingsImport)
@@ -154,10 +155,16 @@ func (s *Server) handleCreateAgent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	agentType := domain.AgentType(req.Type)
+	if err := s.validateAgentRuntime(r.Context(), agentType); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
 	agent, err := s.agents.CreateFull(r.Context(), services.CreateAgentInput{
 		ProjectID:   req.ProjectID,
 		Name:        req.Name,
-		Type:        domain.AgentType(req.Type),
+		Type:        agentType,
 		Description: req.Description,
 		Capability:  req.Capability,
 	})

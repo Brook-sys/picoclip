@@ -3,7 +3,7 @@ package web
 import "picoclip/internal/core/domain"
 import "strings"
 
-templ AgentDetailPage(agent domain.Agent, agents []domain.Agent, tasks []taskResponse, projects []domain.Workspace, runs []domain.Run, skills []domain.Skill) {
+templ AgentDetailPage(agent domain.Agent, agents []domain.Agent, tasks []taskResponse, projects []domain.Workspace, runs []domain.Run, skills []domain.Skill, runtimeOptions []RuntimeOption) {
 	@PageShell("agents", agent.Name, agent.Description, agentDetailAction()) {
 		@Tabs() {
 			@TabLink("Overview", "#overview", true)
@@ -58,7 +58,11 @@ templ AgentDetailPage(agent domain.Agent, agents []domain.Agent, tasks []taskRes
 							<span class="agent-overview-icon runtime-icon">@Icon("cpu", 16)</span>
 							<span class="agent-overview-content">
 								<small>Runtime</small>
-								<span class="agent-runtime-badge">{ string(agent.Type) }</span>
+								if agent.Type != "noop" && !isRuntimeValid(string(agent.Type), runtimeOptions) {
+									<span class="agent-runtime-warning" title="Runtime indisponível ou desabilitado">{ string(agent.Type) } · Runtime unavailable</span>
+								} else {
+									<span class="agent-runtime-badge">{ string(agent.Type) }</span>
+								}
 							</span>
 						</div>
 						<div class="agent-overview-tile agent-overview-wide">

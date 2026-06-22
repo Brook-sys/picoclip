@@ -61,6 +61,12 @@ templ RuntimeConfiguredCard(r RuntimeCardView) {
 				if r.Health.Version != "" {
 					<span class="runtime-version-badge">{ r.Health.Version }</span>
 				}
+				<form hx-post={ "/runtimes/" + string(r.ID) + "/toggle" } hx-target="body" hx-swap="outerHTML" style="display:inline-block; margin-left:8px;">
+					<label class="pc-toggle" title="Enable or disable this runtime for agent creation and execution">
+						<input type="checkbox" name="enabled" value="true" checked?={ r.State.Enabled } onchange="this.form.requestSubmit()"/>
+						<span class="pc-toggle-slider"></span>
+					</label>
+				</form>
 			</div>
 		</div>
 		<div class="runtime-status-grid">

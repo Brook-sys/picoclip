@@ -57,11 +57,16 @@ func (r *Runner) Run(ctx context.Context, task domain.Task) {
 		return
 	}
 
-	if _, ok := r.runtimes.Adapter(domain.RuntimeID(agent.Type)); !ok && agent.Type != "noop" {
-		r.logger.Warn("runner.runtime_unavailable", "task_id", task.ID, "agent_id", agent.ID, "type", agent.Type)
-		_ = r.bus.Publish(ctx, domain.Event{ID: r.idGen.NewID("evt"), Type: domain.EventDriverMissing, TaskID: task.ID, AgentID: agent.ID, Message: "Runtime not available", CreatedAt: r.clock.Now()})
-		r.failTask(ctx, task, "runtime not available")
-		return
+	if agent.Type != "noop" {
+		runtimeID := domain.RuntimeID(agent.Type)
+		state, stateErr := r.runtimes.State(ctx, runtimeID)
+		adapter, ok := r.runtimes.Adapter(runtimeID)
+		if stateErr != nil || !state.Enabled || !ok || adapter.Resolve(ctx, state) != nil {
+			r.logger.Warn("runner.runtime_unavailable", "task_id", task.ID, "agent_id", agent.ID, "type", agent.Type)
+			_ = r.bus.Publish(ctx, domain.Event{ID: r.idGen.NewID("evt"), Type: domain.EventDriverMissing, TaskID: task.ID, AgentID: agent.ID, Message: "Runtime unavailable", CreatedAt: r.clock.Now()})
+			r.failTask(ctx, task, "runtime unavailable")
+			return
+		}
 	}
 
 	run := domain.Run{

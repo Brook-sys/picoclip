@@ -236,13 +236,18 @@ func (s *Server) handleAPIV1CreateAgent(w http.ResponseWriter, r *http.Request) 
 	if len(permissions) == 0 {
 		permissions = services.PermissionsForPreset(req.PermissionPreset)
 	}
+	agentType := domain.AgentType(req.Type)
+	if err := s.validateAgentRuntime(r.Context(), agentType); err != nil {
+		s.apiError(w, err)
+		return
+	}
 	agent, err := s.agents.CreateFull(r.Context(), services.CreateAgentInput{
 		ProjectID:       req.ProjectID,
 		Name:            req.Name,
 		Title:           req.Title,
 		ReportsToID:     req.ReportsToID,
 		Tags:            req.Tags,
-		Type:            domain.AgentType(req.Type),
+		Type:            agentType,
 		Description:     req.Description,
 		SystemPrompt:    req.SystemPrompt,
 		InstructionFile: req.InstructionFile,
