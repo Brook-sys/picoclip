@@ -2,6 +2,7 @@ package services
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -100,15 +101,16 @@ func (r *Runner) Run(ctx context.Context, task domain.Task) {
 		conversation = append(conversation, "Agent custom system prompt:\n"+agent.SystemPrompt)
 	}
 
-	conversation = append(conversation, "PicoClip agent APIs: GET /agent-api/docs, GET /agent-api/me, GET /agent-api/tasks?status=todo,in_progress,in_review,blocked, GET /agent-api/tasks/{id}, POST /agent-api/tasks/{id}/checkout, POST /agent-api/tasks/{id}/comments, PATCH /agent-api/tasks/{id}, POST /agent-api/tasks/{id}/release, POST /agent-api/tasks/{id}/delegate. Always checkout before work, always leave a comment, and only mark a task done by PATCHing status=done with a clear comment.")
+	conversation = append(conversation, r.taskProtocolContext(ctx, task, run, messages))
 	for _, skill := range skills {
 		conversation = append(conversation, r.skillContext(skill))
 	}
 	conversation = append(conversation, "User task: "+task.Prompt)
-	for _, message := range messages {
-		conversation = append(conversation, fmt.Sprintf("%s: %s", message.Role, message.Body))
-	}
 	task.Prompt = strings.Join(conversation, "\n\n")
+	run.Input = task.Prompt
+	run.InputTokens = estimateTokens(run.Input)
+	run.TotalTokens = run.InputTokens
+	_ = r.storage.Runs().Update(ctx, run)
 
 	r.logger.Debug("runner.run_started", "task_id", task.ID, "agent_id", agent.ID, "run_id", run.ID, "runtime", agent.Type)
 	_ = r.bus.Publish(ctx, domain.Event{ID: r.idGen.NewID("evt"), Type: domain.EventRunStarted, TaskID: task.ID, AgentID: agent.ID, RunID: run.ID, Message: "Run started", CreatedAt: r.clock.Now()})
@@ -144,16 +146,22 @@ func (r *Runner) Run(ctx context.Context, task domain.Task) {
 			run.Status = domain.RunStatusTimeout
 		}
 		run.Error = err.Error()
+		run.OutputTokens = estimateTokens(run.Error)
+		run.TotalTokens = run.InputTokens + run.OutputTokens
 		r.logger.Warn("runner.run_failed", "task_id", task.ID, "run_id", run.ID, "runtime", agent.Type, "err", err)
 		_ = r.storage.Runs().Update(ctx, run)
 		r.failTask(ctx, task, fmt.Sprintf("%v", err))
+		r.recordTokenUsage(ctx, run)
 		return
 	}
 
 	r.logger.Debug("runner.run_completed", "task_id", task.ID, "run_id", run.ID, "runtime", agent.Type)
 	run.Status = domain.RunStatusSucceeded
 	run.Output = result.Output
+	run.OutputTokens = estimateTokens(run.Output)
+	run.TotalTokens = run.InputTokens + run.OutputTokens
 	_ = r.storage.Runs().Update(ctx, run)
+	r.recordTokenUsage(ctx, run)
 	_ = r.memory.SaveRun(ctx, task, run)
 	if strings.TrimSpace(result.Output) != "" {
 		_ = r.storage.Messages().Create(ctx, domain.Message{ID: r.idGen.NewID("msg"), TaskID: task.ID, FromID: agent.ID, Role: domain.MessageRoleAgent, Body: result.Output, CreatedAt: finishedAt})
@@ -259,4 +267,80 @@ func joinPermissions(permissions []domain.AgentPermission) string {
 		values = append(values, string(permission))
 	}
 	return strings.Join(values, ", ")
+}
+
+func DefaultTaskProtocolPrompt() string {
+	return strings.Join([]string{
+		"PicoClip Task Protocol:",
+		"1. You are running one task heartbeat.",
+		"2. Before work: checkout the task using POST /agent-api/tasks/{id}/checkout if not already in_progress.",
+		"3. During work: leave comments via POST /agent-api/tasks/{id}/comments for meaningful progress.",
+		"4. If complete: PATCH /agent-api/tasks/{id} with status=done and a clear comment.",
+		"5. If blocked: PATCH /agent-api/tasks/{id} with status=blocked, explaining the blocker and owner.",
+		"6. If work should be delegated: POST /agent-api/tasks/{id}/delegate with child task title and acceptance criteria.",
+		"7. Do not stay silent. Every run must leave a final comment or status update.",
+	}, "\n")
+}
+
+func estimateTokens(text string) int {
+	return len(strings.Fields(text)) * 4 / 3
+}
+
+func (r *Runner) recordTokenUsage(ctx context.Context, run domain.Run) {
+	task, err := r.storage.Tasks().Get(ctx, run.TaskID)
+	if err == nil {
+		task.InputTokens += run.InputTokens
+		task.OutputTokens += run.OutputTokens
+		task.TotalTokens += run.TotalTokens
+		_ = r.storage.Tasks().Update(ctx, task)
+	}
+
+	agent, err := r.storage.Agents().Get(ctx, run.AgentID)
+	if err == nil {
+		agent.InputTokens += run.InputTokens
+		agent.OutputTokens += run.OutputTokens
+		agent.TotalTokens += run.TotalTokens
+		_ = r.storage.Agents().Update(ctx, agent)
+	}
+}
+
+func (r *Runner) taskProtocolPrompt(ctx context.Context) string {
+	raw, err := r.storage.Settings().Get(ctx, "general")
+	if err == nil && raw != "" {
+		var general struct {
+			DefaultTaskProtocol string `json:"DefaultTaskProtocol"`
+		}
+		if jsonErr := json.Unmarshal([]byte(raw), &general); jsonErr == nil && strings.TrimSpace(general.DefaultTaskProtocol) != "" {
+			return general.DefaultTaskProtocol
+		}
+	}
+	return DefaultTaskProtocolPrompt()
+}
+
+func (r *Runner) taskProtocolContext(ctx context.Context, task domain.Task, run domain.Run, messages []domain.Message) string {
+	var sb strings.Builder
+	sb.WriteString(r.taskProtocolPrompt(ctx))
+	sb.WriteString("\n\nCompact Task Context:\n")
+	sb.WriteString(fmt.Sprintf("- Task ID: %s\n", task.ID))
+	sb.WriteString(fmt.Sprintf("- Title: %s\n", task.Title))
+	sb.WriteString(fmt.Sprintf("- Status: %s\n", string(task.Status)))
+	sb.WriteString(fmt.Sprintf("- Run ID: %s\n", run.ID))
+	if task.ParentID != "" {
+		sb.WriteString(fmt.Sprintf("- Parent Task ID: %s\n", task.ParentID))
+	}
+
+	sb.WriteString("\nRecent Comments:\n")
+	if len(messages) == 0 {
+		sb.WriteString("(no comments)\n")
+	} else {
+		start := len(messages) - 8
+		if start < 0 {
+			start = 0
+		}
+		for _, m := range messages[start:] {
+			sb.WriteString(fmt.Sprintf("[%s] %s: %s\n", m.CreatedAt.Format("15:04"), m.Role, m.Body))
+		}
+	}
+
+	return sb.String()
 }

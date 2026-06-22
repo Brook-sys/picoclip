@@ -68,6 +68,9 @@ type Agent struct {
 	Config          map[string]string `json:"config,omitempty"`
 	Env             map[string]string `json:"env,omitempty"`
 	ExtraArgs       []string          `json:"extra_args,omitempty"`
+	InputTokens     int               `json:"input_tokens"`
+	OutputTokens    int               `json:"output_tokens"`
+	TotalTokens     int               `json:"total_tokens"`
 	CreatedAt       time.Time         `json:"created_at"`
 	UpdatedAt       time.Time         `json:"updated_at"`
 }

@@ -45,7 +45,7 @@ func (s *Storage) RestoreAllData(ctx context.Context, data ports.BackupData) err
 		config, _ := json.Marshal(x.Config)
 		env, _ := json.Marshal(x.Env)
 		extraArgs, _ := json.Marshal(x.ExtraArgs)
-		if _, err := tx.ExecContext(ctx, `INSERT INTO agents (id, project_id, name, title, reports_to_id, tags, type, description, system_prompt, instruction_file, enabled, capability, permissions, skill_ids, config, env, extra_args, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, x.ID, x.ProjectID, x.Name, x.Title, x.ReportsToID, string(tags), string(x.Type), x.Description, x.SystemPrompt, x.InstructionFile, x.Enabled, string(x.Capability), string(permissions), string(skillIDs), string(config), string(env), string(extraArgs), x.CreatedAt, x.UpdatedAt); err != nil {
+		if _, err := tx.ExecContext(ctx, `INSERT INTO agents (id, project_id, name, title, reports_to_id, tags, type, description, system_prompt, instruction_file, enabled, capability, permissions, skill_ids, config, env, extra_args, input_tokens, output_tokens, total_tokens, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, x.ID, x.ProjectID, x.Name, x.Title, x.ReportsToID, string(tags), string(x.Type), x.Description, x.SystemPrompt, x.InstructionFile, x.Enabled, string(x.Capability), string(permissions), string(skillIDs), string(config), string(env), string(extraArgs), x.InputTokens, x.OutputTokens, x.TotalTokens, x.CreatedAt, x.UpdatedAt); err != nil {
 			return err
 		}
 	}
@@ -61,12 +61,12 @@ func (s *Storage) RestoreAllData(ctx context.Context, data ports.BackupData) err
 		}
 	}
 	for _, x := range data.Tasks {
-		if _, err := tx.ExecContext(ctx, `INSERT INTO tasks (id, parent_id, workspace_id, agent_id, title, prompt, status, priority, attempts, max_attempts, needs_run, checkout_run_id, checked_out_by_agent_id, cancel_reason, created_at, updated_at, started_at, finished_at, completed_at, cancelled_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, x.ID, x.ParentID, x.WorkspaceID, x.AgentID, x.Title, x.Prompt, string(x.Status), x.Priority, x.Attempts, x.MaxAttempts, x.NeedsRun, x.CheckoutRunID, x.CheckedOutByAgentID, x.CancelReason, x.CreatedAt, x.UpdatedAt, x.StartedAt, x.FinishedAt, x.CompletedAt, x.CancelledAt); err != nil {
+		if _, err := tx.ExecContext(ctx, `INSERT INTO tasks (id, parent_id, workspace_id, agent_id, title, prompt, status, priority, attempts, max_attempts, needs_run, checkout_run_id, checked_out_by_agent_id, cancel_reason, input_tokens, output_tokens, total_tokens, created_at, updated_at, started_at, finished_at, completed_at, cancelled_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, x.ID, x.ParentID, x.WorkspaceID, x.AgentID, x.Title, x.Prompt, string(x.Status), x.Priority, x.Attempts, x.MaxAttempts, x.NeedsRun, x.CheckoutRunID, x.CheckedOutByAgentID, x.CancelReason, x.InputTokens, x.OutputTokens, x.TotalTokens, x.CreatedAt, x.UpdatedAt, x.StartedAt, x.FinishedAt, x.CompletedAt, x.CancelledAt); err != nil {
 			return err
 		}
 	}
 	for _, x := range data.Runs {
-		if _, err := tx.ExecContext(ctx, `INSERT INTO runs (id, task_id, agent_id, driver_type, status, attempt, input, output, error, started_at, finished_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, x.ID, x.TaskID, x.AgentID, x.DriverType, string(x.Status), x.Attempt, x.Input, x.Output, x.Error, x.StartedAt, x.FinishedAt); err != nil {
+		if _, err := tx.ExecContext(ctx, `INSERT INTO runs (id, task_id, agent_id, driver_type, status, attempt, input, output, error, input_tokens, output_tokens, total_tokens, started_at, finished_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, x.ID, x.TaskID, x.AgentID, x.DriverType, string(x.Status), x.Attempt, x.Input, x.Output, x.Error, x.InputTokens, x.OutputTokens, x.TotalTokens, x.StartedAt, x.FinishedAt); err != nil {
 			return err
 		}
 	}

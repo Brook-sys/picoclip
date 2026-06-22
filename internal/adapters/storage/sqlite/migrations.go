@@ -277,5 +277,20 @@ func migrations() []migration {
 				CREATE INDEX IF NOT EXISTS idx_runtime_states_runtime_id ON runtime_states(runtime_id);
 			`,
 		},
+		{
+			version: 4,
+			name:    "add_token_tracking_columns",
+			sql: `
+				ALTER TABLE agents ADD COLUMN input_tokens INTEGER NOT NULL DEFAULT 0;
+				ALTER TABLE agents ADD COLUMN output_tokens INTEGER NOT NULL DEFAULT 0;
+				ALTER TABLE agents ADD COLUMN total_tokens INTEGER NOT NULL DEFAULT 0;
+				ALTER TABLE tasks ADD COLUMN input_tokens INTEGER NOT NULL DEFAULT 0;
+				ALTER TABLE tasks ADD COLUMN output_tokens INTEGER NOT NULL DEFAULT 0;
+				ALTER TABLE tasks ADD COLUMN total_tokens INTEGER NOT NULL DEFAULT 0;
+				ALTER TABLE runs ADD COLUMN input_tokens INTEGER NOT NULL DEFAULT 0;
+				ALTER TABLE runs ADD COLUMN output_tokens INTEGER NOT NULL DEFAULT 0;
+				ALTER TABLE runs ADD COLUMN total_tokens INTEGER NOT NULL DEFAULT 0;
+			`,
+		},
 	}
 }

@@ -29,6 +29,9 @@ type Task struct {
 	CheckoutRunID       string     `json:"checkout_run_id,omitempty"`
 	CheckedOutByAgentID string     `json:"checked_out_by_agent_id,omitempty"`
 	CancelReason        string     `json:"cancel_reason,omitempty"`
+	InputTokens         int        `json:"input_tokens"`
+	OutputTokens        int        `json:"output_tokens"`
+	TotalTokens         int        `json:"total_tokens"`
 	CreatedAt           time.Time  `json:"created_at"`
 	UpdatedAt           time.Time  `json:"updated_at"`
 	StartedAt           *time.Time `json:"started_at,omitempty"`

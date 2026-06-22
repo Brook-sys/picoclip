@@ -18,14 +18,14 @@ func (r *TaskRepository) Create(ctx context.Context, task domain.Task) error {
 		INSERT INTO tasks (
 			id, parent_id, workspace_id, agent_id, title, prompt, status, priority,
 			attempts, max_attempts, needs_run, checkout_run_id, checked_out_by_agent_id,
-			cancel_reason, created_at, updated_at, started_at, finished_at, completed_at, cancelled_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			cancel_reason, input_tokens, output_tokens, total_tokens, created_at, updated_at, started_at, finished_at, completed_at, cancelled_at
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`
 
 	_, err := r.db.ExecContext(ctx, query,
 		task.ID, task.ParentID, task.WorkspaceID, task.AgentID, task.Title, task.Prompt, string(task.Status), task.Priority,
 		task.Attempts, task.MaxAttempts, task.NeedsRun, task.CheckoutRunID, task.CheckedOutByAgentID,
-		task.CancelReason, task.CreatedAt, task.UpdatedAt, task.StartedAt, task.FinishedAt, task.CompletedAt, task.CancelledAt,
+		task.CancelReason, task.InputTokens, task.OutputTokens, task.TotalTokens, task.CreatedAt, task.UpdatedAt, task.StartedAt, task.FinishedAt, task.CompletedAt, task.CancelledAt,
 	)
 	return err
 }
@@ -34,7 +34,7 @@ func (r *TaskRepository) Get(ctx context.Context, id string) (domain.Task, error
 	query := `
 		SELECT id, parent_id, workspace_id, agent_id, title, prompt, status, priority,
 			attempts, max_attempts, needs_run, checkout_run_id, checked_out_by_agent_id,
-			cancel_reason, created_at, updated_at, started_at, finished_at, completed_at, cancelled_at
+			cancel_reason, input_tokens, output_tokens, total_tokens, created_at, updated_at, started_at, finished_at, completed_at, cancelled_at
 		FROM tasks WHERE id = ?
 	`
 	row := r.db.QueryRowContext(ctx, query, id)
@@ -45,7 +45,7 @@ func (r *TaskRepository) List(ctx context.Context, filter ports.TaskFilter) ([]d
 	query := `
 		SELECT id, parent_id, workspace_id, agent_id, title, prompt, status, priority,
 			attempts, max_attempts, needs_run, checkout_run_id, checked_out_by_agent_id,
-			cancel_reason, created_at, updated_at, started_at, finished_at, completed_at, cancelled_at
+			cancel_reason, input_tokens, output_tokens, total_tokens, created_at, updated_at, started_at, finished_at, completed_at, cancelled_at
 		FROM tasks
 		WHERE 1=1
 	`
@@ -106,14 +106,14 @@ func (r *TaskRepository) Update(ctx context.Context, task domain.Task) error {
 		UPDATE tasks SET
 			parent_id = ?, workspace_id = ?, agent_id = ?, title = ?, prompt = ?, status = ?, priority = ?,
 			attempts = ?, max_attempts = ?, needs_run = ?, checkout_run_id = ?, checked_out_by_agent_id = ?,
-			cancel_reason = ?, updated_at = ?, started_at = ?, finished_at = ?, completed_at = ?, cancelled_at = ?
+			cancel_reason = ?, input_tokens = ?, output_tokens = ?, total_tokens = ?, updated_at = ?, started_at = ?, finished_at = ?, completed_at = ?, cancelled_at = ?
 		WHERE id = ?
 	`
 
 	res, err := r.db.ExecContext(ctx, query,
 		task.ParentID, task.WorkspaceID, task.AgentID, task.Title, task.Prompt, string(task.Status), task.Priority,
 		task.Attempts, task.MaxAttempts, task.NeedsRun, task.CheckoutRunID, task.CheckedOutByAgentID,
-		task.CancelReason, task.UpdatedAt, task.StartedAt, task.FinishedAt, task.CompletedAt, task.CancelledAt,
+		task.CancelReason, task.InputTokens, task.OutputTokens, task.TotalTokens, task.UpdatedAt, task.StartedAt, task.FinishedAt, task.CompletedAt, task.CancelledAt,
 		task.ID,
 	)
 	if err != nil {
@@ -142,7 +142,7 @@ func (r *TaskRepository) ClaimNextPending(ctx context.Context) (domain.Task, err
 	query := `
 		SELECT id, parent_id, workspace_id, agent_id, title, prompt, status, priority,
 			attempts, max_attempts, needs_run, checkout_run_id, checked_out_by_agent_id,
-			cancel_reason, created_at, updated_at, started_at, finished_at, completed_at, cancelled_at
+			cancel_reason, input_tokens, output_tokens, total_tokens, created_at, updated_at, started_at, finished_at, completed_at, cancelled_at
 		FROM tasks 
 		WHERE needs_run = 1 AND status != 'done' AND status != 'cancelled'
 		ORDER BY created_at ASC LIMIT 1
@@ -176,7 +176,7 @@ func scanTask(row scanner) (domain.Task, error) {
 	err := row.Scan(
 		&t.ID, &t.ParentID, &t.WorkspaceID, &t.AgentID, &t.Title, &t.Prompt, &statusStr, &t.Priority,
 		&t.Attempts, &t.MaxAttempts, &t.NeedsRun, &t.CheckoutRunID, &t.CheckedOutByAgentID,
-		&t.CancelReason, &t.CreatedAt, &t.UpdatedAt, &t.StartedAt, &t.FinishedAt, &t.CompletedAt, &t.CancelledAt,
+		&t.CancelReason, &t.InputTokens, &t.OutputTokens, &t.TotalTokens, &t.CreatedAt, &t.UpdatedAt, &t.StartedAt, &t.FinishedAt, &t.CompletedAt, &t.CancelledAt,
 	)
 	if errors.Is(err, sql.ErrNoRows) {
 		return domain.Task{}, domain.ErrNotFound

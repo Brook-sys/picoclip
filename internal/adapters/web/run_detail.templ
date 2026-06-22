@@ -64,6 +64,7 @@ templ RunProperties(run domain.Run, task taskResponse, agent domain.Agent) {
 			@PropertyItem("Runtime", run.DriverType)
 			@PropertyItem("Status", string(run.Status))
 			@PropertyItem("Attempt", fmt.Sprintf("%d", run.Attempt))
+			@PropertyItem("Tokens", tokenUsageText(run.InputTokens, run.OutputTokens, run.TotalTokens))
 			@PropertyItem("Started", run.StartedAt.Format("2006-01-02 15:04:05"))
 			if run.FinishedAt != nil {
 				@PropertyItem("Finished", run.FinishedAt.Format("2006-01-02 15:04:05"))

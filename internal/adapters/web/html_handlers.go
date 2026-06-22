@@ -179,6 +179,9 @@ func (s *Server) loadSettingsView(r *http.Request) (SettingsView, error) {
 	}
 	if val, ok := raw["general"]; ok {
 		view.General = decodeSettingsValue(val, view.General)
+		if strings.TrimSpace(view.General.DefaultTaskProtocol) == "" {
+			view.General.DefaultTaskProtocol = services.DefaultTaskProtocolPrompt()
+		}
 	}
 	if val, ok := raw["adapters"]; ok {
 		view.Adapters = decodeSettingsValue(val, view.Adapters)
@@ -225,6 +228,10 @@ func (s *Server) handleWebPostSettingsGeneral(w http.ResponseWriter, r *http.Req
 	view.General.Density = r.FormValue("density")
 	view.General.LogLevel = r.FormValue("log_level")
 	view.General.MaxTaskRetries = r.FormValue("max_task_retries")
+	view.General.DefaultTaskProtocol = r.FormValue("default_task_protocol")
+	if strings.TrimSpace(view.General.DefaultTaskProtocol) == "" {
+		view.General.DefaultTaskProtocol = services.DefaultTaskProtocolPrompt()
+	}
 
 	s.storage.Settings().Set(r.Context(), "general", encodeSettingsValue(view.General))
 	s.handleWebSettings(w, r)

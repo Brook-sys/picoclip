@@ -25,14 +25,14 @@ func (r *AgentRepository) Create(ctx context.Context, agent domain.Agent) error 
 		INSERT INTO agents (
 			id, project_id, name, title, reports_to_id, tags, type, description,
 			system_prompt, instruction_file, enabled, capability, permissions,
-			skill_ids, config, env, extra_args, created_at, updated_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			skill_ids, config, env, extra_args, input_tokens, output_tokens, total_tokens, created_at, updated_at
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`
 
 	_, err := r.db.ExecContext(ctx, query,
 		agent.ID, agent.ProjectID, agent.Name, agent.Title, agent.ReportsToID, string(tagsJSON), string(agent.Type), agent.Description,
 		agent.SystemPrompt, agent.InstructionFile, agent.Enabled, string(agent.Capability), string(permissionsJSON),
-		string(skillIDsJSON), string(configJSON), string(envJSON), string(extraArgsJSON), agent.CreatedAt, agent.UpdatedAt,
+		string(skillIDsJSON), string(configJSON), string(envJSON), string(extraArgsJSON), agent.InputTokens, agent.OutputTokens, agent.TotalTokens, agent.CreatedAt, agent.UpdatedAt,
 	)
 	return err
 }
@@ -41,7 +41,7 @@ func (r *AgentRepository) Get(ctx context.Context, id string) (domain.Agent, err
 	query := `
 		SELECT id, project_id, name, title, reports_to_id, tags, type, description,
 			system_prompt, instruction_file, enabled, capability, permissions,
-			skill_ids, config, env, extra_args, created_at, updated_at
+			skill_ids, config, env, extra_args, input_tokens, output_tokens, total_tokens, created_at, updated_at
 		FROM agents WHERE id = ?
 	`
 
@@ -53,7 +53,7 @@ func (r *AgentRepository) List(ctx context.Context) ([]domain.Agent, error) {
 	query := `
 		SELECT id, project_id, name, title, reports_to_id, tags, type, description,
 			system_prompt, instruction_file, enabled, capability, permissions,
-			skill_ids, config, env, extra_args, created_at, updated_at
+			skill_ids, config, env, extra_args, input_tokens, output_tokens, total_tokens, created_at, updated_at
 		FROM agents ORDER BY created_at ASC
 	`
 
@@ -89,14 +89,14 @@ func (r *AgentRepository) Update(ctx context.Context, agent domain.Agent) error 
 		UPDATE agents SET
 			project_id = ?, name = ?, title = ?, reports_to_id = ?, tags = ?, type = ?, description = ?,
 			system_prompt = ?, instruction_file = ?, enabled = ?, capability = ?, permissions = ?,
-			skill_ids = ?, config = ?, env = ?, extra_args = ?, updated_at = ?
+			skill_ids = ?, config = ?, env = ?, extra_args = ?, input_tokens = ?, output_tokens = ?, total_tokens = ?, updated_at = ?
 		WHERE id = ?
 	`
 
 	res, err := r.db.ExecContext(ctx, query,
 		agent.ProjectID, agent.Name, agent.Title, agent.ReportsToID, string(tagsJSON), string(agent.Type), agent.Description,
 		agent.SystemPrompt, agent.InstructionFile, agent.Enabled, string(agent.Capability), string(permissionsJSON),
-		string(skillIDsJSON), string(configJSON), string(envJSON), string(extraArgsJSON), agent.UpdatedAt, agent.ID,
+		string(skillIDsJSON), string(configJSON), string(envJSON), string(extraArgsJSON), agent.InputTokens, agent.OutputTokens, agent.TotalTokens, agent.UpdatedAt, agent.ID,
 	)
 	if err != nil {
 		return err
@@ -139,7 +139,7 @@ func scanAgent(row scanner) (domain.Agent, error) {
 	err := row.Scan(
 		&a.ID, &a.ProjectID, &a.Name, &a.Title, &a.ReportsToID, &tagsJSON, &typeStr, &a.Description,
 		&a.SystemPrompt, &a.InstructionFile, &a.Enabled, &capabilityStr, &permissionsJSON,
-		&skillIDsJSON, &configJSON, &envJSON, &extraArgsJSON, &a.CreatedAt, &a.UpdatedAt,
+		&skillIDsJSON, &configJSON, &envJSON, &extraArgsJSON, &a.InputTokens, &a.OutputTokens, &a.TotalTokens, &a.CreatedAt, &a.UpdatedAt,
 	)
 
 	if errors.Is(err, sql.ErrNoRows) {

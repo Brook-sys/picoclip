@@ -434,6 +434,9 @@ type taskResponse struct {
 	Response      string            `json:"response"`
 	CancelReason  string            `json:"cancel_reason,omitempty"`
 	CheckoutRunID string            `json:"checkout_run_id,omitempty"`
+	InputTokens   int               `json:"input_tokens"`
+	OutputTokens  int               `json:"output_tokens"`
+	TotalTokens   int               `json:"total_tokens"`
 	CreatedAt     string            `json:"created_at"`
 	UpdatedAt     string            `json:"updated_at"`
 }
@@ -460,6 +463,9 @@ func (s *Server) taskResponse(r *http.Request, task domain.Task) taskResponse {
 		Status:        task.Status,
 		CancelReason:  task.CancelReason,
 		CheckoutRunID: task.CheckoutRunID,
+		InputTokens:   task.InputTokens,
+		OutputTokens:  task.OutputTokens,
+		TotalTokens:   task.TotalTokens,
 		CreatedAt:     task.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
 		UpdatedAt:     task.UpdatedAt.Format("2006-01-02T15:04:05Z07:00"),
 	}

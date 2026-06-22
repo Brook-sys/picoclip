@@ -16,12 +16,12 @@ func (r *RunRepository) Create(ctx context.Context, run domain.Run) error {
 	query := `
 		INSERT INTO runs (
 			id, task_id, agent_id, driver_type, status, attempt,
-			input, output, error, started_at, finished_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			input, output, error, input_tokens, output_tokens, total_tokens, started_at, finished_at
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`
 	_, err := r.db.ExecContext(ctx, query,
 		run.ID, run.TaskID, run.AgentID, string(run.DriverType), string(run.Status), run.Attempt,
-		run.Input, run.Output, run.Error, run.StartedAt, run.FinishedAt,
+		run.Input, run.Output, run.Error, run.InputTokens, run.OutputTokens, run.TotalTokens, run.StartedAt, run.FinishedAt,
 	)
 	return err
 }
@@ -29,7 +29,7 @@ func (r *RunRepository) Create(ctx context.Context, run domain.Run) error {
 func (r *RunRepository) Get(ctx context.Context, id string) (domain.Run, error) {
 	query := `
 		SELECT id, task_id, agent_id, driver_type, status, attempt,
-			input, output, error, started_at, finished_at
+			input, output, error, input_tokens, output_tokens, total_tokens, started_at, finished_at
 		FROM runs WHERE id = ?
 	`
 	row := r.db.QueryRowContext(ctx, query, id)
@@ -39,7 +39,7 @@ func (r *RunRepository) Get(ctx context.Context, id string) (domain.Run, error) 
 func (r *RunRepository) ListByTask(ctx context.Context, taskID string) ([]domain.Run, error) {
 	query := `
 		SELECT id, task_id, agent_id, driver_type, status, attempt,
-			input, output, error, started_at, finished_at
+			input, output, error, input_tokens, output_tokens, total_tokens, started_at, finished_at
 		FROM runs WHERE task_id = ? ORDER BY started_at ASC
 	`
 	rows, err := r.db.QueryContext(ctx, query, taskID)
@@ -66,12 +66,12 @@ func (r *RunRepository) Update(ctx context.Context, run domain.Run) error {
 	query := `
 		UPDATE runs SET
 			task_id = ?, agent_id = ?, driver_type = ?, status = ?, attempt = ?,
-			input = ?, output = ?, error = ?, started_at = ?, finished_at = ?
+			input = ?, output = ?, error = ?, input_tokens = ?, output_tokens = ?, total_tokens = ?, started_at = ?, finished_at = ?
 		WHERE id = ?
 	`
 	res, err := r.db.ExecContext(ctx, query,
 		run.TaskID, run.AgentID, string(run.DriverType), string(run.Status), run.Attempt,
-		run.Input, run.Output, run.Error, run.StartedAt, run.FinishedAt,
+		run.Input, run.Output, run.Error, run.InputTokens, run.OutputTokens, run.TotalTokens, run.StartedAt, run.FinishedAt,
 		run.ID,
 	)
 	if err != nil {
@@ -93,7 +93,7 @@ func scanRun(row scanner) (domain.Run, error) {
 
 	err := row.Scan(
 		&r.ID, &r.TaskID, &r.AgentID, &driverStr, &statusStr, &r.Attempt,
-		&r.Input, &r.Output, &r.Error, &r.StartedAt, &r.FinishedAt,
+		&r.Input, &r.Output, &r.Error, &r.InputTokens, &r.OutputTokens, &r.TotalTokens, &r.StartedAt, &r.FinishedAt,
 	)
 	if errors.Is(err, sql.ErrNoRows) {
 		return domain.Run{}, domain.ErrNotFound

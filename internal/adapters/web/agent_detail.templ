@@ -72,6 +72,15 @@ templ AgentDetailPage(agent domain.Agent, agents []domain.Agent, tasks []taskRes
 								<div class="agent-tag-list">@TagChips(agentDisplayTags(agent, projects))</div>
 							</span>
 						</div>
+						if agent.TotalTokens > 0 {
+							<div class="agent-overview-tile agent-overview-wide">
+								<span class="agent-overview-icon">@Icon("hash", 16)</span>
+								<span class="agent-overview-content">
+									<small>Token Efficiency</small>
+									<strong>{ tokenUsageText(agent.InputTokens, agent.OutputTokens, agent.TotalTokens) }</strong>
+								</span>
+							</div>
+						}
 					</div>
 				</div>
 				<div id="tasks" class="card">

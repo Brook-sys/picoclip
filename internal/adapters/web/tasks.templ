@@ -203,3 +203,7 @@ func taskExcerpt(prompt string) string {
 	}
 	return prompt
 }
+
+func tokenUsageText(input int, output int, total int) string {
+	return fmt.Sprintf("%d in / %d out / %d total", input, output, total)
+}
