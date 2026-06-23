@@ -9,32 +9,67 @@ permissions:
   contents: write
 
 jobs:
-  goreleaser:
-    name: GoReleaser
+  build:
+    name: Build ${{ matrix.goos }} ${{ matrix.goarch }}
     runs-on: ubuntu-latest
-
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - goos: linux
+            goarch: amd64
+          - goos: linux
+            goarch: arm64
+          - goos: darwin
+            goarch: amd64
+          - goos: darwin
+            goarch: arm64
+          - goos: windows
+            goarch: amd64
+            ext: .exe
+          - goos: windows
+            goarch: arm64
+            ext: .exe
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
-      - name: Setup Go
+      - name: Set up Go
         uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
-          cache: true
 
-      - name: Install Templ and generate code
-        run: |
-          make tools
-          make templ-generate
+      - name: Install templ
+        run: go install github.com/a-h/templ/cmd/templ@v0.3.1020
 
-      - name: Run GoReleaser
-        uses: goreleaser/goreleaser-action@v6
-        with:
-          distribution: goreleaser
-          version: latest
-          args: release --clean
+      - name: Generate templates
+        run: templ generate
+
+      - name: Build binary
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CGO_ENABLED: "0"
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+        run: |
+          mkdir -p dist
+          binary="picoclip-${{ github.ref_name }}-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }}"
+          go build -trimpath -ldflags="-s -w" -o "dist/${binary}" cmd/picoclip/main.go
+
+      - name: Package artifact
+        run: |
+          cd dist
+          for file in *; do
+            if [ "${file##*.}" = "exe" ]; then
+              zip "${file%.exe}.zip" "$file"
+              rm "$file"
+            else
+              tar -czf "${file}.tar.gz" "$file"
+              rm "$file"
+            fi
+          done
+
+      - name: Upload release assets
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
+          generate_release_notes: true
