@@ -45,6 +45,94 @@ Ele já inclui uma UI web funcional, gerenciamento de ciclo de vida de tasks, ag
 
 Mesmo assim, ainda é cedo. Alguns comportamentos continuam sendo refinados, e partes do sistema podem mudar bastante com o tempo.
 
+## Como iniciar rapidamente
+
+PicoClip é distribuído como um binário único. Ele não exige banco de dados externo nem serviços pesados em tempo de execução.
+
+### Opção 1: Rodar um binário pronto
+
+Baixe o binário mais recente na página de [GitHub Releases](https://github.com/Brook-sys/picoclip/releases), escolhendo o arquivo correto para sua plataforma.
+
+Exemplo para Linux x64:
+
+```sh
+tar -xzf picoclip-v0.0.1-linux-amd64.tar.gz
+chmod +x picoclip-v0.0.1-linux-amd64
+./picoclip-v0.0.1-linux-amd64
+```
+
+Exemplo para macOS Apple Silicon:
+
+```sh
+tar -xzf picoclip-v0.0.1-darwin-arm64.tar.gz
+chmod +x picoclip-v0.0.1-darwin-arm64
+./picoclip-v0.0.1-darwin-arm64
+```
+
+Exemplo para Windows:
+
+```powershell
+Expand-Archive picoclip-v0.0.1-windows-amd64.zip
+.\picoclip-v0.0.1-windows-amd64\picoclip-v0.0.1-windows-amd64.exe
+```
+
+Depois abra:
+
+```text
+http://127.0.0.1:8080
+```
+
+Por padrão, o PicoClip escuta em `0.0.0.0:8080`. Você pode mudar isso com:
+
+```sh
+BIND=127.0.0.1 PORT=9090 ./picoclip-v0.0.1-linux-amd64
+```
+
+### Opção 2: Rodar pelo código fonte
+
+Requisitos:
+
+- Go
+- Git
+
+```sh
+git clone https://github.com/Brook-sys/picoclip.git
+cd picoclip
+make tools
+make run
+```
+
+Depois abra:
+
+```text
+http://127.0.0.1:8080
+```
+
+Dados de demonstração opcionais:
+
+```sh
+make seed
+```
+
+Modo de desenvolvimento com live reload:
+
+```sh
+make dev
+```
+
+Build local:
+
+```sh
+make build
+./picoclip
+```
+
+Validar tudo:
+
+```sh
+make check
+```
+
 ## Roadmap
 
 Existe um roadmap ativo, e mais recursos serão adicionados gradualmente conforme o projeto amadurece.

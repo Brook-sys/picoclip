@@ -45,6 +45,94 @@ It already includes a working web UI, task lifecycle management, agents, skills,
 
 That said, it is still early. Some behaviors are still being refined, and parts of the system may change significantly over time.
 
+## Quick start
+
+PicoClip is distributed as a single binary. It does not require an external database or heavy runtime services.
+
+### Option 1: Run a prebuilt binary
+
+Download the latest binary from the [GitHub Releases](https://github.com/Brook-sys/picoclip/releases) page for your platform.
+
+Linux x64 example:
+
+```sh
+tar -xzf picoclip-v0.0.1-linux-amd64.tar.gz
+chmod +x picoclip-v0.0.1-linux-amd64
+./picoclip-v0.0.1-linux-amd64
+```
+
+macOS Apple Silicon example:
+
+```sh
+tar -xzf picoclip-v0.0.1-darwin-arm64.tar.gz
+chmod +x picoclip-v0.0.1-darwin-arm64
+./picoclip-v0.0.1-darwin-arm64
+```
+
+Windows example:
+
+```powershell
+Expand-Archive picoclip-v0.0.1-windows-amd64.zip
+.\picoclip-v0.0.1-windows-amd64\picoclip-v0.0.1-windows-amd64.exe
+```
+
+Then open:
+
+```text
+http://127.0.0.1:8080
+```
+
+By default PicoClip listens on `0.0.0.0:8080`. You can change it with:
+
+```sh
+BIND=127.0.0.1 PORT=9090 ./picoclip-v0.0.1-linux-amd64
+```
+
+### Option 2: Run from source
+
+Requirements:
+
+- Go
+- Git
+
+```sh
+git clone https://github.com/Brook-sys/picoclip.git
+cd picoclip
+make tools
+make run
+```
+
+Then open:
+
+```text
+http://127.0.0.1:8080
+```
+
+Optional demo data:
+
+```sh
+make seed
+```
+
+Development mode with live reload:
+
+```sh
+make dev
+```
+
+Build locally:
+
+```sh
+make build
+./picoclip
+```
+
+Validate everything:
+
+```sh
+make check
+```
+
 ## Roadmap
 
 There is an active roadmap, and more features will be added gradually as the project matures.
