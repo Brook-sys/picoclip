@@ -6,7 +6,7 @@ import (
 )
 
 var ansiEscapeRE = regexp.MustCompile(`\x1b\[[0-9;?]*[ -/]*[@-~]`)
-var versionLineRE = regexp.MustCompile(`(?i)(picoclaw|crush)[^\n\r]*?(v?\d+\.\d+\.\d+)`)
+var versionLineRE = regexp.MustCompile(`(?i)(picoclaw|crush|claurst)[^\n\r]*?(v?\d+\.\d+\.\d+)`)
 var semverRE = regexp.MustCompile(`v?\d+\.\d+\.\d+[^\s\n\r]*`)
 
 func sanitizeTerminalOutput(raw string) string {

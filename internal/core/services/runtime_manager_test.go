@@ -202,3 +202,16 @@ func TestRuntimeManagerTestAllConfiguredWithoutRuntimes(t *testing.T) {
 	manager := NewRuntimeManager(storage, t.TempDir(), SystemClock{})
 	manager.TestAllConfigured(context.Background(), NoopLogger{})
 }
+
+func TestRuntimeManagerCatalogIncludesClaurst(t *testing.T) {
+	manager := NewRuntimeManager(memory.NewStorage(), t.TempDir(), SystemClock{})
+	for _, manifest := range manager.Catalog() {
+		if manifest.ID == "claurst" {
+			if manifest.Name == "" || manifest.Description == "" || manifest.Repo == "" {
+				t.Fatalf("claurst manifest incomplete: %#v", manifest)
+			}
+			return
+		}
+	}
+	t.Fatal("expected claurst in runtime catalog")
+}

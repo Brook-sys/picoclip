@@ -38,16 +38,19 @@ func (s *Server) validateAgentRuntime(ctx context.Context, agentType domain.Agen
 		}
 		return domain.ErrRuntimeUnavailable
 	}
-	if agentType == "crush" || agentType == "picoclaw" {
-		runtimeID := domain.RuntimeID(agentType)
-		state, err := s.runtimes.State(ctx, runtimeID)
-		if err != nil || !state.Enabled {
-			return domain.ErrRuntimeUnavailable
-		}
-		adapter, ok := s.runtimes.Adapter(runtimeID)
-		if !ok || adapter.Resolve(ctx, state) != nil {
-			return domain.ErrRuntimeUnavailable
-		}
+
+	runtimeID := domain.RuntimeID(agentType)
+	adapter, ok := s.runtimes.Adapter(runtimeID)
+	if !ok {
+		return domain.ErrRuntimeUnavailable
+	}
+
+	state, err := s.runtimes.State(ctx, runtimeID)
+	if err != nil || !state.Enabled {
+		return domain.ErrRuntimeUnavailable
+	}
+	if adapter.Resolve(ctx, state) != nil {
+		return domain.ErrRuntimeUnavailable
 	}
 	return nil
 }

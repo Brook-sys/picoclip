@@ -48,3 +48,15 @@ func TestPicoClawExistingHealthWithFakeBinary(t *testing.T) {
 		t.Fatalf("expected version output")
 	}
 }
+
+func TestClaurstExistingHealthWithFakeBinary(t *testing.T) {
+	bin := fakeRuntimeBinary(t, "echo claurst v0.1.5\n")
+	adapter := NewClaurstAdapter(bin)
+	health := adapter.Health(context.Background(), domain.RuntimeState{BinPath: bin})
+	if health.Status != "ok" {
+		t.Fatalf("expected ok health, got %#v", health)
+	}
+	if health.Version == "" {
+		t.Fatalf("expected version output")
+	}
+}

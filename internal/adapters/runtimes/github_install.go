@@ -159,10 +159,19 @@ func runtimeAssetNames(prefix string, version string) []string {
 		ext = ".zip"
 	}
 	cleanVersion := strings.TrimPrefix(version, "v")
-	return []string{
+	names := []string{
 		fmt.Sprintf("%s_%s_%s_%s%s", prefix, cleanVersion, titleOS(osName), arch, ext),
 		fmt.Sprintf("%s_%s_%s%s", prefix, titleOS(osName), arch, ext),
 	}
+	for _, lowerOS := range lowerOSNames(osName) {
+		for _, candidateArch := range archNames(arch) {
+			names = append(names,
+				fmt.Sprintf("%s-%s-%s%s", prefix, lowerOS, candidateArch, ext),
+				fmt.Sprintf("%s-%s%s", prefix, candidateArch, ext),
+			)
+		}
+	}
+	return names
 }
 
 func titleOS(osName string) string {
@@ -176,6 +185,20 @@ func titleOS(osName string) string {
 	default:
 		return osName
 	}
+}
+
+func lowerOSNames(osName string) []string {
+	if osName == "darwin" {
+		return []string{"darwin", "macos"}
+	}
+	return []string{osName}
+}
+
+func archNames(arch string) []string {
+	if arch == "arm64" {
+		return []string{"arm64", "aarch64"}
+	}
+	return []string{arch}
 }
 
 func downloadAndExtract(ctx context.Context, url string, assetName string, binaryName string, dst string) error {

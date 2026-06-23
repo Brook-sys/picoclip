@@ -83,8 +83,13 @@ func main() {
 	if picoclawPath == "" {
 		picoclawPath = "picoclaw"
 	}
+	claurstPath := os.Getenv("CLAURST_PATH")
+	if claurstPath == "" {
+		claurstPath = "claurst"
+	}
 	runtimeManager.Register(runtimes.NewCrushAdapter(crushPath))
 	runtimeManager.Register(runtimes.NewPicoClawAdapter(picoclawPath))
+	runtimeManager.Register(runtimes.NewClaurstAdapter(claurstPath))
 
 	config := services.DefaultConfig()
 	engine := services.NewEngine(storage, bus, runtimeManager, services.NoopMemoryProvider{}, appLogger, config)
