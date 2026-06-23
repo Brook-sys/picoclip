@@ -104,9 +104,10 @@ func (a *ClaurstAdapter) Health(ctx context.Context, state domain.RuntimeState) 
 		version, err = commandVersion(testCtx, bin, "version")
 	}
 	if err != nil {
+		message := err.Error()
 		health.Status = "error"
-		health.Errors = append(health.Errors, err.Error())
-		health.Checks = append(health.Checks, domain.DiagnosticCheck{Name: "version_command", Status: "error", Message: err.Error(), CheckedAt: now})
+		health.Errors = append(health.Errors, message)
+		health.Checks = append(health.Checks, domain.DiagnosticCheck{Name: "version_command", Status: "error", Message: message, CheckedAt: now})
 		return health
 	}
 	health.Version = extractRuntimeVersion(string(a.ID()), version)

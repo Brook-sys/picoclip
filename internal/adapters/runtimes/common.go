@@ -3,6 +3,7 @@ package runtimes
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -36,7 +37,14 @@ func userBinDir() string {
 func commandVersion(ctx context.Context, bin string, args ...string) (string, error) {
 	cmd := exec.CommandContext(ctx, bin, args...)
 	out, err := cmd.CombinedOutput()
-	return strings.TrimSpace(string(out)), err
+	outputStr := strings.TrimSpace(string(out))
+	if err != nil && outputStr != "" {
+		if strings.Contains(outputStr, "not found") && strings.Contains(outputStr, "Error relocating") {
+			return outputStr, fmt.Errorf("%w (Incompatible binary: usually glibc/musl mismatch) - output: %s", err, outputStr)
+		}
+		return outputStr, fmt.Errorf("%w - output: %s", err, outputStr)
+	}
+	return outputStr, err
 }
 
 func writeFileIfMissing(path string, content []byte, mode os.FileMode) error {
