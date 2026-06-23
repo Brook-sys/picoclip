@@ -980,6 +980,9 @@ pc-tag-multiselect { position: relative; display: flex; flex-wrap: wrap; align-i
 .runtime-banner-crush img { max-width: min(88%, 340px); }
 .runtime-banner-picoclaw img { max-width: min(88%, 360px); }
 .runtime-banner-claurst img { max-height: 112px; }
+.runtime-compatibility-notice { display: grid; gap: 3px; padding: 10px 12px; border: 1px solid color-mix(in srgb, var(--warn) 32%, var(--border)); border-radius: var(--radius-md); background: color-mix(in srgb, var(--warn-bg) 70%, var(--surface)); color: var(--text); font-size: 12px; }
+.runtime-compatibility-notice strong { color: var(--warn); font-size: 12px; }
+.runtime-compatibility-notice span { color: var(--muted); line-height: 1.4; }
 .runtime-health-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
 .runtime-health-header h3 { margin: 0; font-size: 16px; font-weight: 700; letter-spacing: -0.01em; }
 .runtime-health-header p { margin: 2px 0 0; font-size: 13px; color: var(--muted); }

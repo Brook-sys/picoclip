@@ -57,9 +57,19 @@ templ RuntimeBanner(id string, name string) {
 	}
 }
 
+templ RuntimeCompatibilityNotice(id string) {
+	if id == "claurst" {
+		<div class="runtime-compatibility-notice">
+			<strong>Linux compatibility note</strong>
+			<span>The official Claurst Linux binary currently targets glibc-based distributions. On Alpine or other musl-based systems, install may succeed but the CLI can fail at runtime. Use an existing musl-compatible build if needed.</span>
+		</div>
+	}
+}
+
 templ RuntimeConfiguredCard(r RuntimeCardView) {
 	<div class={ "runtime-health-card", runtimeOverallClass(r) }>
 		@RuntimeBanner(string(r.ID), r.Name)
+		@RuntimeCompatibilityNotice(string(r.ID))
 		<div class="runtime-health-header">
 			<div>
 				<h3>{ r.Name }</h3>
@@ -274,6 +284,7 @@ templ SettingsPage(view SettingsView) {
 							<div class="card bg-surface runtime-list-card" style="border-color: var(--border);">
 								if !r.Configured {
 									@RuntimeBanner(string(r.ID), r.Name)
+									@RuntimeCompatibilityNotice(string(r.ID))
 								}
 								<div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: var(--space-2); margin-top: var(--space-2);">
 									<h3 style="margin: 0;">{ r.Name }</h3>
