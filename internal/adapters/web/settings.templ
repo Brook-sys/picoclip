@@ -49,8 +49,17 @@ templ RuntimePathRow(label string, value string) {
 	}
 }
 
+templ RuntimeBanner(id string, name string) {
+	if runtimeBannerPath(id) != "" {
+		<div class={ "runtime-banner", "runtime-banner-" + id } aria-label={ name + " runtime artwork" }>
+			<img src={ runtimeBannerPath(id) } alt="" loading="lazy"/>
+		</div>
+	}
+}
+
 templ RuntimeConfiguredCard(r RuntimeCardView) {
 	<div class={ "runtime-health-card", runtimeOverallClass(r) }>
+		@RuntimeBanner(string(r.ID), r.Name)
 		<div class="runtime-health-header">
 			<div>
 				<h3>{ r.Name }</h3>
@@ -262,8 +271,11 @@ templ SettingsPage(view SettingsView) {
 					
 					<div class="grid-cols-2" style="margin-top: var(--space-4);">
 						for _, r := range view.Runtimes {
-							<div class="card bg-surface" style="border-color: var(--border);">
-								<div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: var(--space-2);">
+							<div class="card bg-surface runtime-list-card" style="border-color: var(--border);">
+								if !r.Configured {
+									@RuntimeBanner(string(r.ID), r.Name)
+								}
+								<div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: var(--space-2); margin-top: var(--space-2);">
 									<h3 style="margin: 0;">{ r.Name }</h3>
 									if r.Configured {
 										<span class="badge" style="background-color: var(--success-bg); color: var(--success); border: 1px solid var(--success-border);">Installed</span>
@@ -439,6 +451,19 @@ func runtimeAIMessage(r RuntimeCardView) string {
 		return "AI request successful"
 	}
 	return "AI request failed"
+}
+
+func runtimeBannerPath(id string) string {
+	switch id {
+	case "claurst":
+		return "/assets/runtime-claurst.png"
+	case "crush":
+		return "/assets/runtime-crush.png"
+	case "picoclaw":
+		return "/assets/runtime-picoclaw.webp"
+	default:
+		return ""
+	}
 }
 
 func adapterSetting(settings map[string]map[string]string, adapter string, key string) string {

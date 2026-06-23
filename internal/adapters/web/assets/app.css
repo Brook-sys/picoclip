@@ -974,6 +974,12 @@ pc-tag-multiselect { position: relative; display: flex; flex-wrap: wrap; align-i
 .system-status-skills .system-status-icon { background: color-mix(in srgb, var(--accent) 8%, transparent); color: var(--text); }
 
 .runtime-health-card { display: flex; flex-direction: column; gap: 16px; border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 16px; background: var(--surface); box-shadow: var(--shadow-sm); }
+.runtime-list-card { overflow: hidden; }
+.runtime-banner { height: 132px; display: flex; align-items: center; justify-content: center; padding: 18px; border: 1px solid color-mix(in srgb, var(--border) 82%, transparent); border-radius: var(--radius-lg); background: radial-gradient(circle at 50% 35%, color-mix(in srgb, var(--accent) 10%, transparent), transparent 52%), linear-gradient(135deg, var(--surface-soft), var(--surface)); overflow: hidden; }
+.runtime-banner img { display: block; width: auto; height: auto; max-width: min(82%, 300px); max-height: 104px; object-fit: contain; object-position: center; filter: drop-shadow(0 12px 22px color-mix(in srgb, var(--shadow) 46%, transparent)); }
+.runtime-banner-crush img { max-width: min(88%, 340px); }
+.runtime-banner-picoclaw img { max-width: min(88%, 360px); }
+.runtime-banner-claurst img { max-height: 112px; }
 .runtime-health-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
 .runtime-health-header h3 { margin: 0; font-size: 16px; font-weight: 700; letter-spacing: -0.01em; }
 .runtime-health-header p { margin: 2px 0 0; font-size: 13px; color: var(--muted); }
