@@ -2,6 +2,20 @@ package web
 
 import "strconv"
 
+templ SettingsPanelHeader(title string, description string, iconName string) {
+	<div class="settings-panel-header">
+		<span class="settings-panel-icon" aria-hidden="true">
+			@Icon(iconName, 18)
+		</span>
+		<span>
+			<h2>{ title }</h2>
+			if description != "" {
+				<p class="muted">{ description }</p>
+			}
+		</span>
+	</div>
+}
+
 templ SystemStatusCard(label string, value string, iconName string, variant string) {
 	<div class={ "system-status-card", "system-status-" + variant }>
 		<span class="system-status-icon" aria-hidden="true">
@@ -80,7 +94,7 @@ templ RuntimeConfiguredCard(r RuntimeCardView) {
 				if r.Health.Version != "" {
 					<span class="runtime-version-badge">{ r.Health.Version }</span>
 				}
-				<form hx-post={ "/runtimes/" + string(r.ID) + "/toggle" } hx-target="body" hx-swap="outerHTML" style="display:inline-block; margin-left:8px;">
+				<form hx-post={ "/runtimes/" + string(r.ID) + "/toggle" } hx-target="body" hx-swap="outerHTML" class="runtime-toggle-form">
 					<label class="pc-toggle" title="Enable or disable this runtime for agent creation and execution">
 						<input type="checkbox" name="enabled" value="true" checked?={ r.State.Enabled } onchange="this.form.requestSubmit()"/>
 						<span class="pc-toggle-slider"></span>
@@ -179,9 +193,8 @@ templ SettingsPage(view SettingsView) {
 					<a class="nav-link text-danger" href="#danger-zone">Danger Zone</a>
 				</nav>
 				
-				<div class="settings-panel">
-					<h2>Diagnostics</h2>
-					<p class="muted">System health checks.</p>
+				<div class="settings-panel settings-sidebar-card">
+					@SettingsPanelHeader("Diagnostics", "System health checks.", "check-circle")
 					<div class="diagnostic-list">
 						for _, check := range view.Diagnostics.Checks {
 							<div class={ "diagnostic-item", templ.KV("diagnostic-ok", check.Status == "ok"), templ.KV("diagnostic-error", check.Status != "ok") }>
@@ -201,9 +214,8 @@ templ SettingsPage(view SettingsView) {
 					</div>
 				</div>
 
-				<div class="settings-panel">
-					<h2>System Status</h2>
-					<p class="muted">Current workspace inventory.</p>
+				<div class="settings-panel settings-sidebar-card">
+					@SettingsPanelHeader("System Status", "Current workspace inventory.", "bar-chart")
 					<div class="system-status-grid">
 						@SystemStatusCard("Agents", strconv.Itoa(view.Stats.Agents), "cpu", "agents")
 						@SystemStatusCard("Tasks", strconv.Itoa(view.Stats.Tasks), "check-circle", "tasks")
@@ -215,9 +227,8 @@ templ SettingsPage(view SettingsView) {
 			
 			<div class="settings-content">
 				<div id="general" class="settings-panel">
-					<h2>General Settings</h2>
-					<p class="muted">Basic application behaviors.</p>
-					<form hx-post="/settings/general" hx-target="body" hx-swap="outerHTML" data-success="General settings saved." class="stacked">
+					@SettingsPanelHeader("General Settings", "Basic application behaviors and default agent instructions.", "settings")
+					<form hx-post="/settings/general" hx-target="body" hx-swap="outerHTML" data-success="General settings saved." class="settings-form-grid">
 						<label>Theme Preference</label>
 						<select name="theme">
 							<option value="system" selected?={ view.General.Theme == "system" }>System</option>
@@ -246,19 +257,20 @@ templ SettingsPage(view SettingsView) {
 						<p class="muted">Injected into every agent run before the task context. Leave empty and save to restore the PicoClip default.</p>
 						<label class="pc-checkbox-row"><input type="checkbox" name="reset_default_protocol" value="true" /> Restore default protocol on save</label>
 						
-						<button type="submit">Save General</button>
+						<div class="settings-form-actions">
+							<button class="pc-btn pc-btn-primary" type="submit">@Icon("check", 16) Save General</button>
+						</div>
 					</form>
 				</div>
 				
 				<div id="appearance" class="settings-panel">
-					<h2>Appearance</h2>
-					<p class="muted">Visual defaults and interaction density.</p>
-					<div class="grid-cols-2">
-						<div class="card">
+					@SettingsPanelHeader("Appearance", "Visual defaults and interaction density.", "zap")
+					<div class="settings-mini-grid">
+						<div class="pc-card settings-info-card">
 							<strong>Current theme</strong>
 							<p class="muted">Controlled by the sidebar selector and saved locally in the browser.</p>
 						</div>
-						<div class="card">
+						<div class="pc-card settings-info-card">
 							<strong>Density</strong>
 							<p class="muted">Current: { view.General.Density }. Change it in General Settings.</p>
 						</div>
@@ -266,8 +278,7 @@ templ SettingsPage(view SettingsView) {
 				</div>
 				
 				<div id="storage" class="settings-panel">
-					<h2>Storage</h2>
-					<p class="muted">Database and file management.</p>
+					@SettingsPanelHeader("Storage", "Database and file management.", "folder")
 					@PropertyList() {
 						@PropertyItem("Driver", view.Diagnostics.StorageType)
 						@PropertyItem("Database Path", view.Diagnostics.DatabasePath)
@@ -275,28 +286,27 @@ templ SettingsPage(view SettingsView) {
 					}
 				</div>
 				
-				<div id="runtimes" class="settings-panel">
-					<h2>Agent Runtimes</h2>
-					<p class="muted">Manage the execution backends (like Crush, PicoClaw, or Claurst) used by agents to run tasks.</p>
+				<div id="runtimes" class="settings-panel settings-runtimes-panel">
+					@SettingsPanelHeader("Agent Runtimes", "Manage the execution backends used by agents to run tasks.", "cpu")
 					
-					<div class="grid-cols-2" style="margin-top: var(--space-4);">
+					<div class="settings-runtime-grid">
 						for _, r := range view.Runtimes {
-							<div class="card bg-surface runtime-list-card" style="border-color: var(--border);">
+							<div class="pc-card runtime-list-card">
 								if !r.Configured {
 									@RuntimeBanner(string(r.ID), r.Name)
 									@RuntimeCompatibilityNotice(string(r.ID))
 								}
-								<div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: var(--space-2); margin-top: var(--space-2);">
-									<h3 style="margin: 0;">{ r.Name }</h3>
+								<div class="runtime-list-heading">
+									<h3>{ r.Name }</h3>
 									if r.Configured {
-										<span class="badge" style="background-color: var(--success-bg); color: var(--success); border: 1px solid var(--success-border);">Installed</span>
+										<span class="pc-badge pc-badge-good">Installed</span>
 									} else {
-										<span class="badge" style="background-color: var(--surface-hover); color: var(--muted); border: 1px solid var(--border);">Not configured</span>
+										<span class="pc-badge">Not configured</span>
 									}
 								</div>
-								<p class="muted" style="margin-top: 0; font-size: 0.9em;">{ r.Description }</p>
+								<p class="runtime-list-description">{ r.Description }</p>
 								
-								<div style="margin-top: var(--space-3); padding-top: var(--space-3); border-top: 1px solid var(--border);">
+								<div class="runtime-list-body">
 									if r.Configured {
 									@RuntimeConfiguredCard(r)
 									@RuntimeConfigEditors(r)
@@ -329,37 +339,35 @@ templ SettingsPage(view SettingsView) {
 				</div>
 				
 				<div id="environment" class="settings-panel">
-					<h2>Environment Variables</h2>
-					<p class="muted">Global variables injected into task execution. Values are hidden by default because they often contain secrets.</p>
+					@SettingsPanelHeader("Environment Variables", "Global variables injected into task execution. Values are hidden by default because they often contain secrets.", "book")
 					<form hx-post="/settings/environment" hx-target="body" hx-swap="outerHTML" data-success="Environment saved." class="stacked">
 						@EnvEditorField(view.Environment)
 						<button class="pc-btn pc-btn-primary" type="submit">@Icon("check", 16) Save Environment</button>
 					</form>
 				</div>
 				
-				<div id="danger-zone" class="panel border-danger">
-					<h2 class="text-danger">Danger Zone</h2>
-					<p class="muted">Destructive operations for this PicoClip instance.</p>
-
-					<div class="card bg-surface" style="margin-top: var(--space-4); border-color: var(--border);">
+				<div id="danger-zone" class="settings-panel settings-danger-panel">
+					@SettingsPanelHeader("Danger Zone", "Destructive operations for this PicoClip instance.", "trash")
+ 
+					<div class="pc-card">
 						<h3>Export Backup</h3>
 						<p class="muted">Download agents, projects, tasks, runs, messages, skills, events and settings as JSON.</p>
-						<a class="button secondary" href="/settings/export" download="picoclip-backup.json" style="margin-top: 8px;">Download Backup JSON</a>
+						<a class="pc-btn pc-btn-secondary" href="/settings/export" download="picoclip-backup.json">@Icon("book", 16) Download Backup JSON</a>
 					</div>
 					
-					<div class="card bg-surface" style="margin-top: 16px; border-color: var(--border);">
+					<div class="pc-card">
 						<h3>Restore Backup</h3>
 						<p class="muted">Import a PicoClip backup JSON. This replaces the current database content.</p>
-						<form hx-post="/settings/import" hx-encoding="multipart/form-data" hx-confirm="Importing a backup will replace current data. Continue?" hx-target="body" hx-swap="outerHTML" class="stacked" style="margin-top: 8px;">
+						<form hx-post="/settings/import" hx-encoding="multipart/form-data" hx-confirm="Importing a backup will replace current data. Continue?" hx-target="body" hx-swap="outerHTML" class="stacked">
 							<input type="file" name="backup_file" accept="application/json,.json" required/>
-							<button class="button secondary" type="submit">Restore JSON</button>
+							<button class="pc-btn pc-btn-secondary" type="submit">@Icon("folder", 16) Restore JSON</button>
 						</form>
 					</div>
 
-					<div class="card bg-danger-light" style="margin-top: 16px;">
+					<div class="pc-card settings-reset-card">
 						<h3>Factory Reset</h3>
 						<p>This will permanently delete all agents, tasks, runs, messages, projects, custom skills and history. Built-in skills will be restored. This action cannot be undone.</p>
-						<button data-testid="settings-reset-all" class="button button-danger" type="button" data-open-modal="reset-modal" style="margin-top: var(--space-2);">Reset All Data</button>
+						<button data-testid="settings-reset-all" class="pc-btn pc-btn-danger" type="button" data-open-modal="reset-modal">@Icon("trash", 16) Reset All Data</button>
 					</div>
 				</div>
 			</div>
@@ -375,12 +383,12 @@ templ ResetModal(id string) {
 			<h2 class="text-danger">Reset All Data</h2>
 			<p>Are you absolutely sure? This will wipe the entire database and cannot be recovered.</p>
 			
-			<form hx-post="/settings/reset" hx-target="body" hx-swap="outerHTML" class="stacked" style="margin-top: var(--space-4);">
+			<form hx-post="/settings/reset" hx-target="body" hx-swap="outerHTML" class="stacked settings-reset-form">
 				<label for="confirm_text">Please type <strong>RESET</strong> to confirm:</label>
 				<input id="confirm_text" name="confirm_text" type="text" autocomplete="off" required pattern="RESET" title="Type RESET to confirm" />
-				<div class="actions" style="margin-top: var(--space-4);">
-					<button class="button" type="button" data-close-modal={ id }>Cancel</button>
-					<button data-testid="settings-reset-confirm" class="button button-danger" type="submit">Yes, Reset Data</button>
+				<div class="actions">
+					<button class="pc-btn pc-btn-secondary" type="button" data-close-modal={ id }>Cancel</button>
+					<button data-testid="settings-reset-confirm" class="pc-btn pc-btn-danger" type="submit">Yes, Reset Data</button>
 				</div>
 			</form>
 		</div>
