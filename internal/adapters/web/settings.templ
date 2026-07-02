@@ -75,7 +75,7 @@ templ RuntimeCompatibilityNotice(id string) {
 	if id == "claurst" {
 		<div class="runtime-compatibility-notice">
 			<strong>Linux compatibility note</strong>
-			<span>The official Claurst Linux binary currently targets glibc-based distributions. On Alpine or other musl-based systems, install may succeed but the CLI can fail at runtime. Use an existing musl-compatible build if needed.</span>
+			<span>The official Claurst Linux binary targets glibc-based Linux. On Alpine or other musl-based systems, install may succeed but the CLI can fail at runtime. If you run PicoClip in containers and need Claurst, use the Debian/glibc image variant with tags ending in <code>-debian</code>.</span>
 		</div>
 	}
 }

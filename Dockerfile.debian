@@ -2,11 +2,13 @@
 
 ARG GO_VERSION=1.25
 
-FROM golang:${GO_VERSION}-alpine AS builder
+FROM golang:${GO_VERSION}-bookworm AS builder
 
 WORKDIR /src
 
-RUN apk add --no-cache ca-certificates git
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ca-certificates git \
+    && rm -rf /var/lib/apt/lists/*
 
 COPY go.mod go.sum ./
 RUN --mount=type=cache,target=/go/pkg/mod go mod download
@@ -17,11 +19,15 @@ COPY . .
 RUN --mount=type=cache,target=/go/pkg/mod --mount=type=cache,target=/root/.cache/go-build templ generate
 RUN --mount=type=cache,target=/go/pkg/mod --mount=type=cache,target=/root/.cache/go-build CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/picoclip cmd/picoclip/main.go
 
-FROM alpine:3.20
+FROM debian:bookworm-slim
 
-LABEL org.opencontainers.image.description="Default Alpine/musl PicoClip image. Claurst official Linux binaries require glibc; use the Debian image variant when Claurst is required."
+LABEL org.opencontainers.image.description="Debian/glibc PicoClip image variant for running Claurst. Use this instead of the Alpine image when Claurst is required."
 
-RUN apk add --no-cache ca-certificates tzdata && addgroup -S picoclip && adduser -S -G picoclip picoclip
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ca-certificates tzdata wget \
+    && rm -rf /var/lib/apt/lists/* \
+    && groupadd --system picoclip \
+    && useradd --system --gid picoclip --home-dir /app --shell /usr/sbin/nologin picoclip
 
 WORKDIR /app
 COPY --from=builder /out/picoclip /usr/local/bin/picoclip
