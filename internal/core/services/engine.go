@@ -19,7 +19,9 @@ func NewEngine(storage ports.Storage, bus ports.EventBus, runtimes *RuntimeManag
 	idGen := &TimeIDGenerator{}
 	runner := NewRunner(storage, clock, idGen, bus, runtimes, memory, logger, config)
 	dispatcher := NewDispatcher(storage, runner, logger, config.MaxConcurrentRuns)
-	scheduler := NewScheduler(config.PollInterval, dispatcher, logger)
+	reconciler := NewReconciler(storage, clock, bus, idGen, logger)
+	reconciler.SetCanceler(runtimes)
+	scheduler := NewScheduler(config.PollInterval, dispatcher, reconciler, logger)
 	return &Engine{scheduler: scheduler, logger: logger}
 }
 

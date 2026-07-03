@@ -264,3 +264,21 @@ func (m *RuntimeManager) Execute(ctx context.Context, id domain.RuntimeID, input
 	}
 	return adapter.Execute(ctx, state, input)
 }
+
+func (m *RuntimeManager) CancelRun(ctx context.Context, run domain.Run) error {
+	id := domain.RuntimeID(run.DriverType)
+	return m.Cancel(ctx, id, run)
+}
+
+func (m *RuntimeManager) Cancel(ctx context.Context, id domain.RuntimeID, run domain.Run) error {
+	adapter, ok := m.Adapter(id)
+	if !ok {
+		return domain.ErrDriverUnavailable
+	}
+	state, err := m.State(ctx, id)
+	if err != nil {
+		// Se não tiver state, mas tiver adapter e run, tentamos cancelar passando fallback
+		state = domain.RuntimeState{ID: "runtime_" + string(id), RuntimeID: id, Mode: domain.InstallModeExisting, Enabled: true}
+	}
+	return adapter.Cancel(ctx, state, run)
+}

@@ -99,6 +99,7 @@ func main() {
 
 	agentService := services.NewAgentService(storage, clock, idGen)
 	taskService := services.NewTaskService(storage, clock, idGen, bus)
+	taskService.SetCanceler(runtimeManager)
 	workspaceBase := os.Getenv("PICOCLIP_WORKSPACES")
 	if workspaceBase == "" {
 		workspaceBase = "workspaces"

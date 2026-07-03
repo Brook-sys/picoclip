@@ -9,11 +9,12 @@ import (
 )
 
 type Reconciler struct {
-	storage ports.Storage
-	clock   ports.Clock
-	bus     ports.EventBus
-	idGen   ports.IDGenerator
-	logger  ports.Logger
+	storage  ports.Storage
+	clock    ports.Clock
+	bus      ports.EventBus
+	idGen    ports.IDGenerator
+	logger   ports.Logger
+	canceler RunCanceler
 }
 
 func NewReconciler(storage ports.Storage, clock ports.Clock, bus ports.EventBus, idGen ports.IDGenerator, logger ports.Logger) *Reconciler {
@@ -24,6 +25,10 @@ func NewReconciler(storage ports.Storage, clock ports.Clock, bus ports.EventBus,
 		idGen:   idGen,
 		logger:  logger,
 	}
+}
+
+func (r *Reconciler) SetCanceler(canceler RunCanceler) {
+	r.canceler = canceler
 }
 
 func (r *Reconciler) Reconcile(ctx context.Context) {
@@ -79,6 +84,9 @@ func (r *Reconciler) detectStalledRuns(ctx context.Context) int {
 		finished := now
 		run.FinishedAt = &finished
 		_ = r.storage.Runs().Update(ctx, run)
+		if r.canceler != nil {
+			_ = r.canceler.CancelRun(ctx, run)
+		}
 
 		requeued := false
 		task, err := r.storage.Tasks().Get(ctx, run.TaskID)
@@ -139,6 +147,9 @@ func (r *Reconciler) recoverOrphanedRuns(ctx context.Context) int {
 		finished := now
 		run.FinishedAt = &finished
 		_ = r.storage.Runs().Update(ctx, run)
+		if r.canceler != nil {
+			_ = r.canceler.CancelRun(ctx, run)
+		}
 
 		task, err := r.storage.Tasks().Get(ctx, run.TaskID)
 		if err == nil && task.CheckoutRunID == run.ID {

@@ -13,12 +13,17 @@ import (
 
 const defaultTaskLockTTL = 30 * time.Minute
 
+type RunCanceler interface {
+	CancelRun(ctx context.Context, run domain.Run) error
+}
+
 type TaskService struct {
 	storage   ports.Storage
 	clock     ports.Clock
 	idGen     ports.IDGenerator
 	bus       ports.EventBus
 	lifecycle TaskLifecycle
+	canceler  RunCanceler
 }
 
 func NewTaskService(storage ports.Storage, clock ports.Clock, idGen ports.IDGenerator, bus ports.EventBus) *TaskService {
@@ -29,6 +34,10 @@ func NewTaskService(storage ports.Storage, clock ports.Clock, idGen ports.IDGene
 		bus:       bus,
 		lifecycle: NewTaskLifecycle(),
 	}
+}
+
+func (s *TaskService) SetCanceler(canceler RunCanceler) {
+	s.canceler = canceler
 }
 
 func (s *TaskService) Create(ctx context.Context, agentID, title, prompt string) (domain.Task, error) {
@@ -194,9 +203,13 @@ func (s *TaskService) Cancel(ctx context.Context, id, reason string) (domain.Tas
 	}
 
 	if activeRunID != "" {
-		if run, runErr := s.storage.Runs().Get(ctx, activeRunID); runErr == nil && run.ProcessID > 0 {
-			if p, err := os.FindProcess(run.ProcessID); err == nil {
-				_ = p.Kill()
+		if run, runErr := s.storage.Runs().Get(ctx, activeRunID); runErr == nil {
+			if s.canceler != nil {
+				_ = s.canceler.CancelRun(ctx, run)
+			} else if run.ProcessID > 0 {
+				if p, err := os.FindProcess(run.ProcessID); err == nil {
+					_ = p.Kill()
+				}
 			}
 		}
 	}
