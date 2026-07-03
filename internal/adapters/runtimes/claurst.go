@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -175,12 +174,48 @@ func (a *ClaurstAdapter) Execute(ctx context.Context, state domain.RuntimeState,
 	}
 
 	var stdoutBuf, stderrBuf bytes.Buffer
+	done := make(chan bool, 2)
+
 	go func() {
-		_, _ = io.Copy(&stdoutBuf, stdoutPipe)
+		buf := make([]byte, 4096)
+		for {
+			n, err := stdoutPipe.Read(buf)
+			if n > 0 {
+				chunk := make([]byte, n)
+				copy(chunk, buf[:n])
+				stdoutBuf.Write(chunk)
+				if input.OnOutput != nil {
+					input.OnOutput(chunk, nil)
+				}
+			}
+			if err != nil {
+				break
+			}
+		}
+		done <- true
 	}()
+
 	go func() {
-		_, _ = io.Copy(&stderrBuf, stderrPipe)
+		buf := make([]byte, 4096)
+		for {
+			n, err := stderrPipe.Read(buf)
+			if n > 0 {
+				chunk := make([]byte, n)
+				copy(chunk, buf[:n])
+				stderrBuf.Write(chunk)
+				if input.OnOutput != nil {
+					input.OnOutput(nil, chunk)
+				}
+			}
+			if err != nil {
+				break
+			}
+		}
+		done <- true
 	}()
+
+	<-done
+	<-done
 
 	err = cmd.Wait()
 
