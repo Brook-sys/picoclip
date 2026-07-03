@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	"picoclip/internal/core/domain"
 	"picoclip/internal/core/ports"
@@ -36,6 +37,28 @@ func NewRunner(storage ports.Storage, clock ports.Clock, idGen ports.IDGenerator
 	}
 }
 
+func (r *Runner) blockIfBudgetExceeded(ctx context.Context, task domain.Task, now time.Time) bool {
+	stopped, budget, usage, err := NewBudgetService(r.storage, r.clock, r.idGen).IsHardStopped(ctx, task.WorkspaceID, task.AgentID)
+	if err != nil {
+		r.logger.Warn("runner.budget_check_failed", "task_id", task.ID, "agent_id", task.AgentID, "err", err)
+		return false
+	}
+	if !stopped {
+		return false
+	}
+
+	task.Status = domain.TaskStatusBlocked
+	task.NeedsRun = false
+	task.UpdatedAt = now
+	_ = r.storage.Tasks().Update(ctx, task)
+
+	message := fmt.Sprintf("Task blocked by budget %s: usage is %d tokens across %d runs.", budget.ID, usage.TotalTokens, usage.Runs)
+	_ = r.storage.Messages().Create(ctx, domain.Message{ID: r.idGen.NewID("msg"), TaskID: task.ID, Role: domain.MessageRoleSystem, Body: message, CreatedAt: now})
+	_ = r.bus.Publish(ctx, domain.Event{ID: r.idGen.NewID("evt"), Type: domain.EventBudgetBlocked, TaskID: task.ID, AgentID: task.AgentID, Message: message, Data: map[string]string{"budget_id": budget.ID}, CreatedAt: now})
+	r.logger.Warn("runner.budget_hard_stop", "task_id", task.ID, "agent_id", task.AgentID, "budget_id", budget.ID)
+	return true
+}
+
 func (r *Runner) Run(ctx context.Context, task domain.Task) {
 	current, err := r.storage.Tasks().Get(ctx, task.ID)
 	if err != nil || current.Status == domain.TaskStatusCancelled || current.Status == domain.TaskStatusDone {
@@ -43,10 +66,21 @@ func (r *Runner) Run(ctx context.Context, task domain.Task) {
 	}
 	task = current
 	now := r.clock.Now()
+	if r.blockIfBudgetExceeded(ctx, task, now) {
+		return
+	}
+
+	runID := r.idGen.NewID("run")
+	lockExpiresAt := now.Add(defaultTaskLockTTL)
+
 	task.Status = domain.TaskStatusInProgress
 	task.NeedsRun = false
 	task.Attempts++
+	task.CheckoutRunID = runID
+	task.CheckedOutByAgentID = task.AgentID
 	task.StartedAt = &now
+	task.ExecutionLockedAt = &now
+	task.LockExpiresAt = &lockExpiresAt
 	task.UpdatedAt = now
 	if err := r.storage.Tasks().Update(ctx, task); err != nil {
 		return
@@ -71,14 +105,16 @@ func (r *Runner) Run(ctx context.Context, task domain.Task) {
 	}
 
 	run := domain.Run{
-		ID:         r.idGen.NewID("run"),
-		TaskID:     task.ID,
-		AgentID:    agent.ID,
-		DriverType: string(agent.Type),
-		Status:     domain.RunStatusRunning,
-		Attempt:    task.Attempts,
-		Input:      task.Prompt,
-		StartedAt:  r.clock.Now(),
+		ID:           runID,
+		TaskID:       task.ID,
+		AgentID:      agent.ID,
+		DriverType:   string(agent.Type),
+		Status:       domain.RunStatusRunning,
+		Attempt:      task.Attempts,
+		Input:        task.Prompt,
+		StartedAt:    r.clock.Now(),
+		LastOutputAt: &now,
+		StallTimeout: int(r.config.TaskTimeout.Seconds()),
 	}
 	if err := r.storage.Runs().Create(ctx, run); err != nil {
 		r.failTask(ctx, task, err.Error())
@@ -160,11 +196,13 @@ func (r *Runner) Run(ctx context.Context, task domain.Task) {
 	run.Output = result.Output
 	run.OutputTokens = estimateTokens(run.Output)
 	run.TotalTokens = run.InputTokens + run.OutputTokens
+	now2 := r.clock.Now()
+	run.LastOutputAt = &now2
 	_ = r.storage.Runs().Update(ctx, run)
 	r.recordTokenUsage(ctx, run)
 	_ = r.memory.SaveRun(ctx, task, run)
 	if strings.TrimSpace(result.Output) != "" {
-		_ = r.storage.Messages().Create(ctx, domain.Message{ID: r.idGen.NewID("msg"), TaskID: task.ID, FromID: agent.ID, Role: domain.MessageRoleAgent, Body: result.Output, CreatedAt: finishedAt})
+		_ = r.storage.Messages().Create(ctx, domain.Message{ID: r.idGen.NewID("msg"), TaskID: task.ID, FromID: agent.ID, Role: domain.MessageRoleAgent, Body: result.Output, CreatedAt: now})
 	}
 	latest, latestErr = r.storage.Tasks().Get(ctx, task.ID)
 	if latestErr == nil && latest.Status != domain.TaskStatusDone && latest.Status != domain.TaskStatusCancelled {
@@ -173,10 +211,10 @@ func (r *Runner) Run(ctx context.Context, task domain.Task) {
 		} else {
 			latest.Status = domain.TaskStatusInProgress
 		}
-		latest.UpdatedAt = finishedAt
+		latest.UpdatedAt = now
 		_ = r.storage.Tasks().Update(ctx, latest)
 	}
-	_ = r.bus.Publish(ctx, domain.Event{ID: r.idGen.NewID("evt"), Type: domain.EventRunCompleted, TaskID: task.ID, AgentID: agent.ID, RunID: run.ID, Message: "Run completed", CreatedAt: finishedAt})
+	_ = r.bus.Publish(ctx, domain.Event{ID: r.idGen.NewID("evt"), Type: domain.EventRunCompleted, TaskID: task.ID, AgentID: agent.ID, RunID: run.ID, Message: "Run completed", CreatedAt: now})
 }
 
 func (r *Runner) failTask(ctx context.Context, task domain.Task, message string) {

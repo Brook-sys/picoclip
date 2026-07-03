@@ -45,9 +45,11 @@ func (d *Dispatcher) Dispatch(ctx context.Context) {
 		select {
 		case d.semaphore <- struct{}{}:
 			d.wg.Add(1)
-			d.runner.Run(ctx, task)
-			d.wg.Done()
-			<-d.semaphore
+			go func(t domain.Task) {
+				defer d.wg.Done()
+				defer func() { <-d.semaphore }()
+				d.runner.Run(ctx, t)
+			}(task)
 		case <-ctx.Done():
 			return
 		}

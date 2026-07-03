@@ -3,25 +3,31 @@ package services
 import (
 	"context"
 	"fmt"
+	"os"
 	"strings"
+	"time"
 
 	"picoclip/internal/core/domain"
 	"picoclip/internal/core/ports"
 )
 
+const defaultTaskLockTTL = 30 * time.Minute
+
 type TaskService struct {
-	storage ports.Storage
-	clock   ports.Clock
-	idGen   ports.IDGenerator
-	bus     ports.EventBus
+	storage   ports.Storage
+	clock     ports.Clock
+	idGen     ports.IDGenerator
+	bus       ports.EventBus
+	lifecycle TaskLifecycle
 }
 
 func NewTaskService(storage ports.Storage, clock ports.Clock, idGen ports.IDGenerator, bus ports.EventBus) *TaskService {
 	return &TaskService{
-		storage: storage,
-		clock:   clock,
-		idGen:   idGen,
-		bus:     bus,
+		storage:   storage,
+		clock:     clock,
+		idGen:     idGen,
+		bus:       bus,
+		lifecycle: NewTaskLifecycle(),
 	}
 }
 
@@ -64,22 +70,18 @@ func (s *TaskService) CreateChildInWorkspace(ctx context.Context, workspaceID, p
 		return domain.Task{}, err
 	}
 
-	_ = s.storage.Events().Create(ctx, domain.Event{
+	event := domain.Event{
 		ID:        s.idGen.NewID("evt"),
 		Type:      domain.EventTaskCreated,
 		TaskID:    task.ID,
 		AgentID:   task.AgentID,
 		Message:   "Task created",
+		Data:      map[string]string{"actor": "user"},
 		CreatedAt: now,
-	})
-	_ = s.bus.Publish(ctx, domain.Event{
-		ID:        s.idGen.NewID("evt"),
-		Type:      domain.EventTaskCreated,
-		TaskID:    task.ID,
-		AgentID:   task.AgentID,
-		Message:   "Task created",
-		CreatedAt: now,
-	})
+	}
+	_ = s.storage.Events().Create(ctx, event)
+	_ = s.bus.Publish(ctx, event)
+	_, _ = NewWakeupService(s.storage, s.clock, s.idGen).Create(ctx, CreateWakeupInput{AgentID: task.AgentID, TaskID: task.ID, Reason: domain.WakeupReasonAssignment, Priority: task.Priority})
 
 	return task, nil
 }
@@ -137,9 +139,14 @@ func (s *TaskService) AddMessage(ctx context.Context, taskID, fromID, toID strin
 			}
 		}
 	}
-	event := domain.Event{ID: s.idGen.NewID("evt"), Type: domain.EventMessageCreated, TaskID: taskID, AgentID: toID, Message: "Message created", CreatedAt: now}
+	event := domain.Event{ID: s.idGen.NewID("evt"), Type: domain.EventMessageCreated, TaskID: taskID, AgentID: toID, Message: "Message created", Data: map[string]string{"role": string(role)}, CreatedAt: now}
 	_ = s.storage.Events().Create(ctx, event)
 	_ = s.bus.Publish(ctx, event)
+	if role == domain.MessageRoleUser {
+		if task, err := s.storage.Tasks().Get(ctx, taskID); err == nil {
+			_, _ = NewWakeupService(s.storage, s.clock, s.idGen).Create(ctx, CreateWakeupInput{AgentID: task.AgentID, TaskID: task.ID, Reason: domain.WakeupReasonComment, Priority: task.Priority})
+		}
+	}
 	return message, nil
 }
 
@@ -167,17 +174,31 @@ func (s *TaskService) Cancel(ctx context.Context, id, reason string) (domain.Tas
 		return task, nil
 	}
 	now := s.clock.Now()
+	activeRunID := task.CheckoutRunID
+
 	task.Status = domain.TaskStatusCancelled
 	task.NeedsRun = false
 	task.CheckoutRunID = ""
 	task.CheckedOutByAgentID = ""
+	task.ExecutionLockedAt = nil
+	task.LockExpiresAt = nil
 	task.CancelReason = reason
 	task.FinishedAt = &now
 	task.CancelledAt = &now
 	task.UpdatedAt = now
+
 	if err := s.storage.Tasks().Update(ctx, task); err != nil {
 		return domain.Task{}, err
 	}
+
+	if activeRunID != "" {
+		if run, runErr := s.storage.Runs().Get(ctx, activeRunID); runErr == nil && run.ProcessID > 0 {
+			if p, err := os.FindProcess(run.ProcessID); err == nil {
+				_ = p.Kill()
+			}
+		}
+	}
+
 	event := domain.Event{ID: s.idGen.NewID("evt"), Type: domain.EventTaskCanceled, TaskID: task.ID, AgentID: task.AgentID, Message: reason, CreatedAt: now}
 	_ = s.storage.Events().Create(ctx, event)
 	_ = s.bus.Publish(ctx, event)
@@ -185,6 +206,9 @@ func (s *TaskService) Cancel(ctx context.Context, id, reason string) (domain.Tas
 }
 
 func (s *TaskService) Checkout(ctx context.Context, id, agentID, runID string, expected []domain.TaskStatus) (domain.Task, error) {
+	if runID == "" {
+		return domain.Task{}, fmt.Errorf("%w: run_id is required", domain.ErrInvalidInput)
+	}
 	task, err := s.storage.Tasks().Get(ctx, id)
 	if err != nil {
 		return domain.Task{}, err
@@ -200,9 +224,13 @@ func (s *TaskService) Checkout(ctx context.Context, id, agentID, runID string, e
 	}
 	now := s.clock.Now()
 	task.Status = domain.TaskStatusInProgress
+	task.NeedsRun = false
 	task.CheckedOutByAgentID = agentID
 	task.CheckoutRunID = runID
+	lockExpiresAt := now.Add(defaultTaskLockTTL)
 	task.StartedAt = &now
+	task.ExecutionLockedAt = &now
+	task.LockExpiresAt = &lockExpiresAt
 	task.UpdatedAt = now
 	if err := s.storage.Tasks().Update(ctx, task); err != nil {
 		return domain.Task{}, err
@@ -221,6 +249,8 @@ func (s *TaskService) Release(ctx context.Context, id, agentID, comment string) 
 	now := s.clock.Now()
 	task.CheckedOutByAgentID = ""
 	task.CheckoutRunID = ""
+	task.ExecutionLockedAt = nil
+	task.LockExpiresAt = nil
 	if task.Status == domain.TaskStatusInProgress {
 		task.Status = domain.TaskStatusTodo
 	}
@@ -239,36 +269,11 @@ func (s *TaskService) UpdateStatus(ctx context.Context, id string, status domain
 	if err != nil {
 		return domain.Task{}, err
 	}
-	if status != "" && !validTaskStatus(status) {
-		return domain.Task{}, fmt.Errorf("%w: invalid task status", domain.ErrInvalidInput)
-	}
-	if (status == domain.TaskStatusDone || status == domain.TaskStatusBlocked) && strings.TrimSpace(comment) == "" {
-		return domain.Task{}, fmt.Errorf("%w: comment is required for done or blocked", domain.ErrInvalidInput)
-	}
 	now := s.clock.Now()
-	if status != "" {
-		task.Status = status
-		if status == domain.TaskStatusDone {
-			task.NeedsRun = false
-			task.FinishedAt = &now
-			task.CompletedAt = &now
-			task.CheckoutRunID = ""
-			task.CheckedOutByAgentID = ""
-		}
-		if status == domain.TaskStatusBlocked || status == domain.TaskStatusInReview || status == domain.TaskStatusTodo || status == domain.TaskStatusBacklog {
-			task.NeedsRun = false
-			task.FinishedAt = nil
-			if status != domain.TaskStatusInProgress {
-				task.CheckoutRunID = ""
-				task.CheckedOutByAgentID = ""
-			}
-		}
-		if status == domain.TaskStatusInProgress {
-			task.NeedsRun = true
-			task.FinishedAt = nil
-		}
+	task, err = s.lifecycle.Apply(task, TaskTransition{From: task.Status, To: status, Comment: comment, Now: now, UpdatedBy: agentID})
+	if err != nil {
+		return domain.Task{}, err
 	}
-	task.UpdatedAt = now
 	if err := s.storage.Tasks().Update(ctx, task); err != nil {
 		return domain.Task{}, err
 	}
