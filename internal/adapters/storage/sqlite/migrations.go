@@ -292,5 +292,110 @@ func migrations() []migration {
 				ALTER TABLE runs ADD COLUMN total_tokens INTEGER NOT NULL DEFAULT 0;
 			`,
 		},
+		{
+			version: 5,
+			name:    "add_task_lock_columns",
+			sql: `
+				ALTER TABLE tasks ADD COLUMN execution_locked_at TIMESTAMP;
+				ALTER TABLE tasks ADD COLUMN lock_expires_at TIMESTAMP;
+				CREATE INDEX IF NOT EXISTS idx_tasks_lock_expires_at ON tasks(lock_expires_at);
+			`,
+		},
+		{
+			version: 6,
+			name:    "create_wakeups_table",
+			sql: `
+				CREATE TABLE IF NOT EXISTS wakeups (
+					id TEXT PRIMARY KEY,
+					agent_id TEXT NOT NULL,
+					task_id TEXT NOT NULL DEFAULT '',
+					reason TEXT NOT NULL,
+					status TEXT NOT NULL,
+					priority INTEGER NOT NULL DEFAULT 0,
+					due_at TIMESTAMP NOT NULL,
+					claimed_at TIMESTAMP,
+					payload TEXT NOT NULL DEFAULT '{}',
+					created_at TIMESTAMP NOT NULL,
+					updated_at TIMESTAMP NOT NULL
+				);
+				CREATE INDEX IF NOT EXISTS idx_wakeups_pending ON wakeups(status, due_at, priority);
+				CREATE INDEX IF NOT EXISTS idx_wakeups_agent_id ON wakeups(agent_id);
+				CREATE INDEX IF NOT EXISTS idx_wakeups_task_id ON wakeups(task_id);
+			`,
+		},
+		{
+			version: 7,
+			name:    "create_usage_events_table",
+			sql: `
+				CREATE TABLE IF NOT EXISTS usage_events (
+					id TEXT PRIMARY KEY,
+					run_id TEXT NOT NULL,
+					task_id TEXT NOT NULL,
+					agent_id TEXT NOT NULL,
+					provider TEXT NOT NULL DEFAULT '',
+					model TEXT NOT NULL DEFAULT '',
+					input_tokens INTEGER NOT NULL DEFAULT 0,
+					output_tokens INTEGER NOT NULL DEFAULT 0,
+					total_tokens INTEGER NOT NULL DEFAULT 0,
+					process_id INTEGER NOT NULL DEFAULT 0,
+					last_output_at TIMESTAMP,
+					stall_timeout INTEGER NOT NULL DEFAULT 0,
+					started_at TIMESTAMP NOT NULL,
+					finished_at TIMESTAMP
+				);
+				CREATE INDEX IF NOT EXISTS idx_usage_task ON usage_events(task_id);
+				CREATE INDEX IF NOT EXISTS idx_usage_agent ON usage_events(agent_id);
+				CREATE INDEX IF NOT EXISTS idx_usage_run ON usage_events(run_id);
+			`,
+		},
+		{
+			version: 8,
+			name:    "add_run_liveness_columns",
+			sql: `
+				ALTER TABLE runs ADD COLUMN process_id INTEGER NOT NULL DEFAULT 0;
+				ALTER TABLE runs ADD COLUMN last_output_at TIMESTAMP;
+				ALTER TABLE runs ADD COLUMN stall_timeout INTEGER NOT NULL DEFAULT 0;
+				CREATE INDEX IF NOT EXISTS idx_runs_last_output ON runs(last_output_at);
+			`,
+		},
+		{
+			version: 9,
+			name:    "fix_run_started_finished_order",
+			sql: `
+				-- No-op: started_at/finished_at already exist in correct position since v1
+			`,
+		},
+		{
+			version: 10,
+			name:    "create_budgets_table",
+			sql: `
+				CREATE TABLE IF NOT EXISTS budgets (
+					id TEXT PRIMARY KEY,
+					scope TEXT NOT NULL,
+					workspace_id TEXT NOT NULL DEFAULT '',
+					agent_id TEXT NOT NULL DEFAULT '',
+					limit_tokens INTEGER NOT NULL DEFAULT 0,
+					limit_runs INTEGER NOT NULL DEFAULT 0,
+					limit_cost_micros INTEGER NOT NULL DEFAULT 0,
+					hard_stop BOOLEAN NOT NULL DEFAULT 1,
+					enabled BOOLEAN NOT NULL DEFAULT 1,
+					created_at TIMESTAMP NOT NULL,
+					updated_at TIMESTAMP NOT NULL
+				);
+				CREATE INDEX IF NOT EXISTS idx_budgets_scope ON budgets(scope);
+				CREATE INDEX IF NOT EXISTS idx_budgets_workspace ON budgets(workspace_id);
+				CREATE INDEX IF NOT EXISTS idx_budgets_agent ON budgets(agent_id);
+			`,
+		},
+		{
+			version: 11,
+			name:    "fix_usage_events_ledger_columns",
+			sql: `
+				ALTER TABLE usage_events ADD COLUMN cached_tokens INTEGER NOT NULL DEFAULT 0;
+				ALTER TABLE usage_events ADD COLUMN cost_micros INTEGER NOT NULL DEFAULT 0;
+				ALTER TABLE usage_events ADD COLUMN created_at TIMESTAMP;
+				UPDATE usage_events SET created_at = COALESCE(created_at, started_at, CURRENT_TIMESTAMP);
+			`,
+		},
 	}
 }

@@ -22,10 +22,11 @@ type Server struct {
 	bus             ports.EventBus
 	debugMode       bool
 	adapterSettings map[string]map[string]string
+	auth            *services.Authorizer
 }
 
 func NewServer(agents *services.AgentService, tasks *services.TaskService, skills *services.SkillService, projects *services.WorkspaceService, runtimes *services.RuntimeManager, diagnostics *services.DiagnosticsService, storage ports.Storage, bus ports.EventBus, debugMode bool) *Server {
-	return &Server{agents: agents, tasks: tasks, skills: skills, projects: projects, runtimes: runtimes, diagnostics: diagnostics, storage: storage, bus: bus, debugMode: debugMode, adapterSettings: map[string]map[string]string{"noop": {"timeout": "1m"}}}
+	return &Server{agents: agents, tasks: tasks, skills: skills, projects: projects, runtimes: runtimes, diagnostics: diagnostics, storage: storage, bus: bus, debugMode: debugMode, adapterSettings: map[string]map[string]string{"noop": {"timeout": "1m"}}, auth: services.NewAuthorizer(storage)}
 }
 
 func (s *Server) Mount(mux *http.ServeMux) {
@@ -53,11 +54,14 @@ func (s *Server) Mount(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/diagnostics", s.handleAPIDiagnostics)
 	mux.HandleFunc("GET /agent-api/docs", s.handleAgentDocs)
 	mux.HandleFunc("GET /agent-api/me", s.handleAgentMe)
+	mux.HandleFunc("GET /agent-api/agents/me/inbox-lite", s.handleAgentInboxLite)
 	mux.HandleFunc("GET /agent-api/agents", s.handleGetAgents)
 	mux.HandleFunc("GET /agent-api/tasks", s.handleGetTasks)
 	mux.HandleFunc("GET /agent-api/issues", s.handleGetTasks)
 	mux.HandleFunc("GET /agent-api/tasks/{id}", s.handleAgentTaskDetail)
 	mux.HandleFunc("GET /agent-api/issues/{id}", s.handleAgentTaskDetail)
+	mux.HandleFunc("GET /agent-api/tasks/{id}/heartbeat-context", s.handleAgentHeartbeatContext)
+	mux.HandleFunc("GET /agent-api/issues/{id}/heartbeat-context", s.handleAgentHeartbeatContext)
 	mux.HandleFunc("GET /agent-api/tasks/{id}/comments", s.handleAgentTaskComments)
 	mux.HandleFunc("GET /agent-api/issues/{id}/comments", s.handleAgentTaskComments)
 	mux.HandleFunc("GET /agent-api/projects", s.handleGetProjects)
@@ -106,6 +110,9 @@ func (s *Server) Mount(mux *http.ServeMux) {
 	mux.HandleFunc("POST /runtimes/{id}/config", s.handleWebPostRuntimeConfig)
 	mux.HandleFunc("POST /runtimes/{id}/toggle", s.handleWebPostRuntimeToggle)
 	mux.HandleFunc("POST /settings/environment", s.handleWebPostSettingsEnvironment)
+	mux.HandleFunc("POST /settings/budgets", s.handleWebPostSettingsBudgets)
+	mux.HandleFunc("POST /settings/budgets/{id}/toggle", s.handleWebToggleBudget)
+	mux.HandleFunc("POST /settings/budgets/{id}/delete", s.handleWebDeleteBudget)
 	mux.HandleFunc("GET /settings/export", s.handleWebSettingsExport)
 	mux.HandleFunc("POST /settings/import", s.handleWebSettingsImport)
 	mux.HandleFunc("POST /settings/reset", s.handleWebPostSettingsReset)
@@ -200,6 +207,7 @@ func (s *Server) handleCreateTask(w http.ResponseWriter, r *http.Request) {
 		ParentID        string `json:"parent_id"`
 		AgentID         string `json:"agent_id"`
 		AssigneeAgentID string `json:"assignee_agent_id"`
+		FromAgentID     string `json:"from_agent_id"`
 		Title           string `json:"title"`
 		Message         string `json:"message"`
 		Prompt          string `json:"prompt"`
@@ -214,6 +222,12 @@ func (s *Server) handleCreateTask(w http.ResponseWriter, r *http.Request) {
 
 	if req.AgentID == "" {
 		req.AgentID = req.AssigneeAgentID
+	}
+	if isAgentAPIRequest(r) {
+		if err := s.auth.RequireAgentPermission(r.Context(), req.FromAgentID, domain.PermissionTasksCreate); err != nil {
+			writeTaskError(w, err)
+			return
+		}
 	}
 	task, err := s.tasks.CreateChildInWorkspace(r.Context(), req.ProjectID, req.ParentID, req.AgentID, req.Title, req.Prompt)
 	if err != nil {
@@ -238,7 +252,12 @@ func (s *Server) handleCreateMessage(w http.ResponseWriter, r *http.Request) {
 	if req.Role == "" {
 		req.Role = domain.MessageRoleUser
 	}
-
+	if isAgentAPIRequest(r) {
+		if err := s.auth.RequireAgentPermission(r.Context(), req.FromID, domain.PermissionTasksUpdate); err != nil {
+			writeTaskError(w, err)
+			return
+		}
+	}
 	message, err := s.tasks.AddMessage(r.Context(), r.PathValue("id"), req.FromID, req.ToID, req.Role, req.Body)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -262,6 +281,121 @@ func (s *Server) handleAgentMe(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	http.Error(w, domain.ErrNotFound.Error(), http.StatusNotFound)
+}
+
+func (s *Server) handleAgentInboxLite(w http.ResponseWriter, r *http.Request) {
+	agentID := r.URL.Query().Get("agent_id")
+	if agentID == "" {
+		http.Error(w, "agent_id required", http.StatusBadRequest)
+		return
+	}
+	tasks, err := s.tasks.List(r.Context(), ports.TaskFilter{AgentID: agentID})
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	items := make([]map[string]any, 0, len(tasks))
+	for _, task := range tasks {
+		if task.Status == domain.TaskStatusDone || task.Status == domain.TaskStatusCancelled {
+			continue
+		}
+		items = append(items, map[string]any{
+			"task_id": task.ID,
+			"title":   task.Title,
+			"status":  task.Status,
+			"reason":  s.latestWakeReason(r, task.ID),
+		})
+	}
+	s.jsonResponse(w, map[string]any{"agent_id": agentID, "inbox": items})
+}
+
+func (s *Server) handleAgentHeartbeatContext(w http.ResponseWriter, r *http.Request) {
+	task, err := s.tasks.Get(r.Context(), r.PathValue("id"))
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusNotFound)
+		return
+	}
+	messages, _ := s.tasks.GetMessages(r.Context(), task.ID)
+	lastUser := ""
+	for i := len(messages) - 1; i >= 0; i-- {
+		if messages[i].Role == domain.MessageRoleUser {
+			lastUser = messages[i].Body
+			break
+		}
+	}
+	ctx := map[string]any{
+		"task_id":           task.ID,
+		"title":             task.Title,
+		"prompt":            task.Prompt,
+		"last_user_comment": lastUser,
+		"status":            task.Status,
+		"checkout_run_id":   task.CheckoutRunID,
+		"wake_reason":       s.latestWakeReason(r, task.ID),
+		"skills":            s.compactSkills(r, task),
+		"apis":              []string{"/agent-api/tasks", "/agent-api/projects", "/agent-api/skills"},
+	}
+	s.jsonResponse(w, ctx)
+}
+
+func (s *Server) latestWakeReason(r *http.Request, taskID string) string {
+	wakeups, err := s.storage.Wakeups().ListByTask(r.Context(), taskID)
+	if err != nil || len(wakeups) == 0 {
+		return "assignment"
+	}
+	return string(wakeups[0].Reason)
+}
+
+func (s *Server) compactSkills(r *http.Request, task domain.Task) []map[string]string {
+	agent, err := s.agents.Get(r.Context(), task.AgentID)
+	if err != nil {
+		return []map[string]string{}
+	}
+	skills, err := s.skills.List(r.Context(), task.WorkspaceID)
+	if err != nil {
+		return []map[string]string{}
+	}
+	manual := map[string]struct{}{}
+	for _, id := range agent.SkillIDs {
+		manual[id] = struct{}{}
+	}
+	out := make([]map[string]string, 0)
+	for _, skill := range skills {
+		if !skill.Enabled {
+			continue
+		}
+		if _, ok := manual[skill.ID]; ok || compactSkillAllowedForAgent(skill, agent) || skill.Kind == domain.SkillKindBuiltin && skill.Permission != "" && agentHasPermission(agent, skill.Permission) {
+			out = append(out, map[string]string{"id": skill.ID, "name": skill.Name, "description": skill.Description})
+		}
+	}
+	return out
+}
+
+func compactSkillAllowedForAgent(skill domain.Skill, agent domain.Agent) bool {
+	for _, id := range skill.AgentIDs {
+		if id == agent.ID {
+			return true
+		}
+	}
+	for _, agentType := range skill.AllowedAgentTypes {
+		if agentType == agent.Type {
+			return true
+		}
+	}
+	for _, required := range skill.AllowedPermissions {
+		if agentHasPermission(agent, required) {
+			return true
+		}
+	}
+	return false
+}
+
+func agentHasPermission(agent domain.Agent, required domain.AgentPermission) bool {
+	for _, permission := range agent.Permissions {
+		if permission == required {
+			return true
+		}
+	}
+	return false
 }
 
 func (s *Server) handleAgentTaskDetail(w http.ResponseWriter, r *http.Request) {
@@ -301,6 +435,10 @@ func (s *Server) handleAgentCreateComment(w http.ResponseWriter, r *http.Request
 	if req.Role == "" {
 		req.Role = domain.MessageRoleUser
 	}
+	if err := s.auth.RequireAgentPermission(r.Context(), req.FromID, domain.PermissionTasksUpdate); err != nil {
+		writeTaskError(w, err)
+		return
+	}
 	message, err := s.tasks.AddMessage(r.Context(), r.PathValue("id"), req.FromID, req.ToID, req.Role, req.Body)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -322,6 +460,13 @@ func (s *Server) handleAgentCheckoutTask(w http.ResponseWriter, r *http.Request)
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
+	if err := s.auth.RequireAgentPermission(r.Context(), req.AgentID, domain.PermissionTasksRun); err != nil {
+		writeTaskError(w, err)
+		return
+	}
+	if req.RunID == "" {
+		req.RunID = "run_" + r.PathValue("id") + "_auto"
+	}
 	task, err := s.tasks.Checkout(r.Context(), r.PathValue("id"), req.AgentID, req.RunID, parseTaskStatuses(req.ExpectedStatuses))
 	if err != nil {
 		writeTaskError(w, err)
@@ -336,6 +481,10 @@ func (s *Server) handleAgentReleaseTask(w http.ResponseWriter, r *http.Request) 
 		Comment string `json:"comment"`
 	}
 	_ = json.NewDecoder(r.Body).Decode(&req)
+	if err := s.auth.RequireAgentPermission(r.Context(), req.AgentID, domain.PermissionTasksUpdate); err != nil {
+		writeTaskError(w, err)
+		return
+	}
 	task, err := s.tasks.Release(r.Context(), r.PathValue("id"), req.AgentID, req.Comment)
 	if err != nil {
 		writeTaskError(w, err)
@@ -354,6 +503,10 @@ func (s *Server) handleAgentUpdateTask(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
+	if err := s.auth.RequireAgentPermission(r.Context(), req.AgentID, domain.PermissionTasksUpdate); err != nil {
+		writeTaskError(w, err)
+		return
+	}
 	task, err := s.tasks.UpdateStatus(r.Context(), r.PathValue("id"), req.Status, req.Comment, req.AgentID)
 	if err != nil {
 		writeTaskError(w, err)
@@ -363,6 +516,14 @@ func (s *Server) handleAgentUpdateTask(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleAgentWakeTask(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		AgentID string `json:"agent_id"`
+	}
+	_ = json.NewDecoder(r.Body).Decode(&req)
+	if err := s.auth.RequireAgentPermission(r.Context(), req.AgentID, domain.PermissionTasksUpdate); err != nil {
+		writeTaskError(w, err)
+		return
+	}
 	task, err := s.tasks.Wake(r.Context(), r.PathValue("id"))
 	if err != nil {
 		writeTaskError(w, err)
@@ -389,6 +550,10 @@ func parseTaskStatuses(values []string) []domain.TaskStatus {
 	return statuses
 }
 
+func isAgentAPIRequest(r *http.Request) bool {
+	return strings.HasPrefix(r.URL.Path, "/agent-api/")
+}
+
 func writeTaskError(w http.ResponseWriter, err error) {
 	status := http.StatusBadRequest
 	if errors.Is(err, domain.ErrConflict) {
@@ -396,6 +561,9 @@ func writeTaskError(w http.ResponseWriter, err error) {
 	}
 	if errors.Is(err, domain.ErrNotFound) {
 		status = http.StatusNotFound
+	}
+	if errors.Is(err, domain.ErrForbidden) {
+		status = http.StatusForbidden
 	}
 	http.Error(w, err.Error(), status)
 }
@@ -409,6 +577,18 @@ func (s *Server) handleDelegateTask(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if err := s.auth.RequireAgentPermission(r.Context(), req.FromAgentID, domain.PermissionDelegate); err != nil {
+		writeTaskError(w, err)
+		return
+	}
+	if req.ToAgentID == "" {
+		writeTaskError(w, domain.ErrInvalidInput)
+		return
+	}
+	if _, err := s.agents.Get(r.Context(), req.ToAgentID); err != nil {
+		writeTaskError(w, err)
 		return
 	}
 

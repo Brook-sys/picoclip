@@ -67,6 +67,39 @@ func testCoreFlow(t *testing.T, factory StorageFactory) {
 	if _, err := storage.Tasks().ClaimNextPending(ctx); err != domain.ErrNoPendingTasks {
 		t.Fatalf("expected no pending tasks, got %v", err)
 	}
+	locked := domain.Task{ID: "tsk_locked", WorkspaceID: workspace.ID, AgentID: agent.ID, Title: "Locked", Prompt: "Do locked work", Status: domain.TaskStatusInProgress, NeedsRun: true, CheckoutRunID: "run_locked", CheckedOutByAgentID: agent.ID, CreatedAt: now.Add(time.Second), UpdatedAt: now.Add(time.Second)}
+	if err := storage.Tasks().Create(ctx, locked); err != nil {
+		t.Fatal(err)
+	}
+	exhausted := domain.Task{ID: "tsk_exhausted", WorkspaceID: workspace.ID, AgentID: agent.ID, Title: "Exhausted", Prompt: "Do exhausted work", Status: domain.TaskStatusTodo, NeedsRun: true, Attempts: 1, MaxAttempts: 1, CreatedAt: now.Add(2 * time.Second), UpdatedAt: now.Add(2 * time.Second)}
+	if err := storage.Tasks().Create(ctx, exhausted); err != nil {
+		t.Fatal(err)
+	}
+	low := domain.Task{ID: "tsk_low_priority", WorkspaceID: workspace.ID, AgentID: agent.ID, Title: "Low", Prompt: "Do low work", Status: domain.TaskStatusTodo, NeedsRun: true, Priority: 1, CreatedAt: now.Add(3 * time.Second), UpdatedAt: now.Add(3 * time.Second)}
+	high := domain.Task{ID: "tsk_high_priority", WorkspaceID: workspace.ID, AgentID: agent.ID, Title: "High", Prompt: "Do high work", Status: domain.TaskStatusTodo, NeedsRun: true, Priority: 10, CreatedAt: now.Add(4 * time.Second), UpdatedAt: now.Add(4 * time.Second)}
+	if err := storage.Tasks().Create(ctx, low); err != nil {
+		t.Fatal(err)
+	}
+	if err := storage.Tasks().Create(ctx, high); err != nil {
+		t.Fatal(err)
+	}
+	claimed, err = storage.Tasks().ClaimNextPending(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if claimed.ID != high.ID {
+		t.Fatalf("expected high priority task, got %s", claimed.ID)
+	}
+	claimed, err = storage.Tasks().ClaimNextPending(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if claimed.ID != low.ID {
+		t.Fatalf("expected low priority task, got %s", claimed.ID)
+	}
+	if _, err := storage.Tasks().ClaimNextPending(ctx); err != domain.ErrNoPendingTasks {
+		t.Fatalf("expected locked and exhausted tasks skipped, got %v", err)
+	}
 	run := domain.Run{ID: "run_contract", TaskID: task.ID, AgentID: agent.ID, DriverType: "noop", Status: domain.RunStatusSucceeded, StartedAt: now}
 	if err := storage.Runs().Create(ctx, run); err != nil {
 		t.Fatal(err)

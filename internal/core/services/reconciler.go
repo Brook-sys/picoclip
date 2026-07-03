@@ -80,31 +80,41 @@ func (r *Reconciler) detectStalledRuns(ctx context.Context) int {
 		run.FinishedAt = &finished
 		_ = r.storage.Runs().Update(ctx, run)
 
+		requeued := false
 		task, err := r.storage.Tasks().Get(ctx, run.TaskID)
 		if err == nil && task.CheckoutRunID == run.ID {
 			task.CheckoutRunID = ""
+			task.CheckedOutByAgentID = ""
 			task.ExecutionLockedAt = nil
 			task.LockExpiresAt = nil
-			task.NeedsRun = true
+			if task.MaxAttempts > 0 && task.Attempts >= task.MaxAttempts {
+				task.Status = domain.TaskStatusBlocked
+				task.NeedsRun = false
+			} else {
+				task.NeedsRun = true
+				requeued = true
+			}
 			task.UpdatedAt = now
 			_ = r.storage.Tasks().Update(ctx, task)
 		}
 
-		due := now.Add(time.Duration(run.Attempt+1) * 30 * time.Second)
-		if due.Sub(now) > 5*time.Minute {
-			due = now.Add(5 * time.Minute)
+		if requeued {
+			due := now.Add(time.Duration(run.Attempt+1) * 30 * time.Second)
+			if due.Sub(now) > 5*time.Minute {
+				due = now.Add(5 * time.Minute)
+			}
+			wakeup := domain.WakeupRequest{
+				ID:        r.idGen.NewID("wakeup"),
+				TaskID:    run.TaskID,
+				AgentID:   run.AgentID,
+				Reason:    domain.WakeupReasonRetry,
+				Status:    domain.WakeupStatusPending,
+				Priority:  5,
+				DueAt:     due,
+				CreatedAt: now,
+			}
+			_ = r.storage.Wakeups().Create(ctx, wakeup)
 		}
-		wakeup := domain.WakeupRequest{
-			ID:        r.idGen.NewID("wakeup"),
-			TaskID:    run.TaskID,
-			AgentID:   run.AgentID,
-			Reason:    domain.WakeupReasonRetry,
-			Status:    domain.WakeupStatusPending,
-			Priority:  5,
-			DueAt:     due,
-			CreatedAt: now,
-		}
-		_ = r.storage.Wakeups().Create(ctx, wakeup)
 		count++
 	}
 
@@ -136,7 +146,12 @@ func (r *Reconciler) recoverOrphanedRuns(ctx context.Context) int {
 			task.CheckedOutByAgentID = ""
 			task.ExecutionLockedAt = nil
 			task.LockExpiresAt = nil
-			task.NeedsRun = true
+			if task.MaxAttempts > 0 && task.Attempts >= task.MaxAttempts {
+				task.Status = domain.TaskStatusBlocked
+				task.NeedsRun = false
+			} else {
+				task.NeedsRun = true
+			}
 			task.UpdatedAt = now
 			_ = r.storage.Tasks().Update(ctx, task)
 		}

@@ -72,7 +72,7 @@ func TestAgentTaskLifecycleAPI(t *testing.T) {
 
 	client := ts.Client()
 	agent := postJSON(t, client, ts.URL+"/api/agents", map[string]any{"name": "Lifecycle Agent", "type": "noop"})
-	task := postJSON(t, client, ts.URL+"/agent-api/tasks", map[string]any{"assignee_agent_id": agent["id"], "prompt": "Lifecycle test"})
+	task := postJSON(t, client, ts.URL+"/agent-api/tasks", map[string]any{"from_agent_id": agent["id"], "assignee_agent_id": agent["id"], "prompt": "Lifecycle test"})
 	if task["status"] != "todo" {
 		t.Fatalf("created status = %v, want todo", task["status"])
 	}
@@ -97,7 +97,7 @@ func TestAgentTaskLifecycleAPI(t *testing.T) {
 		t.Fatalf("patch blocked status = %d", res.StatusCode)
 	}
 
-	_ = postJSON(t, client, ts.URL+"/agent-api/tasks/"+task["id"].(string)+"/comments", map[string]any{"role": "user", "body": "Continue."})
+	_ = postJSON(t, client, ts.URL+"/agent-api/tasks/"+task["id"].(string)+"/comments", map[string]any{"from_id": agent["id"], "role": "user", "body": "Continue."})
 
 	detailRes, err := client.Get(ts.URL + "/agent-api/tasks/" + task["id"].(string))
 	if err != nil {
@@ -120,6 +120,90 @@ func TestAgentTaskLifecycleAPI(t *testing.T) {
 	}
 	if len(detail.Messages) < 2 {
 		t.Fatalf("messages len = %d, want at least 2", len(detail.Messages))
+	}
+}
+
+func TestAgentAPIPermissionEnforcement(t *testing.T) {
+	ts := newTestServer(t)
+	defer ts.Close()
+
+	client := ts.Client()
+	agent := postJSON(t, client, ts.URL+"/api/agents", map[string]any{"name": "Observer", "type": "noop", "capability": "observer"})
+	task := postJSON(t, client, ts.URL+"/api/tasks", map[string]any{"agent_id": agent["id"], "title": "Protected", "prompt": "Do"})
+
+	body, _ := json.Marshal(map[string]any{"agent_id": agent["id"], "expected_statuses": []string{"todo"}})
+	res, err := client.Post(ts.URL+"/agent-api/tasks/"+task["id"].(string)+"/checkout", "application/json", bytes.NewReader(body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusForbidden {
+		t.Fatalf("checkout status = %d, want 403", res.StatusCode)
+	}
+
+	cancelBody, _ := json.Marshal(map[string]any{"agent_id": agent["id"], "reason": "test"})
+	cancelReq, _ := http.NewRequest(http.MethodPost, ts.URL+"/api/tasks/"+task["id"].(string)+"/cancel", bytes.NewReader(cancelBody))
+	cancelReq.Header.Set("Content-Type", "application/json")
+	cancelRes, err := client.Do(cancelReq)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cancelRes.Body.Close()
+	if cancelRes.StatusCode != http.StatusForbidden {
+		t.Fatalf("cancel status = %d, want 403", cancelRes.StatusCode)
+	}
+}
+
+func TestAgentInboxLiteAndHeartbeatContext(t *testing.T) {
+	ts := newTestServer(t)
+	defer ts.Close()
+
+	client := ts.Client()
+	agent := postJSON(t, client, ts.URL+"/api/agents", map[string]any{"name": "Inbox Agent", "type": "noop"})
+	task := postJSON(t, client, ts.URL+"/agent-api/tasks", map[string]any{"from_agent_id": agent["id"], "assignee_agent_id": agent["id"], "title": "Inbox task", "prompt": "Do inbox work"})
+	_ = postJSON(t, client, ts.URL+"/agent-api/tasks/"+task["id"].(string)+"/comments", map[string]any{"from_id": agent["id"], "role": "user", "body": "Latest user comment"})
+
+	inboxRes, err := client.Get(ts.URL + "/agent-api/agents/me/inbox-lite?agent_id=" + agent["id"].(string))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer inboxRes.Body.Close()
+	if inboxRes.StatusCode != http.StatusOK {
+		t.Fatalf("inbox status = %d", inboxRes.StatusCode)
+	}
+	var inbox struct {
+		Inbox []struct {
+			TaskID string `json:"task_id"`
+			Title  string `json:"title"`
+		} `json:"inbox"`
+	}
+	if err := json.NewDecoder(inboxRes.Body).Decode(&inbox); err != nil {
+		t.Fatal(err)
+	}
+	if len(inbox.Inbox) == 0 || inbox.Inbox[0].TaskID != task["id"].(string) {
+		t.Fatalf("unexpected inbox: %+v", inbox)
+	}
+
+	ctxRes, err := client.Get(ts.URL + "/agent-api/tasks/" + task["id"].(string) + "/heartbeat-context")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ctxRes.Body.Close()
+	if ctxRes.StatusCode != http.StatusOK {
+		t.Fatalf("heartbeat context status = %d", ctxRes.StatusCode)
+	}
+	var hb map[string]any
+	if err := json.NewDecoder(ctxRes.Body).Decode(&hb); err != nil {
+		t.Fatal(err)
+	}
+	if hb["last_user_comment"] != "Latest user comment" {
+		t.Fatalf("last_user_comment = %v", hb["last_user_comment"])
+	}
+	if hb["wake_reason"] != "comment" {
+		t.Fatalf("wake_reason = %v", hb["wake_reason"])
+	}
+	if _, ok := hb["skills"].([]any); !ok {
+		t.Fatalf("skills missing from heartbeat context: %+v", hb)
 	}
 }
 
@@ -214,7 +298,7 @@ func TestTaskDetailUsesPartialPollingOnly(t *testing.T) {
 
 	client := ts.Client()
 	agent := postJSON(t, client, ts.URL+"/api/agents", map[string]any{"name": "UI Agent", "type": "noop"})
-	task := postJSON(t, client, ts.URL+"/agent-api/tasks", map[string]any{"assignee_agent_id": agent["id"], "prompt": "UI detail test"})
+	task := postJSON(t, client, ts.URL+"/agent-api/tasks", map[string]any{"from_agent_id": agent["id"], "assignee_agent_id": agent["id"], "prompt": "UI detail test"})
 
 	res, err := client.Get(ts.URL + "/tasks/" + task["id"].(string))
 	if err != nil {

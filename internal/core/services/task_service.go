@@ -161,7 +161,9 @@ func (s *TaskService) Delegate(ctx context.Context, parentID, fromAgentID, toAge
 	}
 	now := s.clock.Now()
 	_ = s.storage.Messages().Create(ctx, domain.Message{ID: s.idGen.NewID("msg"), TaskID: parentID, FromID: fromAgentID, ToID: toAgentID, Role: domain.MessageRoleDelegated, Body: "Delegated task " + task.ID + ": " + prompt, CreatedAt: now})
-	_ = s.bus.Publish(ctx, domain.Event{ID: s.idGen.NewID("evt"), Type: domain.EventTaskDelegated, TaskID: parentID, AgentID: toAgentID, Message: "Task delegated", Data: map[string]string{"child_task_id": task.ID}, CreatedAt: now})
+	event := domain.Event{ID: s.idGen.NewID("evt"), Type: domain.EventTaskDelegated, TaskID: parentID, AgentID: toAgentID, Message: "Task delegated", Data: map[string]string{"child_task_id": task.ID, "from_agent_id": fromAgentID, "to_agent_id": toAgentID}, CreatedAt: now}
+	_ = s.storage.Events().Create(ctx, event)
+	_ = s.bus.Publish(ctx, event)
 	return task, nil
 }
 

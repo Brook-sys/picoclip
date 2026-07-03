@@ -66,6 +66,10 @@ func (r *Runner) Run(ctx context.Context, task domain.Task) {
 	}
 	task = current
 	now := r.clock.Now()
+	if r.maxAttemptsExceeded(task) {
+		r.failTask(ctx, task, "maximum attempts reached")
+		return
+	}
 	if r.blockIfBudgetExceeded(ctx, task, now) {
 		return
 	}
@@ -211,6 +215,12 @@ func (r *Runner) Run(ctx context.Context, task domain.Task) {
 		} else {
 			latest.Status = domain.TaskStatusInProgress
 		}
+		if latest.CheckoutRunID == run.ID {
+			latest.CheckoutRunID = ""
+			latest.CheckedOutByAgentID = ""
+			latest.ExecutionLockedAt = nil
+			latest.LockExpiresAt = nil
+		}
 		latest.UpdatedAt = now
 		_ = r.storage.Tasks().Update(ctx, latest)
 	}
@@ -221,11 +231,23 @@ func (r *Runner) failTask(ctx context.Context, task domain.Task, message string)
 	now := r.clock.Now()
 	task.Status = domain.TaskStatusBlocked
 	task.NeedsRun = false
+	task.CheckoutRunID = ""
+	task.CheckedOutByAgentID = ""
+	task.ExecutionLockedAt = nil
+	task.LockExpiresAt = nil
 	task.FinishedAt = nil
 	task.UpdatedAt = now
 	_ = r.storage.Tasks().Update(ctx, task)
 	_ = r.storage.Messages().Create(ctx, domain.Message{ID: r.idGen.NewID("msg"), TaskID: task.ID, FromID: task.AgentID, Role: domain.MessageRoleSystem, Body: "Run failed: " + message, CreatedAt: now})
 	_ = r.bus.Publish(ctx, domain.Event{ID: r.idGen.NewID("evt"), Type: domain.EventTaskFailed, TaskID: task.ID, AgentID: task.AgentID, Message: message, CreatedAt: now})
+}
+
+func (r *Runner) maxAttemptsExceeded(task domain.Task) bool {
+	limit := task.MaxAttempts
+	if limit <= 0 {
+		limit = r.config.MaxAttempts
+	}
+	return limit > 0 && task.Attempts >= limit
 }
 
 func (r *Runner) skillsForAgent(ctx context.Context, agent domain.Agent) []domain.Skill {
@@ -326,6 +348,35 @@ func estimateTokens(text string) int {
 }
 
 func (r *Runner) recordTokenUsage(ctx context.Context, run domain.Run) {
+	usage, err := r.storage.Usage().ListByTask(ctx, run.TaskID)
+	if err == nil {
+		for _, event := range usage {
+			if event.RunID == run.ID {
+				return
+			}
+		}
+	}
+
+	createdAt := r.clock.Now()
+	if run.FinishedAt != nil {
+		createdAt = *run.FinishedAt
+	}
+	usageID := r.idGen.NewID("usage")
+	if run.ID != "" {
+		usageID = "usage_" + run.ID
+	}
+	_ = r.storage.Usage().Create(ctx, domain.UsageEvent{
+		ID:           usageID,
+		RunID:        run.ID,
+		TaskID:       run.TaskID,
+		AgentID:      run.AgentID,
+		Provider:     run.DriverType,
+		InputTokens:  run.InputTokens,
+		OutputTokens: run.OutputTokens,
+		CostMicros:   0,
+		CreatedAt:    createdAt,
+	})
+
 	task, err := r.storage.Tasks().Get(ctx, run.TaskID)
 	if err == nil {
 		task.InputTokens += run.InputTokens

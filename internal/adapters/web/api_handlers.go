@@ -50,9 +50,16 @@ func (s *Server) handleUpdateAgentSkills(w http.ResponseWriter, r *http.Request)
 
 func (s *Server) handleCancelTask(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		Reason string `json:"reason"`
+		AgentID string `json:"agent_id"`
+		Reason  string `json:"reason"`
 	}
 	_ = json.NewDecoder(r.Body).Decode(&req)
+	if isAgentAPIRequest(r) || req.AgentID != "" {
+		if err := s.auth.RequireAgentPermission(r.Context(), req.AgentID, domain.PermissionTasksCancel); err != nil {
+			writeTaskError(w, err)
+			return
+		}
+	}
 	task, err := s.tasks.Cancel(r.Context(), r.PathValue("id"), req.Reason)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -72,6 +79,7 @@ func (s *Server) handleGetSkills(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleCreateSkill(w http.ResponseWriter, r *http.Request) {
 	var req struct {
+		AgentID      string `json:"agent_id"`
 		ProjectID    string `json:"project_id"`
 		Name         string `json:"name"`
 		Description  string `json:"description"`
@@ -80,6 +88,12 @@ func (s *Server) handleCreateSkill(w http.ResponseWriter, r *http.Request) {
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
+	}
+	if req.AgentID != "" {
+		if err := s.auth.RequireAgentPermission(r.Context(), req.AgentID, domain.PermissionSkillsCreate); err != nil {
+			writeTaskError(w, err)
+			return
+		}
 	}
 	skill, err := s.skills.Create(r.Context(), req.ProjectID, req.Name, req.Description, req.Instructions)
 	if err != nil {
@@ -91,6 +105,7 @@ func (s *Server) handleCreateSkill(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleUpdateSkill(w http.ResponseWriter, r *http.Request) {
 	var req struct {
+		AgentID      string `json:"agent_id"`
 		Name         string `json:"name"`
 		Description  string `json:"description"`
 		Instructions string `json:"instructions"`
@@ -99,6 +114,12 @@ func (s *Server) handleUpdateSkill(w http.ResponseWriter, r *http.Request) {
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
+	}
+	if req.AgentID != "" {
+		if err := s.auth.RequireAgentPermission(r.Context(), req.AgentID, domain.PermissionSkillsUpdate); err != nil {
+			writeTaskError(w, err)
+			return
+		}
 	}
 	skill, err := s.skills.Update(r.Context(), r.PathValue("id"), req.Name, req.Description, req.Instructions, req.Enabled)
 	if err != nil {
@@ -109,6 +130,13 @@ func (s *Server) handleUpdateSkill(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleDeleteSkill(w http.ResponseWriter, r *http.Request) {
+	agentID := r.URL.Query().Get("agent_id")
+	if agentID != "" {
+		if err := s.auth.RequireAgentPermission(r.Context(), agentID, domain.PermissionSkillsDelete); err != nil {
+			writeTaskError(w, err)
+			return
+		}
+	}
 	if err := s.skills.Delete(r.Context(), r.PathValue("id")); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return

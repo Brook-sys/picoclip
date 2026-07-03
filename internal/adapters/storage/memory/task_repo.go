@@ -73,20 +73,34 @@ func taskStatusIn(status domain.TaskStatus, statuses []domain.TaskStatus) bool {
 func (r taskRepository) ClaimNextPending(ctx context.Context) (domain.Task, error) {
 	r.storage.mu.Lock()
 	defer r.storage.mu.Unlock()
-	var oldest *domain.Task
+	var selected *domain.Task
 	for _, task := range r.storage.tasks {
-		if task.NeedsRun && task.Status != domain.TaskStatusDone && task.Status != domain.TaskStatusCancelled {
-			if oldest == nil || task.CreatedAt.Before(oldest.CreatedAt) {
-				t := task
-				oldest = &t
-			}
+		if !taskRunnable(task) {
+			continue
+		}
+		if selected == nil || task.Priority > selected.Priority || task.Priority == selected.Priority && task.CreatedAt.Before(selected.CreatedAt) {
+			t := task
+			selected = &t
 		}
 	}
-	if oldest == nil {
+	if selected == nil {
 		return domain.Task{}, domain.ErrNoPendingTasks
 	}
-	task := *oldest
+	task := *selected
 	task.NeedsRun = false
 	r.storage.tasks[task.ID] = task
 	return task, nil
+}
+
+func taskRunnable(task domain.Task) bool {
+	if !task.NeedsRun || task.Status == domain.TaskStatusDone || task.Status == domain.TaskStatusCancelled {
+		return false
+	}
+	if task.CheckoutRunID != "" || task.CheckedOutByAgentID != "" {
+		return false
+	}
+	if task.MaxAttempts > 0 && task.Attempts >= task.MaxAttempts {
+		return false
+	}
+	return true
 }

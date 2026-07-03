@@ -2,12 +2,12 @@ package web
 
 import "picoclip/internal/core/domain"
 
-templ ActivityPage(events []domain.Event) {
+templ ActivityPage(events []domain.Event, tasks map[string]taskResponse, agents map[string]domain.Agent) {
 	@PageShell("activity", "Activity", "Global event stream, executions and human actions.", nil) {
-		<section class="panel">
+		<section class="panel activity-panel">
 			@SectionHeader("Live Activity", "Recent activity updates in real time when events are published.") {}
 			<div id="activity-live">
-				@EventTimeline(events)
+				@EventTimelineFull(events, tasks, agents)
 			</div>
 		</section>
 		<script>
@@ -20,14 +20,133 @@ templ ActivityPage(events []domain.Event) {
 				source.onmessage = function(evt){
 					try {
 						var ev = JSON.parse(evt.data);
-						var timeline = root.querySelector('.timeline');
-						if(!timeline){ root.innerHTML = '<div class="timeline"></div>'; timeline = root.querySelector('.timeline'); }
-						var node = document.createElement('article');
-						node.innerHTML = '<span></span><div><strong>'+esc(ev.type)+'</strong><p>'+esc(ev.message)+'</p><small>live</small></div>';
+						var timeline = root.querySelector('.activity-timeline');
+						if(!timeline){ root.innerHTML = '<div class="activity-timeline"></div>'; timeline = root.querySelector('.activity-timeline'); }
+						var node = document.createElement('div');
+						node.className = 'activity-timeline-item';
+
+						var pills = '';
+						if (ev.task_id) pills += '<a href="/tasks/'+esc(ev.task_id)+'" class="activity-pill">Task '+esc(ev.task_id.substring(0,8))+'</a>';
+						if (ev.agent_id) pills += '<a href="/agents/'+esc(ev.agent_id)+'" class="activity-pill">Agent '+esc(ev.agent_id.substring(0,8))+'</a>';
+						if (ev.run_id) pills += '<a href="/runs/'+esc(ev.run_id)+'" class="activity-pill">Run '+esc(ev.run_id.substring(0,8))+'</a>';
+
+						// A crude JS fallback for friendly messages if needed, though they will load proper friendly text on refresh.
+						var friendly = esc(ev.message);
+						if (ev.type === "message.created") {
+							var role = ev.data && ev.data.role ? ev.data.role : "User";
+							friendly = role + " added a message to the task.";
+						} else if (ev.type === "task.created") {
+							friendly = "A new task was created.";
+						} else if (ev.type === "task.delegated") {
+							friendly = "A subtask was delegated.";
+						} else if (ev.type === "run.completed") {
+							friendly = "Agent finished executing the task.";
+						} else if (ev.type === "run.started") {
+							friendly = "Agent started executing the task.";
+						}
+
+						node.innerHTML = '<div class="activity-timeline-icon"><i data-lucide="activity"></i></div><div class="activity-timeline-content"><div class="activity-timeline-header"><strong>'+esc(ev.type)+'</strong><div class="activity-pills">'+pills+'</div><small>live</small></div><div class="activity-timeline-body"><p>'+friendly+'</p></div></div>';
 						timeline.prepend(node);
 					} catch(e) {}
 				};
 			})();
 		</script>
 	}
+}
+
+func agentNameByID(id string, agents map[string]domain.Agent) string {
+	if agent, ok := agents[id]; ok {
+		return agent.Name
+	}
+	if id != "" {
+		return id
+	}
+	return "an agent"
+}
+
+func friendlyEventMessage(event domain.Event, tasks map[string]taskResponse, agents map[string]domain.Agent) string {
+	taskName := "a task"
+	if t, ok := tasks[event.TaskID]; ok && t.Title != "" {
+		taskName = "\"" + t.Title + "\""
+	}
+	agentName := "An agent"
+	if a, ok := agents[event.AgentID]; ok {
+		agentName = a.Name
+	}
+
+	switch event.Type {
+	case domain.EventTaskCreated:
+		return "User created task " + taskName + "."
+	case domain.EventMessageCreated:
+		role := event.Data["role"]
+		if role == "agent" {
+			return agentName + " sent a message in task " + taskName + "."
+		}
+		return "User sent a message in task " + taskName + "."
+	case domain.EventTaskStarted, domain.EventRunStarted:
+		return agentName + " started executing task " + taskName + "."
+	case domain.EventTaskCompleted, domain.EventRunCompleted:
+		return agentName + " finished executing task " + taskName + "."
+	case domain.EventTaskFailed, domain.EventRunFailed:
+		return agentName + " failed to execute task " + taskName + "."
+	case domain.EventTaskCanceled:
+		return "User canceled task " + taskName + "."
+	case domain.EventTaskDelegated:
+		fromName := agentNameByID(event.Data["from_agent_id"], agents)
+		toName := agentNameByID(event.Data["to_agent_id"], agents)
+		return fromName + " delegated a new subtask to " + toName + "."
+	case domain.EventAgentCreated:
+		return "User created a new agent: " + agentName + "."
+	case domain.EventBudgetBlocked:
+		return "Execution of task " + taskName + " was blocked by a budget limit."
+	default:
+		return event.Message
+	}
+}
+
+templ EventTimelineFull(events []domain.Event, tasks map[string]taskResponse, agents map[string]domain.Agent) {
+	<div class="activity-timeline">
+		if len(events) == 0 {
+			@EmptyState("No activity yet", "System events will appear here as they happen.", "activity") {}
+		}
+		for _, event := range events {
+			<div class="activity-timeline-item">
+				<div class="activity-timeline-icon">@Icon("activity", 14)</div>
+				<div class="activity-timeline-content">
+					<div class="activity-timeline-header">
+						<strong>{ string(event.Type) }</strong>
+						<div class="activity-pills">
+							if event.TaskID != "" {
+								<a href={ templ.URL("/tasks/" + event.TaskID) } class="activity-pill">
+									if task, ok := tasks[event.TaskID]; ok && task.Title != "" {
+										Task: { task.Title }
+									} else {
+										Task: { event.TaskID[:8] }
+									}
+								</a>
+							}
+							if event.AgentID != "" {
+								<a href={ templ.URL("/agents/" + event.AgentID) } class="activity-pill">
+									if agent, ok := agents[event.AgentID]; ok {
+										Agent: { agent.Name }
+									} else {
+										Agent: { event.AgentID[:8] }
+									}
+								</a>
+							}
+							if event.RunID != "" {
+								<a href={ templ.URL("/runs/" + event.RunID) } class="activity-pill">
+									Run: { event.RunID[:8] }
+								</a>
+							}
+						</div>
+						<small>{ event.CreatedAt.Format("2006-01-02 15:04:05") }</small>
+					</div>
+					<div class="activity-timeline-body">
+						<p>{ friendlyEventMessage(event, tasks, agents) }</p>
+					</div>
+				</div>
+			</div>
+		}
+	</div>
 }
