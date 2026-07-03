@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"sync"
+	"time"
 
 	"picoclip/internal/core/domain"
 	"picoclip/internal/core/ports"
@@ -31,7 +32,7 @@ func NewDispatcher(storage ports.Storage, runner *Runner, logger ports.Logger, m
 
 func (d *Dispatcher) Dispatch(ctx context.Context) {
 	for {
-		task, err := d.storage.Tasks().ClaimNextPending(ctx)
+		task, run, err := d.storage.Tasks().ClaimNextRunnable(ctx, time.Now(), 30*time.Minute)
 		if err != nil {
 			if !errors.Is(err, domain.ErrNoPendingTasks) {
 				d.logger.Warn("dispatcher.claim_failed", "err", err)
@@ -41,7 +42,7 @@ func (d *Dispatcher) Dispatch(ctx context.Context) {
 			return
 		}
 
-		d.logger.Debug("dispatcher.task_claimed", "task_id", task.ID, "agent_id", task.AgentID)
+		d.logger.Debug("dispatcher.task_claimed", "task_id", task.ID, "agent_id", task.AgentID, "run_id", run.ID)
 		select {
 		case d.semaphore <- struct{}{}:
 			d.wg.Add(1)

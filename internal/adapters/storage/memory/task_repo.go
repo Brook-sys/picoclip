@@ -3,6 +3,7 @@ package memory
 import (
 	"context"
 	"sort"
+	"time"
 
 	"picoclip/internal/core/domain"
 	"picoclip/internal/core/ports"
@@ -90,6 +91,50 @@ func (r taskRepository) ClaimNextPending(ctx context.Context) (domain.Task, erro
 	task.NeedsRun = false
 	r.storage.tasks[task.ID] = task
 	return task, nil
+}
+
+func (r taskRepository) ClaimNextRunnable(ctx context.Context, now time.Time, lockTTL time.Duration) (domain.Task, domain.Run, error) {
+	r.storage.mu.Lock()
+	defer r.storage.mu.Unlock()
+	var selected *domain.Task
+	for _, task := range r.storage.tasks {
+		if !taskRunnable(task) {
+			continue
+		}
+		if selected == nil || task.Priority > selected.Priority || task.Priority == selected.Priority && task.CreatedAt.Before(selected.CreatedAt) {
+			t := task
+			selected = &t
+		}
+	}
+	if selected == nil {
+		return domain.Task{}, domain.Run{}, domain.ErrNoPendingTasks
+	}
+	task := *selected
+	task.NeedsRun = false
+	task.Status = domain.TaskStatusInProgress
+	task.Attempts++
+	runID := "run_" + task.ID + "_" + now.Format("20060102150405")
+	task.CheckoutRunID = runID
+	task.CheckedOutByAgentID = task.AgentID
+	task.StartedAt = &now
+	task.ExecutionLockedAt = &now
+	expires := now.Add(lockTTL)
+	task.LockExpiresAt = &expires
+	task.UpdatedAt = now
+	r.storage.tasks[task.ID] = task
+
+	run := domain.Run{
+		ID:           runID,
+		TaskID:       task.ID,
+		AgentID:      task.AgentID,
+		DriverType:   "",
+		Status:       domain.RunStatusRunning,
+		Attempt:      task.Attempts,
+		StartedAt:    now,
+		LastOutputAt: &now,
+		StallTimeout: int(lockTTL.Seconds()),
+	}
+	return task, run, nil
 }
 
 func taskRunnable(task domain.Task) bool {

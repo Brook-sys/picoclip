@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"time"
 
 	"picoclip/internal/core/domain"
 	"picoclip/internal/core/ports"
@@ -185,6 +186,92 @@ func (r *TaskRepository) ClaimNextPending(ctx context.Context) (domain.Task, err
 	}
 
 	return task, nil
+}
+
+func (r *TaskRepository) ClaimNextRunnable(ctx context.Context, now time.Time, lockTTL time.Duration) (domain.Task, domain.Run, error) {
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return domain.Task{}, domain.Run{}, err
+	}
+	defer tx.Rollback()
+
+	query := `
+		SELECT id, parent_id, workspace_id, agent_id, title, prompt, status, priority,
+			attempts, max_attempts, needs_run, checkout_run_id, checked_out_by_agent_id,
+			execution_locked_at, lock_expires_at, cancel_reason, input_tokens, output_tokens, total_tokens, created_at, updated_at, started_at, finished_at, completed_at, cancelled_at
+		FROM tasks
+		WHERE needs_run = 1
+			AND status NOT IN ('done', 'cancelled')
+			AND checkout_run_id = ''
+			AND checked_out_by_agent_id = ''
+			AND (max_attempts <= 0 OR attempts < max_attempts)
+		ORDER BY priority DESC, created_at ASC LIMIT 1
+	`
+	row := tx.QueryRowContext(ctx, query)
+	task, err := scanTask(row)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) || errors.Is(err, domain.ErrNotFound) {
+			return domain.Task{}, domain.Run{}, domain.ErrNoPendingTasks
+		}
+		return domain.Task{}, domain.Run{}, err
+	}
+
+	runID := "run_" + task.ID + "_" + time.Now().Format("20060102150405")
+	lockExpires := now.Add(lockTTL)
+
+	update := `
+		UPDATE tasks SET
+			needs_run = 0,
+			status = 'in_progress',
+			attempts = attempts + 1,
+			checkout_run_id = ?,
+			checked_out_by_agent_id = agent_id,
+			started_at = ?,
+			execution_locked_at = ?,
+			lock_expires_at = ?,
+			updated_at = ?
+		WHERE id = ?
+			AND needs_run = 1
+			AND status NOT IN ('done', 'cancelled')
+			AND checkout_run_id = ''
+			AND checked_out_by_agent_id = ''
+			AND (max_attempts <= 0 OR attempts < max_attempts)
+	`
+	res, err := tx.ExecContext(ctx, update, runID, now, now, lockExpires, now, task.ID)
+	if err != nil {
+		return domain.Task{}, domain.Run{}, err
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return domain.Task{}, domain.Run{}, err
+	}
+	if rows == 0 {
+		return domain.Task{}, domain.Run{}, domain.ErrNoPendingTasks
+	}
+
+	// Re-fetch to get updated fields
+	task, err = r.Get(ctx, task.ID)
+	if err != nil {
+		return domain.Task{}, domain.Run{}, err
+	}
+
+	run := domain.Run{
+		ID:           task.CheckoutRunID,
+		TaskID:       task.ID,
+		AgentID:      task.AgentID,
+		DriverType:   "",
+		Status:       domain.RunStatusRunning,
+		Attempt:      task.Attempts,
+		StartedAt:    now,
+		LastOutputAt: &now,
+		StallTimeout: int(lockTTL.Seconds()),
+	}
+
+	if err := tx.Commit(); err != nil {
+		return domain.Task{}, domain.Run{}, err
+	}
+
+	return task, run, nil
 }
 
 func scanTask(row scanner) (domain.Task, error) {
