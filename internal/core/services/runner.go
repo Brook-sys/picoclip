@@ -193,6 +193,8 @@ func (r *Runner) Run(ctx context.Context, task domain.Task) {
 			},
 			OnOutput: func(stdout, stderr []byte) {
 				now := r.clock.Now()
+				run.Output = appendRunStream(run.Output, stdout)
+				run.Error = appendRunStream(run.Error, stderr)
 				run.LastOutputAt = &now
 				_ = r.storage.Runs().Update(ctx, run)
 			},
@@ -372,8 +374,21 @@ func DefaultTaskProtocolPrompt() string {
 	}, "\n")
 }
 
+const maxRunStreamBytes = 256 * 1024
+
 func estimateTokens(text string) int {
 	return len(strings.Fields(text)) * 4 / 3
+}
+
+func appendRunStream(current string, chunk []byte) string {
+	if len(chunk) == 0 {
+		return current
+	}
+	combined := current + string(chunk)
+	if len(combined) <= maxRunStreamBytes {
+		return combined
+	}
+	return combined[len(combined)-maxRunStreamBytes:]
 }
 
 func (r *Runner) recordTokenUsage(ctx context.Context, run domain.Run) {
