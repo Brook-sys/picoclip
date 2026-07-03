@@ -74,26 +74,55 @@ func (r *Runner) Run(ctx context.Context, task domain.Task) {
 		return
 	}
 
-	runID := r.idGen.NewID("run")
-	lockExpiresAt := now.Add(defaultTaskLockTTL)
-
-	task.Status = domain.TaskStatusInProgress
-	task.NeedsRun = false
-	task.Attempts++
-	task.CheckoutRunID = runID
-	task.CheckedOutByAgentID = task.AgentID
-	task.StartedAt = &now
-	task.ExecutionLockedAt = &now
-	task.LockExpiresAt = &lockExpiresAt
-	task.UpdatedAt = now
-	if err := r.storage.Tasks().Update(ctx, task); err != nil {
-		return
-	}
-
 	agent, err := r.storage.Agents().Get(ctx, task.AgentID)
 	if err != nil {
 		r.failTask(ctx, task, "agent not found")
 		return
+	}
+
+	var run domain.Run
+
+	if task.CheckoutRunID != "" {
+		// Task já veio com lease do ClaimNextRunnable
+		run, err = r.storage.Runs().Get(ctx, task.CheckoutRunID)
+		if err != nil {
+			r.failTask(ctx, task, "run not found for lease")
+			return
+		}
+	} else {
+		// Caminho legacy (ClaimNextPending)
+		runID := r.idGen.NewID("run")
+		lockExpiresAt := now.Add(defaultTaskLockTTL)
+
+		task.Status = domain.TaskStatusInProgress
+		task.NeedsRun = false
+		task.Attempts++
+		task.CheckoutRunID = runID
+		task.CheckedOutByAgentID = task.AgentID
+		task.StartedAt = &now
+		task.ExecutionLockedAt = &now
+		task.LockExpiresAt = &lockExpiresAt
+		task.UpdatedAt = now
+		if err := r.storage.Tasks().Update(ctx, task); err != nil {
+			return
+		}
+
+		run = domain.Run{
+			ID:           runID,
+			TaskID:       task.ID,
+			AgentID:      agent.ID,
+			DriverType:   string(agent.Type),
+			Status:       domain.RunStatusRunning,
+			Attempt:      task.Attempts,
+			Input:        task.Prompt,
+			StartedAt:    r.clock.Now(),
+			LastOutputAt: &now,
+			StallTimeout: int(r.config.TaskTimeout.Seconds()),
+		}
+		if err := r.storage.Runs().Create(ctx, run); err != nil {
+			r.failTask(ctx, task, err.Error())
+			return
+		}
 	}
 
 	if agent.Type != "noop" {
@@ -106,23 +135,6 @@ func (r *Runner) Run(ctx context.Context, task domain.Task) {
 			r.failTask(ctx, task, "runtime unavailable")
 			return
 		}
-	}
-
-	run := domain.Run{
-		ID:           runID,
-		TaskID:       task.ID,
-		AgentID:      agent.ID,
-		DriverType:   string(agent.Type),
-		Status:       domain.RunStatusRunning,
-		Attempt:      task.Attempts,
-		Input:        task.Prompt,
-		StartedAt:    r.clock.Now(),
-		LastOutputAt: &now,
-		StallTimeout: int(r.config.TaskTimeout.Seconds()),
-	}
-	if err := r.storage.Runs().Create(ctx, run); err != nil {
-		r.failTask(ctx, task, err.Error())
-		return
 	}
 
 	messages, _ := r.storage.Messages().ListByTask(ctx, task.ID)
