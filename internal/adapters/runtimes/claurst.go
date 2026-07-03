@@ -1,8 +1,10 @@
 package runtimes
 
 import (
+	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -155,9 +157,50 @@ func (a *ClaurstAdapter) Execute(ctx context.Context, state domain.RuntimeState,
 	if state.HomePath != "" {
 		cmd.Env = append(cmd.Env, "CLAURST_HOME="+state.HomePath)
 	}
-	output, err := cmd.CombinedOutput()
+
+	stdoutPipe, err := cmd.StdoutPipe()
 	if err != nil {
-		return ports.RuntimeExecutionResult{}, fmt.Errorf("claurst execution failed: %w, output: %s", err, string(output))
+		return ports.RuntimeExecutionResult{}, err
 	}
-	return ports.RuntimeExecutionResult{Output: strings.TrimSpace(string(output))}, nil
+	stderrPipe, err := cmd.StderrPipe()
+	if err != nil {
+		return ports.RuntimeExecutionResult{}, err
+	}
+
+	if err := cmd.Start(); err != nil {
+		return ports.RuntimeExecutionResult{}, fmt.Errorf("claurst start failed: %w", err)
+	}
+	if input.OnStart != nil && cmd.Process != nil {
+		input.OnStart(cmd.Process.Pid)
+	}
+
+	var stdoutBuf, stderrBuf bytes.Buffer
+	go func() {
+		_, _ = io.Copy(&stdoutBuf, stdoutPipe)
+	}()
+	go func() {
+		_, _ = io.Copy(&stderrBuf, stderrPipe)
+	}()
+
+	err = cmd.Wait()
+
+	if input.OnOutput != nil {
+		input.OnOutput(stdoutBuf.Bytes(), stderrBuf.Bytes())
+	}
+
+	if err != nil {
+		return ports.RuntimeExecutionResult{}, fmt.Errorf("claurst execution failed: %w\nstderr: %s", err, strings.TrimSpace(stderrBuf.String()))
+	}
+	return ports.RuntimeExecutionResult{Output: strings.TrimSpace(stdoutBuf.String())}, nil
+}
+
+func (a *ClaurstAdapter) Cancel(ctx context.Context, state domain.RuntimeState, run domain.Run) error {
+	if run.ProcessID <= 0 {
+		return nil
+	}
+	p, err := os.FindProcess(run.ProcessID)
+	if err != nil {
+		return nil
+	}
+	return p.Kill()
 }

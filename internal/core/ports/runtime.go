@@ -14,6 +14,8 @@ type RuntimeExecutionInput struct {
 	Config    map[string]string
 	Env       map[string]string
 	ExtraArgs []string
+	OnStart   func(pid int)
+	OnOutput  func(stdout, stderr []byte)
 }
 
 type RuntimeExecutionResult struct {
@@ -34,6 +36,7 @@ type RuntimeAdapter interface {
 	ReadConfig(ctx context.Context, state domain.RuntimeState) ([]domain.RuntimeConfigFile, error)
 	WriteConfig(ctx context.Context, state domain.RuntimeState, fileName string, content []byte) error
 	Execute(ctx context.Context, state domain.RuntimeState, input RuntimeExecutionInput) (RuntimeExecutionResult, error)
+	Cancel(ctx context.Context, state domain.RuntimeState, run domain.Run) error
 }
 
 type RuntimeRepository interface {

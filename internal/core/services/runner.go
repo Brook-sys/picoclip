@@ -179,7 +179,24 @@ func (r *Runner) Run(ctx context.Context, task domain.Task) {
 	if agent.Type == "noop" {
 		result = ports.RuntimeExecutionResult{Output: "noop driver executed"}
 	} else {
-		result, err = r.runtimes.Execute(runCtx, domain.RuntimeID(agent.Type), ports.RuntimeExecutionInput{Agent: agent, Task: task, Run: run, Memory: memoryContext, Config: agent.Config, Env: agent.Env, ExtraArgs: agent.ExtraArgs})
+		result, err = r.runtimes.Execute(runCtx, domain.RuntimeID(agent.Type), ports.RuntimeExecutionInput{
+			Agent:     agent,
+			Task:      task,
+			Run:       run,
+			Memory:    memoryContext,
+			Config:    agent.Config,
+			Env:       agent.Env,
+			ExtraArgs: agent.ExtraArgs,
+			OnStart: func(pid int) {
+				run.ProcessID = pid
+				_ = r.storage.Runs().Update(ctx, run)
+			},
+			OnOutput: func(stdout, stderr []byte) {
+				now := r.clock.Now()
+				run.LastOutputAt = &now
+				_ = r.storage.Runs().Update(ctx, run)
+			},
+		})
 	}
 	finishedAt := r.clock.Now()
 	run.FinishedAt = &finishedAt
