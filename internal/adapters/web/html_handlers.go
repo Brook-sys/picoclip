@@ -213,6 +213,15 @@ func (s *Server) loadSettingsView(r *http.Request) (SettingsView, error) {
 	if budgets, err := s.storage.Budgets().List(ctx); err == nil {
 		view.Budgets = budgets
 	}
+	if webhooks, err := s.storage.Webhooks().ListSubscriptions(ctx); err == nil {
+		view.Webhooks = webhooks
+		view.WebhookDeliveries = make(map[string][]domain.WebhookDelivery, len(webhooks))
+		for _, webhook := range webhooks {
+			if deliveries, err := s.storage.Webhooks().ListDeliveries(ctx, webhook.ID, 5); err == nil {
+				view.WebhookDeliveries[webhook.ID] = deliveries
+			}
+		}
+	}
 
 	return view, nil
 }
@@ -361,6 +370,68 @@ func (s *Server) handleWebDeleteBudget(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
+	s.handleWebSettings(w, r)
+}
+
+func (s *Server) handleWebCreateWebhook(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	eventTypes := make([]domain.EventType, 0)
+	for _, raw := range r.Form["event_types"] {
+		raw = strings.TrimSpace(raw)
+		if raw != "" {
+			eventTypes = append(eventTypes, domain.EventType(raw))
+		}
+	}
+	svc := services.NewWebhookService(s.storage, services.SystemClock{}, &services.TimeIDGenerator{})
+	_, err := svc.CreateSubscription(r.Context(), domain.WebhookSubscription{
+		Name:       strings.TrimSpace(r.FormValue("name")),
+		URL:        strings.TrimSpace(r.FormValue("url")),
+		Secret:     r.FormValue("secret"),
+		EventTypes: eventTypes,
+		Enabled:    true,
+	})
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	s.handleWebSettings(w, r)
+}
+
+func (s *Server) handleWebToggleWebhook(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	webhook, err := s.storage.Webhooks().GetSubscription(r.Context(), id)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusNotFound)
+		return
+	}
+	webhook.Enabled = !webhook.Enabled
+	webhook.UpdatedAt = time.Now().UTC()
+	if err := s.storage.Webhooks().UpdateSubscription(r.Context(), webhook); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	s.handleWebSettings(w, r)
+}
+
+func (s *Server) handleWebTestWebhook(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	webhook, err := s.storage.Webhooks().GetSubscription(r.Context(), id)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusNotFound)
+		return
+	}
+	now := time.Now().UTC()
+	event := domain.Event{ID: "evt_test_" + strconv.FormatInt(now.UnixNano(), 10), Type: domain.EventRunCompleted, Message: "Webhook test delivery", Data: map[string]string{"webhook_id": webhook.ID, "source": "settings"}, CreatedAt: now}
+	payload, _ := json.Marshal(event)
+	delivery := domain.WebhookDelivery{ID: "whd_test_" + strconv.FormatInt(now.UnixNano(), 10), SubscriptionID: webhook.ID, EventID: event.ID, EventType: event.Type, URL: webhook.URL, Status: domain.WebhookDeliveryPending, RequestBody: string(payload), CreatedAt: now, UpdatedAt: now}
+	if err := s.storage.Webhooks().CreateDelivery(r.Context(), delivery); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	services.NewWebhookDeliveryWorker(s.storage, services.SystemClock{}, nil).ProcessDue(r.Context())
 	s.handleWebSettings(w, r)
 }
 

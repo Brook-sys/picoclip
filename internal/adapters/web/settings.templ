@@ -2,6 +2,7 @@ package web
 
 import (
 	"strconv"
+	"strings"
 
 	"picoclip/internal/core/domain"
 )
@@ -209,6 +210,7 @@ templ SettingsPage(view SettingsView) {
 					@SettingsTabLink("runtimes", "cpu", "Runtimes")
 					@SettingsTabLink("environment", "book", "Environment")
 					@SettingsTabLink("budgets", "activity", "Budgets")
+					@SettingsTabLink("webhooks", "zap", "Webhooks")
 					@SettingsTabLinkDanger("danger-zone", "trash", "Danger Zone")
 				</nav>
 				
@@ -462,6 +464,88 @@ templ SettingsPage(view SettingsView) {
 								</div>
 								<label class="budget-hard-stop-note"><input type="checkbox" name="hard_stop" checked /> <span><strong>Hard stop</strong><small>Block new task execution when any configured limit is reached.</small></span></label>
 								<button class="pc-btn pc-btn-primary" type="submit">@Icon("plus", 16) Create Budget</button>
+							</form>
+						</div>
+					</div>
+				</div>
+
+				<div id="webhooks" class="settings-panel settings-tab-panel">
+					@SettingsPanelHeader("Webhooks", "Deliver PicoClip events to external HTTP endpoints with signed payloads and retries.", "zap")
+					<div class="budget-overview-grid">
+						@SystemStatusCard("Subscriptions", strconv.Itoa(len(view.Webhooks)), "zap", "agents")
+						@SystemStatusCard("Active", strconv.Itoa(webhookCountActive(view.Webhooks)), "check", "tasks")
+						@SystemStatusCard("Recent deliveries", strconv.Itoa(webhookDeliveryCount(view.WebhookDeliveries)), "activity", "projects")
+					</div>
+
+					<div class="settings-split-grid">
+						<div class="stacked">
+							for _, webhook := range view.Webhooks {
+								<div class={ "pc-card", "budget-card", templ.KV("budget-card-disabled", !webhook.Enabled) }>
+									<div class="budget-card-header">
+										<div class="budget-card-title">
+											<div class="budget-badges">
+												<span class={ "pc-badge", templ.KV("pc-badge-muted", !webhook.Enabled) }>{ webhookStatusLabel(webhook) }</span>
+												if webhook.Secret != "" {
+													<span class="pc-badge">Signed</span>
+												}
+											</div>
+											<strong>{ webhook.Name }</strong>
+											<p>{ webhook.URL }</p>
+											<small class="muted">{ webhookEventLabel(webhook.EventTypes) }</small>
+										</div>
+									</div>
+
+									<div class="budget-actions">
+										<form hx-post={ "/settings/webhooks/" + webhook.ID + "/toggle" } hx-target="body" hx-swap="outerHTML">
+											<button class="pc-btn pc-btn-secondary" type="submit">{ webhookToggleLabel(webhook) }</button>
+										</form>
+										<form hx-post={ "/settings/webhooks/" + webhook.ID + "/test" } hx-target="body" hx-swap="outerHTML" data-success="Webhook test delivery queued.">
+											<button class="pc-btn pc-btn-secondary" type="submit">@Icon("play", 16) Test</button>
+										</form>
+									</div>
+
+									<div class="webhook-delivery-list">
+										<strong>Recent deliveries</strong>
+										if len(view.WebhookDeliveries[webhook.ID]) == 0 {
+											<p class="muted">No deliveries yet.</p>
+										}
+										for _, delivery := range view.WebhookDeliveries[webhook.ID] {
+											<div class="webhook-delivery-row">
+												<span class={ "pc-badge", webhookDeliveryBadgeClass(delivery) }>{ string(delivery.Status) }</span>
+												<span>{ string(delivery.EventType) }</span>
+												<small>{ webhookDeliveryMeta(delivery) }</small>
+											</div>
+										}
+									</div>
+								</div>
+							}
+							if len(view.Webhooks) == 0 {
+								<div class="budget-empty-state">
+									<strong>No webhooks configured</strong>
+									<p>Create a subscription to send events such as task completion and run failures to your own tools.</p>
+								</div>
+							}
+						</div>
+
+						<div class="pc-card budget-create-card">
+							<div class="budget-create-header">
+								<h3>Create webhook</h3>
+								<p>Leave events unchecked to subscribe to every event type.</p>
+							</div>
+							<form hx-post="/settings/webhooks" hx-target="body" hx-swap="outerHTML" class="stacked" data-success="Webhook created.">
+								<label>Name</label>
+								<input name="name" class="pc-input" placeholder="Deploy notifications" />
+								<label>Endpoint URL</label>
+								<input name="url" class="pc-input" type="url" placeholder="https://example.com/picoclip/webhook" required />
+								<label>Signing secret</label>
+								<input name="secret" class="pc-input" type="password" autocomplete="new-password" placeholder="Optional HMAC secret" />
+								<label>Events</label>
+								<div class="webhook-event-grid">
+									for _, eventType := range view.WebhookEventTypes {
+										<label><input type="checkbox" name="event_types" value={ string(eventType) } /> <span>{ string(eventType) }</span></label>
+									}
+								</div>
+								<button class="pc-btn pc-btn-primary" type="submit">@Icon("plus", 16) Create Webhook</button>
 							</form>
 						</div>
 					</div>
@@ -728,4 +812,71 @@ func budgetCountDisabled(budgets []domain.Budget) int {
 		}
 	}
 	return count
+}
+
+func webhookCountActive(webhooks []domain.WebhookSubscription) int {
+	count := 0
+	for _, webhook := range webhooks {
+		if webhook.Enabled {
+			count++
+		}
+	}
+	return count
+}
+
+func webhookDeliveryCount(deliveries map[string][]domain.WebhookDelivery) int {
+	count := 0
+	for _, items := range deliveries {
+		count += len(items)
+	}
+	return count
+}
+
+func webhookStatusLabel(webhook domain.WebhookSubscription) string {
+	if webhook.Enabled {
+		return "active"
+	}
+	return "disabled"
+}
+
+func webhookToggleLabel(webhook domain.WebhookSubscription) string {
+	if webhook.Enabled {
+		return "Disable"
+	}
+	return "Enable"
+}
+
+func webhookEventLabel(events []domain.EventType) string {
+	if len(events) == 0 {
+		return "All events"
+	}
+	parts := make([]string, 0, len(events))
+	for _, event := range events {
+		parts = append(parts, string(event))
+	}
+	return strings.Join(parts, ", ")
+}
+
+func webhookDeliveryBadgeClass(delivery domain.WebhookDelivery) string {
+	switch delivery.Status {
+	case domain.WebhookDeliveryDelivered:
+		return "pc-badge-good"
+	case domain.WebhookDeliveryDead:
+		return "pc-badge-bad"
+	case domain.WebhookDeliveryFailed:
+		return "pc-badge-warn"
+	default:
+		return "pc-badge-muted"
+	}
+}
+
+func webhookDeliveryMeta(delivery domain.WebhookDelivery) string {
+	parts := []string{"attempts " + strconv.Itoa(delivery.Attempts)}
+	if delivery.ResponseStatus > 0 {
+		parts = append(parts, "status " + strconv.Itoa(delivery.ResponseStatus))
+	}
+	if delivery.LastError != "" {
+		parts = append(parts, delivery.LastError)
+	}
+	return strings.Join(parts, " · ")
 }

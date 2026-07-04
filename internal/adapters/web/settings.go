@@ -10,15 +10,18 @@ import (
 )
 
 type SettingsView struct {
-	General     GeneralSettings
-	Adapters    map[string]map[string]string
-	Environment map[string]string
-	Runtimes    []RuntimeCardView
-	Diagnostics domain.DiagnosticsReport
-	Stats       SettingsStats
-	Budgets     []domain.Budget
-	Agents      []domain.Agent
-	Projects    []domain.Workspace
+	General           GeneralSettings
+	Adapters          map[string]map[string]string
+	Environment       map[string]string
+	Runtimes          []RuntimeCardView
+	Diagnostics       domain.DiagnosticsReport
+	Stats             SettingsStats
+	Budgets           []domain.Budget
+	Webhooks          []domain.WebhookSubscription
+	WebhookDeliveries map[string][]domain.WebhookDelivery
+	WebhookEventTypes []domain.EventType
+	Agents            []domain.Agent
+	Projects          []domain.Workspace
 }
 
 type GeneralSettings struct {
@@ -46,7 +49,21 @@ func defaultSettingsView() SettingsView {
 			"crush": {"binary_path": "", "default_args": "", "timeout": "30m", "cwd_strategy": "project"},
 			"noop":  {"timeout": "1m"},
 		},
-		Environment: map[string]string{},
+		Environment:       map[string]string{},
+		WebhookDeliveries: map[string][]domain.WebhookDelivery{},
+		WebhookEventTypes: []domain.EventType{
+			domain.EventTaskCreated,
+			domain.EventTaskCompleted,
+			domain.EventTaskFailed,
+			domain.EventTaskCanceled,
+			domain.EventTaskDelegated,
+			domain.EventRunStarted,
+			domain.EventRunCompleted,
+			domain.EventRunFailed,
+			domain.EventRunCanceled,
+			domain.EventMessageCreated,
+			domain.EventBudgetBlocked,
+		},
 	}
 }
 
