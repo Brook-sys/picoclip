@@ -140,7 +140,9 @@ type WebhookRepository interface {
 	GetSubscription(ctx context.Context, id string) (domain.WebhookSubscription, error)
 	ListSubscriptions(ctx context.Context) ([]domain.WebhookSubscription, error)
 	UpdateSubscription(ctx context.Context, subscription domain.WebhookSubscription) error
+	DeleteSubscription(ctx context.Context, id string) error
 	CreateDelivery(ctx context.Context, delivery domain.WebhookDelivery) error
+	GetDelivery(ctx context.Context, id string) (domain.WebhookDelivery, error)
 	ListDueDeliveries(ctx context.Context, now time.Time, limit int) ([]domain.WebhookDelivery, error)
 	UpdateDelivery(ctx context.Context, delivery domain.WebhookDelivery) error
 	ListDeliveries(ctx context.Context, subscriptionID string, limit int) ([]domain.WebhookDelivery, error)

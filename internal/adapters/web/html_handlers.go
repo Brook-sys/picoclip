@@ -373,11 +373,7 @@ func (s *Server) handleWebDeleteBudget(w http.ResponseWriter, r *http.Request) {
 	s.handleWebSettings(w, r)
 }
 
-func (s *Server) handleWebCreateWebhook(w http.ResponseWriter, r *http.Request) {
-	if err := r.ParseForm(); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
+func parseWebhookEventTypes(r *http.Request) []domain.EventType {
 	eventTypes := make([]domain.EventType, 0)
 	for _, raw := range r.Form["event_types"] {
 		raw = strings.TrimSpace(raw)
@@ -385,15 +381,55 @@ func (s *Server) handleWebCreateWebhook(w http.ResponseWriter, r *http.Request) 
 			eventTypes = append(eventTypes, domain.EventType(raw))
 		}
 	}
+	return eventTypes
+}
+
+func (s *Server) handleWebCreateWebhook(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
 	svc := services.NewWebhookService(s.storage, services.SystemClock{}, &services.TimeIDGenerator{})
 	_, err := svc.CreateSubscription(r.Context(), domain.WebhookSubscription{
 		Name:       strings.TrimSpace(r.FormValue("name")),
 		URL:        strings.TrimSpace(r.FormValue("url")),
 		Secret:     r.FormValue("secret"),
-		EventTypes: eventTypes,
+		EventTypes: parseWebhookEventTypes(r),
 		Enabled:    true,
 	})
 	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	s.handleWebSettings(w, r)
+}
+
+func (s *Server) handleWebUpdateWebhook(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	webhook, err := s.storage.Webhooks().GetSubscription(r.Context(), id)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusNotFound)
+		return
+	}
+	webhook.Name = strings.TrimSpace(r.FormValue("name"))
+	webhook.URL = strings.TrimSpace(r.FormValue("url"))
+	if r.FormValue("secret_mode") == "replace" {
+		webhook.Secret = r.FormValue("secret")
+	}
+	webhook.EventTypes = parseWebhookEventTypes(r)
+	webhook.UpdatedAt = time.Now().UTC()
+	if webhook.Name == "" {
+		webhook.Name = webhook.URL
+	}
+	if webhook.URL == "" {
+		http.Error(w, "url is required", http.StatusBadRequest)
+		return
+	}
+	if err := s.storage.Webhooks().UpdateSubscription(r.Context(), webhook); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
@@ -428,6 +464,34 @@ func (s *Server) handleWebTestWebhook(w http.ResponseWriter, r *http.Request) {
 	payload, _ := json.Marshal(event)
 	delivery := domain.WebhookDelivery{ID: "whd_test_" + strconv.FormatInt(now.UnixNano(), 10), SubscriptionID: webhook.ID, EventID: event.ID, EventType: event.Type, URL: webhook.URL, Status: domain.WebhookDeliveryPending, RequestBody: string(payload), CreatedAt: now, UpdatedAt: now}
 	if err := s.storage.Webhooks().CreateDelivery(r.Context(), delivery); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	services.NewWebhookDeliveryWorker(s.storage, services.SystemClock{}, nil).ProcessDue(r.Context())
+	s.handleWebSettings(w, r)
+}
+
+func (s *Server) handleWebDeleteWebhook(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	if err := s.storage.Webhooks().DeleteSubscription(r.Context(), id); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	s.handleWebSettings(w, r)
+}
+
+func (s *Server) handleWebRetryWebhookDelivery(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	delivery, err := s.storage.Webhooks().GetDelivery(r.Context(), id)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusNotFound)
+		return
+	}
+	delivery.Status = domain.WebhookDeliveryPending
+	delivery.LastError = ""
+	delivery.NextAttemptAt = nil
+	delivery.UpdatedAt = time.Now().UTC()
+	if err := s.storage.Webhooks().UpdateDelivery(r.Context(), delivery); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}

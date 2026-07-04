@@ -46,11 +46,36 @@ func (r webhookRepository) UpdateSubscription(ctx context.Context, subscription 
 	return nil
 }
 
+func (r webhookRepository) DeleteSubscription(ctx context.Context, id string) error {
+	r.storage.mu.Lock()
+	defer r.storage.mu.Unlock()
+	if _, ok := r.storage.webhooks[id]; !ok {
+		return domain.ErrNotFound
+	}
+	delete(r.storage.webhooks, id)
+	for deliveryID, delivery := range r.storage.deliveries {
+		if delivery.SubscriptionID == id {
+			delete(r.storage.deliveries, deliveryID)
+		}
+	}
+	return nil
+}
+
 func (r webhookRepository) CreateDelivery(ctx context.Context, delivery domain.WebhookDelivery) error {
 	r.storage.mu.Lock()
 	defer r.storage.mu.Unlock()
 	r.storage.deliveries[delivery.ID] = delivery
 	return nil
+}
+
+func (r webhookRepository) GetDelivery(ctx context.Context, id string) (domain.WebhookDelivery, error) {
+	r.storage.mu.RLock()
+	defer r.storage.mu.RUnlock()
+	delivery, ok := r.storage.deliveries[id]
+	if !ok {
+		return domain.WebhookDelivery{}, domain.ErrNotFound
+	}
+	return delivery, nil
 }
 
 func (r webhookRepository) ListDueDeliveries(ctx context.Context, now time.Time, limit int) ([]domain.WebhookDelivery, error) {

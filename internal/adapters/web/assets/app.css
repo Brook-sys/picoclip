@@ -1467,9 +1467,13 @@ pc-tag-multiselect { position: relative; display: flex; flex-wrap: wrap; align-i
 .webhook-event-grid label { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface-soft); font-size: 12px; font-weight: 700; color: var(--muted); }
 .webhook-event-grid input { width: auto; }
 .webhook-delivery-list { display: grid; gap: 8px; margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--border); }
-.webhook-delivery-row { display: grid; grid-template-columns: auto minmax(120px, 1fr) minmax(120px, 1.2fr); gap: 10px; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--border-subtle); }
+.webhook-edit-panel { margin-top: 14px; padding: 12px; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface-soft); }
+.webhook-edit-panel summary { cursor: pointer; font-weight: 800; color: var(--text); }
+.webhook-edit-panel form { margin-top: 12px; }
+.webhook-delivery-row { display: grid; grid-template-columns: auto minmax(120px, 1fr) minmax(120px, 1.2fr) auto; gap: 10px; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--border-subtle); }
 .webhook-delivery-row:last-child { border-bottom: 0; }
 .webhook-delivery-row small { color: var(--muted); }
+.webhook-delivery-row form { margin: 0; }
 @media (max-width: 900px) { .settings-split-grid { grid-template-columns: 1fr; } .webhook-delivery-row { grid-template-columns: 1fr; } }
 .pc-checkbox-row { display: inline-flex; align-items: center; gap: 8px; color: var(--muted); font-size: 13px; }
 .pc-checkbox-row input { width: auto; }

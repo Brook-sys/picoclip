@@ -75,6 +75,25 @@ func (r *WebhookRepository) UpdateSubscription(ctx context.Context, subscription
 	return nil
 }
 
+func (r *WebhookRepository) DeleteSubscription(ctx context.Context, id string) error {
+	q := getQueryer(ctx, r.db)
+	if _, err := q.ExecContext(ctx, `DELETE FROM webhook_deliveries WHERE subscription_id = ?`, id); err != nil {
+		return err
+	}
+	res, err := q.ExecContext(ctx, `DELETE FROM webhook_subscriptions WHERE id = ?`, id)
+	if err != nil {
+		return err
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return domain.ErrNotFound
+	}
+	return nil
+}
+
 func (r *WebhookRepository) CreateDelivery(ctx context.Context, delivery domain.WebhookDelivery) error {
 	q := getQueryer(ctx, r.db)
 	_, err := q.ExecContext(ctx, `
@@ -82,6 +101,15 @@ func (r *WebhookRepository) CreateDelivery(ctx context.Context, delivery domain.
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`, delivery.ID, delivery.SubscriptionID, delivery.EventID, string(delivery.EventType), delivery.URL, string(delivery.Status), delivery.Attempts, delivery.RequestBody, delivery.ResponseStatus, delivery.ResponseBody, delivery.LastError, delivery.NextAttemptAt, delivery.CreatedAt, delivery.UpdatedAt)
 	return err
+}
+
+func (r *WebhookRepository) GetDelivery(ctx context.Context, id string) (domain.WebhookDelivery, error) {
+	q := getQueryer(ctx, r.db)
+	row := q.QueryRowContext(ctx, `
+		SELECT id, subscription_id, event_id, event_type, url, status, attempts, request_body, response_status, response_body, last_error, next_attempt_at, created_at, updated_at
+		FROM webhook_deliveries WHERE id = ?
+	`, id)
+	return scanWebhookDelivery(row)
 }
 
 func (r *WebhookRepository) ListDueDeliveries(ctx context.Context, now time.Time, limit int) ([]domain.WebhookDelivery, error) {

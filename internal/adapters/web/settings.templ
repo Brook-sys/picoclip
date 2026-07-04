@@ -502,7 +502,33 @@ templ SettingsPage(view SettingsView) {
 										<form hx-post={ "/settings/webhooks/" + webhook.ID + "/test" } hx-target="body" hx-swap="outerHTML" data-success="Webhook test delivery queued.">
 											<button class="pc-btn pc-btn-secondary" type="submit">@Icon("play", 16) Test</button>
 										</form>
+										<form hx-post={ "/settings/webhooks/" + webhook.ID + "/delete" } hx-confirm="Delete this webhook and its delivery history?" hx-target="body" hx-swap="outerHTML">
+											<button class="pc-btn pc-btn-ghost runtime-danger-action" type="submit">@Icon("trash", 16) Delete</button>
+										</form>
 									</div>
+
+									<details class="webhook-edit-panel">
+										<summary>Edit webhook</summary>
+										<form hx-post={ "/settings/webhooks/" + webhook.ID + "/edit" } hx-target="body" hx-swap="outerHTML" class="stacked" data-success="Webhook updated.">
+											<label>Name</label>
+											<input name="name" class="pc-input" value={ webhook.Name } />
+											<label>Endpoint URL</label>
+											<input name="url" class="pc-input" type="url" value={ webhook.URL } required />
+											<label>Signing secret</label>
+											<select name="secret_mode" class="pc-input">
+												<option value="keep">Keep current secret</option>
+												<option value="replace">Replace secret with value below</option>
+											</select>
+											<input name="secret" class="pc-input" type="password" autocomplete="new-password" placeholder="New secret or blank to clear" />
+											<label>Events</label>
+											<div class="webhook-event-grid">
+												for _, eventType := range view.WebhookEventTypes {
+													<label><input type="checkbox" name="event_types" value={ string(eventType) } checked?={ webhookEventSelected(webhook.EventTypes, eventType) } /> <span>{ string(eventType) }</span></label>
+												}
+											</div>
+											<button class="pc-btn pc-btn-primary" type="submit">Save Webhook</button>
+										</form>
+									</details>
 
 									<div class="webhook-delivery-list">
 										<strong>Recent deliveries</strong>
@@ -514,6 +540,9 @@ templ SettingsPage(view SettingsView) {
 												<span class={ "pc-badge", webhookDeliveryBadgeClass(delivery) }>{ string(delivery.Status) }</span>
 												<span>{ string(delivery.EventType) }</span>
 												<small>{ webhookDeliveryMeta(delivery) }</small>
+												<form hx-post={ "/settings/webhook-deliveries/" + delivery.ID + "/retry" } hx-target="body" hx-swap="outerHTML" data-success="Webhook delivery retried.">
+													<button class="pc-btn pc-btn-ghost" type="submit">Retry</button>
+												</form>
 											</div>
 										}
 									</div>
@@ -855,6 +884,15 @@ func webhookEventLabel(events []domain.EventType) string {
 		parts = append(parts, string(event))
 	}
 	return strings.Join(parts, ", ")
+}
+
+func webhookEventSelected(events []domain.EventType, target domain.EventType) bool {
+	for _, event := range events {
+		if event == target {
+			return true
+		}
+	}
+	return false
 }
 
 func webhookDeliveryBadgeClass(delivery domain.WebhookDelivery) string {

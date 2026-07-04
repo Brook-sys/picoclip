@@ -173,6 +173,19 @@ func testCoreFlow(t *testing.T, factory StorageFactory) {
 	if len(deliveries) != 1 || deliveries[0].ID != delivery.ID {
 		t.Fatalf("expected webhook delivery, got %#v", deliveries)
 	}
+	gotDelivery, err := storage.Webhooks().GetDelivery(ctx, delivery.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if gotDelivery.ID != delivery.ID {
+		t.Fatalf("expected webhook delivery by id, got %#v", gotDelivery)
+	}
+	if err := storage.Webhooks().DeleteSubscription(ctx, subscription.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := storage.Webhooks().GetSubscription(ctx, subscription.ID); err != domain.ErrNotFound {
+		t.Fatalf("expected webhook subscription deleted, got %v", err)
+	}
 }
 
 func testRuntimes(t *testing.T, factory StorageFactory) {
