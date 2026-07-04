@@ -55,8 +55,8 @@ templ TaskModal(id string, projectID string, projects []domain.Workspace, agents
 
 					<div class="task-meta-inline">
 						<span class="task-meta-word">For</span>
-						<div class="inline-entity-select">
-							@TaskAssigneeSelect(agents, "agent_id", "")
+						<div class="inline-entity-select inline-agent-picker">
+							@AgentPicker(agents, "agent_id", "", "Search agent...")
 						</div>
 						<span class="task-meta-word">in</span>
 						if projectID != "" {
@@ -75,7 +75,7 @@ templ TaskModal(id string, projectID string, projects []domain.Workspace, agents
 
 					<div class="task-description-field">
 						@FormField("prompt", "Description", "What needs to be done?") {
-							@TextareaField("prompt", "", "Objective, context and acceptance criteria", 6, false)
+							@TextareaField("prompt", "", "Objetivo, contexto e critérios de aceite", 6, false)
 						}
 					</div>
 

@@ -611,10 +611,10 @@ templ SettingsPage(view SettingsView) {
 				var links = Array.prototype.slice.call(document.querySelectorAll('[data-settings-tab]'));
 				var panels = Array.prototype.slice.call(document.querySelectorAll('.settings-tab-panel'));
 				if (!links.length || !panels.length) return;
-				function activate(id){
-					if (!id) id = 'general';
-					var found = panels.some(function(panel){ return panel.id === id; });
-					if (!found) id = 'general';
+					function activate(id){
+						if (!id) id = 'danger-zone';
+						var found = panels.some(function(panel){ return panel.id === id; });
+						if (!found) id = 'general';
 					panels.forEach(function(panel){ panel.hidden = panel.id !== id; panel.classList.toggle('active', panel.id === id); });
 					links.forEach(function(link){ link.classList.toggle('active', link.getAttribute('data-settings-tab') === id); });
 				}

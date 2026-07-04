@@ -234,6 +234,9 @@ func (s *Server) handleCreateTask(w http.ResponseWriter, r *http.Request) {
 		req.AgentID = req.AssigneeAgentID
 	}
 	if isAgentAPIRequest(r) {
+		if req.FromAgentID == "" {
+			req.FromAgentID = req.AgentID
+		}
 		if err := s.auth.RequireAgentPermission(r.Context(), req.FromAgentID, domain.PermissionTasksCreate); err != nil {
 			writeTaskError(w, err)
 			return
@@ -444,6 +447,11 @@ func (s *Server) handleAgentCreateComment(w http.ResponseWriter, r *http.Request
 	}
 	if req.Role == "" {
 		req.Role = domain.MessageRoleUser
+	}
+	if req.FromID == "" {
+		if task, err := s.tasks.Get(r.Context(), r.PathValue("id")); err == nil {
+			req.FromID = task.AgentID
+		}
 	}
 	if err := s.auth.RequireAgentPermission(r.Context(), req.FromID, domain.PermissionTasksUpdate); err != nil {
 		writeTaskError(w, err)
