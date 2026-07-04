@@ -617,6 +617,7 @@ type taskResponse struct {
 	Response      string            `json:"response"`
 	CancelReason  string            `json:"cancel_reason,omitempty"`
 	CheckoutRunID string            `json:"checkout_run_id,omitempty"`
+	Mode          domain.TaskMode   `json:"mode"`
 	InputTokens   int               `json:"input_tokens"`
 	OutputTokens  int               `json:"output_tokens"`
 	TotalTokens   int               `json:"total_tokens"`
@@ -646,6 +647,7 @@ func (s *Server) taskResponse(r *http.Request, task domain.Task) taskResponse {
 		Status:        task.Status,
 		CancelReason:  task.CancelReason,
 		CheckoutRunID: task.CheckoutRunID,
+		Mode:          task.Mode,
 		InputTokens:   task.InputTokens,
 		OutputTokens:  task.OutputTokens,
 		TotalTokens:   task.TotalTokens,

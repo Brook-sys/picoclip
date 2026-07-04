@@ -16,11 +16,13 @@ func (s *Server) handleAPIV1Tasks(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleAPIV1CreateTask(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		ProjectID string `json:"project_id"`
-		AgentID   string `json:"agent_id"`
-		Title     string `json:"title"`
-		Prompt    string `json:"prompt"`
-		Message   string `json:"message"`
+		ProjectID        string          `json:"project_id"`
+		AgentID          string          `json:"agent_id"`
+		Title            string          `json:"title"`
+		Prompt           string          `json:"prompt"`
+		Message          string          `json:"message"`
+		Mode             domain.TaskMode `json:"mode"`
+		LoopDelaySeconds int             `json:"loop_delay_seconds"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		s.apiError(w, domain.ErrInvalidInput)
@@ -30,6 +32,15 @@ func (s *Server) handleAPIV1CreateTask(w http.ResponseWriter, r *http.Request) {
 		req.Prompt = req.Message
 	}
 	task, err := s.tasks.CreateInWorkspace(r.Context(), req.ProjectID, req.AgentID, req.Title, req.Prompt)
+	if err == nil && req.Mode == domain.TaskModeContinuous {
+		if req.LoopDelaySeconds < 1 {
+			req.LoopDelaySeconds = 60
+		}
+		task.Mode = domain.TaskModeContinuous
+		task.MaxAttempts = 0
+		task.LoopDelaySeconds = req.LoopDelaySeconds
+		err = s.storage.Tasks().Update(r.Context(), task)
+	}
 	if err != nil {
 		s.apiError(w, err)
 		return

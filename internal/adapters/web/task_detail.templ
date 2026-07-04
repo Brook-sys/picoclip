@@ -15,6 +15,9 @@ templ TaskDetailPage(task taskResponse, rawTask domain.Task, agents []domain.Age
 							if isLiveTask(task, rawTask) {
 								<span class="badge badge-warn">Agent running</span>
 							}
+							if rawTask.Mode == domain.TaskModeContinuous {
+								<span class="badge">Continuous</span>
+							}
 						</div>
 					</div>
 					<h2>@InlineTextField("/tasks/" + task.ID + "/edit-inline", "title", taskDisplayTitle(task), "Task title")</h2>
@@ -67,8 +70,24 @@ templ TaskPropertiesRail(task taskResponse, rawTask domain.Task, agents []domain
 					<span title="Tokens used (input / output / total)">{ tokenUsageText(task.InputTokens, task.OutputTokens, task.TotalTokens) }</span>
 				}
 			}
+			@IssuePropertyRow("Mode") {
+				if rawTask.Mode == domain.TaskModeContinuous {
+					<span>Continuous</span>
+				} else {
+					<span>Once</span>
+				}
+			}
+			if rawTask.Mode == domain.TaskModeContinuous {
+				@IssuePropertyRow("Loop delay") {
+					<span>{ fmt.Sprintf("%ds", rawTask.LoopDelaySeconds) }</span>
+				}
+			}
 			@IssuePropertyRow("Attempts") {
-				<span>{ fmt.Sprintf("%d / %d", rawTask.Attempts, rawTask.MaxAttempts) }</span>
+				if rawTask.MaxAttempts == 0 {
+					<span>{ fmt.Sprintf("%d / unlimited", rawTask.Attempts) }</span>
+				} else {
+					<span>{ fmt.Sprintf("%d / %d", rawTask.Attempts, rawTask.MaxAttempts) }</span>
+				}
 			}
 			@IssuePropertyRow("Created") {
 				<small>{ task.CreatedAt }</small>

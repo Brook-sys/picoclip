@@ -724,10 +724,24 @@ func (s *Server) handleWebPostTask(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	_, err := s.tasks.CreateInWorkspace(r.Context(), r.FormValue("project_id"), r.FormValue("agent_id"), r.FormValue("title"), r.FormValue("prompt"))
+
+	task, err := s.tasks.CreateInWorkspace(r.Context(), r.FormValue("project_id"), r.FormValue("agent_id"), r.FormValue("title"), r.FormValue("prompt"))
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
+	}
+	if r.FormValue("continuous") == "true" {
+		delay, _ := strconv.Atoi(r.FormValue("loop_delay_seconds"))
+		if delay < 1 {
+			delay = 60
+		}
+		task.Mode = domain.TaskModeContinuous
+		task.MaxAttempts = 0
+		task.LoopDelaySeconds = delay
+		if err := s.storage.Tasks().Update(r.Context(), task); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
 	}
 	s.handleWebTasks(w, r)
 }

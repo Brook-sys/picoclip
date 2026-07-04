@@ -22,6 +22,9 @@ templ TaskTable(tasks []taskResponse, agents []domain.Agent, projects []domain.W
 					<div class="task-list-main">
 						<div class="task-list-title-row">
 							<span class="task-type">{ issuePriorityLabel(task.Status) }</span>
+							if task.Mode == domain.TaskModeContinuous {
+								<span class="task-type" style="color: var(--info); border-color: color-mix(in srgb, var(--info) 24%, var(--border));">@Icon("activity", 10) Continuous</span>
+							}
 							<strong>{ taskDisplayTitle(task) }</strong>
 						</div>
 						if taskExcerpt(task.Prompt) != "" {

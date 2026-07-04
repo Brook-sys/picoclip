@@ -75,8 +75,20 @@ templ TaskModal(id string, projectID string, projects []domain.Workspace, agents
 
 					<div class="task-description-field">
 						@FormField("prompt", "Description", "What needs to be done?") {
-							@TextareaField("prompt", "", "Objetivo, contexto e critérios de aceite", 6, false)
+							@TextareaField("prompt", "", "Objective, context and acceptance criteria", 6, false)
 						}
+					</div>
+
+					<div class="task-continuous-options" style="margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border);">
+						<label class="pc-checkbox-row">
+							<input type="checkbox" name="continuous" value="true" onchange="document.getElementById('loop-delay-group').style.display = this.checked ? 'block' : 'none';" />
+							<span><strong>Continuous task</strong><small>Run this task in an endless loop until cancelled.</small></span>
+						</label>
+						<div id="loop-delay-group" style="display: none; margin-top: 12px; margin-left: 28px;">
+							<label style="display: block; font-size: 13px; font-weight: 750; margin-bottom: 6px;">Delay between cycles (seconds)</label>
+							<input type="number" name="loop_delay_seconds" value="60" min="1" class="pc-input" style="max-width: 120px;" />
+							<p class="muted" style="font-size: 12px; margin-top: 4px;">Wait this long after one cycle finishes before starting the next.</p>
+						</div>
 					</div>
 				</div>
 
