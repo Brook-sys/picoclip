@@ -391,11 +391,47 @@ func migrations() []migration {
 			version: 11,
 			name:    "fix_usage_events_ledger_columns",
 			sql: `
-				ALTER TABLE usage_events ADD COLUMN cached_tokens INTEGER NOT NULL DEFAULT 0;
-				ALTER TABLE usage_events ADD COLUMN cost_micros INTEGER NOT NULL DEFAULT 0;
-				ALTER TABLE usage_events ADD COLUMN created_at TIMESTAMP;
-				UPDATE usage_events SET created_at = COALESCE(created_at, started_at, CURRENT_TIMESTAMP);
-			`,
+					ALTER TABLE usage_events ADD COLUMN cached_tokens INTEGER NOT NULL DEFAULT 0;
+					ALTER TABLE usage_events ADD COLUMN cost_micros INTEGER NOT NULL DEFAULT 0;
+					ALTER TABLE usage_events ADD COLUMN created_at TIMESTAMP;
+					UPDATE usage_events SET created_at = COALESCE(created_at, started_at, CURRENT_TIMESTAMP);
+				`,
+		},
+		{
+			version: 12,
+			name:    "create_outbox_events_table",
+			sql: `
+					CREATE TABLE IF NOT EXISTS outbox_events (
+						id TEXT PRIMARY KEY,
+						type TEXT NOT NULL,
+						payload TEXT NOT NULL,
+						created_at TIMESTAMP NOT NULL
+					);
+					CREATE INDEX IF NOT EXISTS idx_outbox_created_at ON outbox_events(created_at);
+				`,
+		},
+		{
+			version: 13,
+			name:    "add_outbox_retry_columns",
+			sql: `
+					ALTER TABLE outbox_events ADD COLUMN attempts INTEGER NOT NULL DEFAULT 0;
+					ALTER TABLE outbox_events ADD COLUMN next_attempt_at TIMESTAMP;
+					ALTER TABLE outbox_events ADD COLUMN last_error TEXT NOT NULL DEFAULT '';
+					CREATE INDEX IF NOT EXISTS idx_outbox_next_attempt ON outbox_events(next_attempt_at, created_at);
+				`,
+		},
+		{
+			version: 14,
+			name:    "add_continuous_task_columns",
+			sql: `
+					ALTER TABLE tasks ADD COLUMN mode TEXT NOT NULL DEFAULT 'once';
+					ALTER TABLE tasks ADD COLUMN loop_delay_seconds INTEGER NOT NULL DEFAULT 0;
+					ALTER TABLE tasks ADD COLUMN loop_run_count INTEGER NOT NULL DEFAULT 0;
+					ALTER TABLE tasks ADD COLUMN loop_next_run_at TIMESTAMP;
+					ALTER TABLE tasks ADD COLUMN loop_paused_at TIMESTAMP;
+					ALTER TABLE tasks ADD COLUMN loop_audit_prompt TEXT NOT NULL DEFAULT '';
+					CREATE INDEX IF NOT EXISTS idx_tasks_loop_next_run ON tasks(mode, status, loop_next_run_at);
+				`,
 		},
 	}
 }

@@ -5,13 +5,21 @@ import "time"
 type TaskStatus string
 
 const (
-	TaskStatusBacklog    TaskStatus = "backlog"
-	TaskStatusTodo       TaskStatus = "todo"
-	TaskStatusInProgress TaskStatus = "in_progress"
-	TaskStatusInReview   TaskStatus = "in_review"
-	TaskStatusBlocked    TaskStatus = "blocked"
-	TaskStatusDone       TaskStatus = "done"
-	TaskStatusCancelled  TaskStatus = "cancelled"
+	TaskStatusBacklog          TaskStatus = "backlog"
+	TaskStatusTodo             TaskStatus = "todo"
+	TaskStatusInProgress       TaskStatus = "in_progress"
+	TaskStatusWaitingNextCycle TaskStatus = "waiting_next_cycle"
+	TaskStatusInReview         TaskStatus = "in_review"
+	TaskStatusBlocked          TaskStatus = "blocked"
+	TaskStatusDone             TaskStatus = "done"
+	TaskStatusCancelled        TaskStatus = "cancelled"
+)
+
+type TaskMode string
+
+const (
+	TaskModeOnce       TaskMode = "once"
+	TaskModeContinuous TaskMode = "continuous"
 )
 
 type Task struct {
@@ -23,11 +31,19 @@ type Task struct {
 	Prompt              string     `json:"prompt"`
 	Status              TaskStatus `json:"status"`
 	Priority            int        `json:"priority"`
+	Mode                TaskMode   `json:"mode"`
+	LoopDelaySeconds    int        `json:"loop_delay_seconds"`
+	LoopRunCount        int        `json:"loop_run_count"`
+	LoopNextRunAt       *time.Time `json:"loop_next_run_at,omitempty"`
+	LoopPausedAt        *time.Time `json:"loop_paused_at,omitempty"`
+	LoopAuditPrompt     string     `json:"loop_audit_prompt,omitempty"`
 	Attempts            int        `json:"attempts"`
 	MaxAttempts         int        `json:"max_attempts"`
 	NeedsRun            bool       `json:"needs_run"`
 	CheckoutRunID       string     `json:"checkout_run_id,omitempty"`
 	CheckedOutByAgentID string     `json:"checked_out_by_agent_id,omitempty"`
+	ExecutionLockedAt   *time.Time `json:"execution_locked_at,omitempty"`
+	LockExpiresAt       *time.Time `json:"lock_expires_at,omitempty"`
 	CancelReason        string     `json:"cancel_reason,omitempty"`
 	InputTokens         int        `json:"input_tokens"`
 	OutputTokens        int        `json:"output_tokens"`

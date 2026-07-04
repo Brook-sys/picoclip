@@ -18,13 +18,16 @@ func (r *TaskRepository) Create(ctx context.Context, task domain.Task) error {
 	query := `
 		INSERT INTO tasks (
 			id, parent_id, workspace_id, agent_id, title, prompt, status, priority,
+			mode, loop_delay_seconds, loop_run_count, loop_next_run_at, loop_paused_at, loop_audit_prompt,
 			attempts, max_attempts, needs_run, checkout_run_id, checked_out_by_agent_id,
 			execution_locked_at, lock_expires_at, cancel_reason, input_tokens, output_tokens, total_tokens, created_at, updated_at, started_at, finished_at, completed_at, cancelled_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`
 
-	_, err := r.db.ExecContext(ctx, query,
+	q := getQueryer(ctx, r.db)
+	_, err := q.ExecContext(ctx, query,
 		task.ID, task.ParentID, task.WorkspaceID, task.AgentID, task.Title, task.Prompt, string(task.Status), task.Priority,
+		string(task.Mode), task.LoopDelaySeconds, task.LoopRunCount, task.LoopNextRunAt, task.LoopPausedAt, task.LoopAuditPrompt,
 		task.Attempts, task.MaxAttempts, task.NeedsRun, task.CheckoutRunID, task.CheckedOutByAgentID,
 		task.ExecutionLockedAt, task.LockExpiresAt, task.CancelReason, task.InputTokens, task.OutputTokens, task.TotalTokens, task.CreatedAt, task.UpdatedAt, task.StartedAt, task.FinishedAt, task.CompletedAt, task.CancelledAt,
 	)
@@ -34,17 +37,20 @@ func (r *TaskRepository) Create(ctx context.Context, task domain.Task) error {
 func (r *TaskRepository) Get(ctx context.Context, id string) (domain.Task, error) {
 	query := `
 		SELECT id, parent_id, workspace_id, agent_id, title, prompt, status, priority,
+			mode, loop_delay_seconds, loop_run_count, loop_next_run_at, loop_paused_at, loop_audit_prompt,
 			attempts, max_attempts, needs_run, checkout_run_id, checked_out_by_agent_id,
 			execution_locked_at, lock_expires_at, cancel_reason, input_tokens, output_tokens, total_tokens, created_at, updated_at, started_at, finished_at, completed_at, cancelled_at
 		FROM tasks WHERE id = ?
 	`
-	row := r.db.QueryRowContext(ctx, query, id)
+	q := getQueryer(ctx, r.db)
+	row := q.QueryRowContext(ctx, query, id)
 	return scanTask(row)
 }
 
 func (r *TaskRepository) List(ctx context.Context, filter ports.TaskFilter) ([]domain.Task, error) {
 	query := `
 		SELECT id, parent_id, workspace_id, agent_id, title, prompt, status, priority,
+			mode, loop_delay_seconds, loop_run_count, loop_next_run_at, loop_paused_at, loop_audit_prompt,
 			attempts, max_attempts, needs_run, checkout_run_id, checked_out_by_agent_id,
 			execution_locked_at, lock_expires_at, cancel_reason, input_tokens, output_tokens, total_tokens, created_at, updated_at, started_at, finished_at, completed_at, cancelled_at
 		FROM tasks
@@ -106,13 +112,16 @@ func (r *TaskRepository) Update(ctx context.Context, task domain.Task) error {
 	query := `
 		UPDATE tasks SET
 			parent_id = ?, workspace_id = ?, agent_id = ?, title = ?, prompt = ?, status = ?, priority = ?,
+			mode = ?, loop_delay_seconds = ?, loop_run_count = ?, loop_next_run_at = ?, loop_paused_at = ?, loop_audit_prompt = ?,
 			attempts = ?, max_attempts = ?, needs_run = ?, checkout_run_id = ?, checked_out_by_agent_id = ?,
 			execution_locked_at = ?, lock_expires_at = ?, cancel_reason = ?, input_tokens = ?, output_tokens = ?, total_tokens = ?, updated_at = ?, started_at = ?, finished_at = ?, completed_at = ?, cancelled_at = ?
 		WHERE id = ?
 	`
 
-	res, err := r.db.ExecContext(ctx, query,
+	q := getQueryer(ctx, r.db)
+	res, err := q.ExecContext(ctx, query,
 		task.ParentID, task.WorkspaceID, task.AgentID, task.Title, task.Prompt, string(task.Status), task.Priority,
+		string(task.Mode), task.LoopDelaySeconds, task.LoopRunCount, task.LoopNextRunAt, task.LoopPausedAt, task.LoopAuditPrompt,
 		task.Attempts, task.MaxAttempts, task.NeedsRun, task.CheckoutRunID, task.CheckedOutByAgentID,
 		task.ExecutionLockedAt, task.LockExpiresAt, task.CancelReason, task.InputTokens, task.OutputTokens, task.TotalTokens, task.UpdatedAt, task.StartedAt, task.FinishedAt, task.CompletedAt, task.CancelledAt,
 		task.ID,
@@ -140,6 +149,7 @@ func (r *TaskRepository) ClaimNextPending(ctx context.Context) (domain.Task, err
 
 	query := `
 		SELECT id, parent_id, workspace_id, agent_id, title, prompt, status, priority,
+			mode, loop_delay_seconds, loop_run_count, loop_next_run_at, loop_paused_at, loop_audit_prompt,
 			attempts, max_attempts, needs_run, checkout_run_id, checked_out_by_agent_id,
 			execution_locked_at, lock_expires_at, cancel_reason, input_tokens, output_tokens, total_tokens, created_at, updated_at, started_at, finished_at, completed_at, cancelled_at
 		FROM tasks
@@ -197,6 +207,7 @@ func (r *TaskRepository) ClaimNextRunnable(ctx context.Context, now time.Time, l
 
 	query := `
 		SELECT id, parent_id, workspace_id, agent_id, title, prompt, status, priority,
+			mode, loop_delay_seconds, loop_run_count, loop_next_run_at, loop_paused_at, loop_audit_prompt,
 			attempts, max_attempts, needs_run, checkout_run_id, checked_out_by_agent_id,
 			execution_locked_at, lock_expires_at, cancel_reason, input_tokens, output_tokens, total_tokens, created_at, updated_at, started_at, finished_at, completed_at, cancelled_at
 		FROM tasks
@@ -276,10 +287,11 @@ func (r *TaskRepository) ClaimNextRunnable(ctx context.Context, now time.Time, l
 
 func scanTask(row scanner) (domain.Task, error) {
 	var t domain.Task
-	var statusStr string
+	var statusStr, modeStr string
 
 	err := row.Scan(
 		&t.ID, &t.ParentID, &t.WorkspaceID, &t.AgentID, &t.Title, &t.Prompt, &statusStr, &t.Priority,
+		&modeStr, &t.LoopDelaySeconds, &t.LoopRunCount, &t.LoopNextRunAt, &t.LoopPausedAt, &t.LoopAuditPrompt,
 		&t.Attempts, &t.MaxAttempts, &t.NeedsRun, &t.CheckoutRunID, &t.CheckedOutByAgentID,
 		&t.ExecutionLockedAt, &t.LockExpiresAt, &t.CancelReason, &t.InputTokens, &t.OutputTokens, &t.TotalTokens, &t.CreatedAt, &t.UpdatedAt, &t.StartedAt, &t.FinishedAt, &t.CompletedAt, &t.CancelledAt,
 	)
@@ -290,5 +302,6 @@ func scanTask(row scanner) (domain.Task, error) {
 		return domain.Task{}, err
 	}
 	t.Status = domain.TaskStatus(statusStr)
+	t.Mode = domain.TaskMode(modeStr)
 	return t, nil
 }
