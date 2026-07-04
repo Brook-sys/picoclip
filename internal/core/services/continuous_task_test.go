@@ -2,6 +2,7 @@ package services
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
@@ -101,5 +102,30 @@ func TestTaskServiceControlsContinuousTask(t *testing.T) {
 	}
 	if queued.Status != domain.TaskStatusTodo || !queued.NeedsRun || queued.LoopNextRunAt != nil || queued.LoopPausedAt != nil {
 		t.Fatalf("unexpected queued task: %#v", queued)
+	}
+}
+
+func TestContinuousTaskProtocolContextIncludesLoopGuidance(t *testing.T) {
+	st := memory.NewStorage()
+	clock := fixedClock{t: time.Date(2026, 7, 4, 13, 0, 0, 0, time.UTC)}
+	idgen := &seqID{}
+	task := domain.Task{ID: "task_prompt", AgentID: "agent_prompt", Title: "watch", Prompt: "watch", Status: domain.TaskStatusInProgress, Mode: domain.TaskModeContinuous, LoopDelaySeconds: 60, LoopRunCount: 2, CreatedAt: clock.t, UpdatedAt: clock.t}
+	child := domain.Task{ID: "task_child", ParentID: task.ID, AgentID: "agent_child", Title: "child work", Prompt: "do child", Status: domain.TaskStatusTodo, CreatedAt: clock.t, UpdatedAt: clock.t}
+	if err := st.Tasks().Create(context.Background(), task); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.Tasks().Create(context.Background(), child); err != nil {
+		t.Fatal(err)
+	}
+	messages := []domain.Message{
+		{ID: "msg_question", TaskID: task.ID, Role: domain.MessageRoleAgent, Body: "Which branch should I monitor?", CreatedAt: clock.t},
+		{ID: "msg_user", TaskID: task.ID, Role: domain.MessageRoleUser, Body: "Use main.", CreatedAt: clock.t.Add(time.Second)},
+	}
+	runner := NewRunner(st, clock, idgen, noopBus{}, nil, NoopMemoryProvider{}, testLogger{}, Config{})
+	contextText := runner.taskProtocolContext(context.Background(), task, domain.Run{ID: "run_prompt"}, messages)
+	for _, want := range []string{"Continuous Task Instructions", "Current cycle: 3", "non-blocking", "Child Tasks To Supervise", "task_child", "Open Questions Raised For User", "Which branch should I monitor?", "Latest User Comment", "Use main."} {
+		if !strings.Contains(contextText, want) {
+			t.Fatalf("expected context to contain %q:\n%s", want, contextText)
+		}
 	}
 }

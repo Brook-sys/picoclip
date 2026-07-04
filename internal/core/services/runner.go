@@ -450,7 +450,8 @@ func DefaultTaskProtocolPrompt() string {
 		"4. If satisfied/completed: PATCH /agent-api/tasks/{id} with status=done and a clear final comment.",
 		"5. If blocked: PATCH /agent-api/tasks/{id} with status=blocked, explaining the blocker and owner/next action.",
 		"6. If work should be split: POST /agent-api/tasks/{id}/delegate with child task title and acceptance criteria.",
-		"7. Do not stay silent. Every run must leave a final comment or status update.",
+		"7. For continuous tasks, do not mark done just because one heartbeat completed; report progress and let PicoClip schedule the next cycle.",
+		"8. Do not stay silent. Every run must leave a final comment or status update.",
 	}, "\n")
 }
 
@@ -540,6 +541,32 @@ func latestCommentByRole(messages []domain.Message, role domain.MessageRole) str
 	return ""
 }
 
+func userQuestions(messages []domain.Message) []domain.Message {
+	questions := make([]domain.Message, 0)
+	for _, message := range messages {
+		if message.Role != domain.MessageRoleAgent && message.Role != domain.MessageRoleSystem {
+			continue
+		}
+		body := strings.TrimSpace(message.Body)
+		if body == "" || !strings.Contains(body, "?") {
+			continue
+		}
+		questions = append(questions, message)
+	}
+	return questions
+}
+
+func formatTaskSummary(task domain.Task) string {
+	parts := []string{fmt.Sprintf("%s (%s)", task.ID, task.Status)}
+	if strings.TrimSpace(task.Title) != "" {
+		parts = append(parts, task.Title)
+	}
+	if task.CheckoutRunID != "" {
+		parts = append(parts, "running")
+	}
+	return strings.Join(parts, " · ")
+}
+
 func (r *Runner) taskProtocolContext(ctx context.Context, task domain.Task, run domain.Run, messages []domain.Message) string {
 	var sb strings.Builder
 	sb.WriteString(r.taskProtocolPrompt(ctx))
@@ -550,6 +577,40 @@ func (r *Runner) taskProtocolContext(ctx context.Context, task domain.Task, run 
 	sb.WriteString(fmt.Sprintf("- Run ID: %s\n", run.ID))
 	if task.ParentID != "" {
 		sb.WriteString(fmt.Sprintf("- Parent Task ID: %s\n", task.ParentID))
+	}
+	if task.Mode == domain.TaskModeContinuous {
+		sb.WriteString("\nContinuous Task Instructions:\n")
+		sb.WriteString(fmt.Sprintf("- Current cycle: %d\n", task.LoopRunCount+1))
+		sb.WriteString(fmt.Sprintf("- Delay after this cycle: %d seconds\n", task.LoopDelaySeconds))
+		sb.WriteString("- This heartbeat should make incremental progress, inspect recent context, and report what changed.\n")
+		sb.WriteString("- Do not block waiting for a human answer. If you need information, ask clearly in a comment and continue with safe assumptions or next best work.\n")
+		sb.WriteString("- User answers/comments are consumed on the next scheduled cycle; do not request immediate reruns unless explicitly necessary.\n")
+		sb.WriteString("- If you delegate subtasks, supervise them in later cycles by checking child task status before creating duplicates.\n")
+		sb.WriteString("- Do not mark the parent task done unless the continuous loop objective should permanently stop.\n")
+	}
+
+	children, _ := r.storage.Tasks().List(ctx, ports.TaskFilter{ParentID: task.ID})
+	if len(children) > 0 {
+		sb.WriteString("\nChild Tasks To Supervise:\n")
+		limit := len(children) - 8
+		if limit < 0 {
+			limit = 0
+		}
+		for _, child := range children[limit:] {
+			sb.WriteString("- " + formatTaskSummary(child) + "\n")
+		}
+	}
+
+	questions := userQuestions(messages)
+	if task.Mode == domain.TaskModeContinuous && len(questions) > 0 {
+		sb.WriteString("\nOpen Questions Raised For User (non-blocking):\n")
+		start := len(questions) - 5
+		if start < 0 {
+			start = 0
+		}
+		for _, question := range questions[start:] {
+			sb.WriteString(fmt.Sprintf("[%s] %s\n", question.CreatedAt.Format("15:04"), question.Body))
+		}
 	}
 
 	latestUserComment := latestCommentByRole(messages, domain.MessageRoleUser)
