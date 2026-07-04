@@ -15,6 +15,8 @@ func (s *Storage) RestoreAllData(ctx context.Context, data ports.BackupData) err
 	defer tx.Rollback()
 
 	if _, err := tx.ExecContext(ctx, `
+		DELETE FROM webhook_deliveries;
+		DELETE FROM webhook_subscriptions;
 		DELETE FROM wakeups;
 		DELETE FROM messages;
 		DELETE FROM events;
@@ -100,6 +102,12 @@ func (s *Storage) RestoreAllData(ctx context.Context, data ports.BackupData) err
 	}
 	for _, x := range data.Budgets {
 		if _, err := tx.ExecContext(ctx, `INSERT INTO budgets (id, scope, workspace_id, agent_id, limit_tokens, limit_runs, limit_cost_micros, hard_stop, enabled, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, x.ID, string(x.Scope), x.WorkspaceID, x.AgentID, x.LimitTokens, x.LimitRuns, x.LimitCostMicros, x.HardStop, x.Enabled, x.CreatedAt, x.UpdatedAt); err != nil {
+			return err
+		}
+	}
+	for _, x := range data.Webhooks {
+		eventTypes, _ := json.Marshal(x.EventTypes)
+		if _, err := tx.ExecContext(ctx, `INSERT INTO webhook_subscriptions (id, name, url, secret, event_types, enabled, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`, x.ID, x.Name, x.URL, x.Secret, string(eventTypes), x.Enabled, x.CreatedAt, x.UpdatedAt); err != nil {
 			return err
 		}
 	}

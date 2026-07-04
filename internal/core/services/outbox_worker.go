@@ -40,6 +40,10 @@ func (w *OutboxWorker) processOutbox(ctx context.Context) {
 	}
 
 	for _, ev := range events {
+		if err := EnqueueWebhookDeliveries(ctx, w.storage, ev, time.Now()); err != nil {
+			_ = w.storage.Events().MarkOutboxFailed(ctx, ev.ID, err.Error(), time.Now().Add(5*time.Second))
+			continue
+		}
 		if err := w.bus.Publish(ctx, ev); err != nil {
 			_ = w.storage.Events().MarkOutboxFailed(ctx, ev.ID, err.Error(), time.Now().Add(5*time.Second))
 			continue

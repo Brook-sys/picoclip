@@ -380,6 +380,7 @@ func (s *Server) handleWebSettingsExport(w http.ResponseWriter, r *http.Request)
 	messages := make([]domain.Message, 0)
 	events := make([]domain.Event, 0)
 	budgets, _ := s.storage.Budgets().List(ctx)
+	webhooks, _ := s.storage.Webhooks().ListSubscriptions(ctx)
 	for _, task := range tasks {
 		if taskRuns, err := s.storage.Runs().ListByTask(ctx, task.ID); err == nil {
 			runs = append(runs, taskRuns...)
@@ -405,6 +406,7 @@ func (s *Server) handleWebSettingsExport(w http.ResponseWriter, r *http.Request)
 		"messages": messages,
 		"events":   events,
 		"budgets":  budgets,
+		"webhooks": webhooks,
 	})
 }
 

@@ -23,6 +23,8 @@ type Storage struct {
 	wakeups    map[string]domain.WakeupRequest
 	usage      map[string]domain.UsageEvent
 	budgets    map[string]domain.Budget
+	webhooks   map[string]domain.WebhookSubscription
+	deliveries map[string]domain.WebhookDelivery
 }
 
 type agentRepository struct{ storage *Storage }
@@ -35,6 +37,7 @@ type workspaceRepository struct{ storage *Storage }
 type settingsRepository struct{ storage *Storage }
 type wakeupRepository struct{ storage *Storage }
 type usageRepository struct{ storage *Storage }
+type webhookRepository struct{ storage *Storage }
 
 func NewStorage() *Storage {
 	return &Storage{
@@ -50,6 +53,8 @@ func NewStorage() *Storage {
 		wakeups:    make(map[string]domain.WakeupRequest),
 		usage:      make(map[string]domain.UsageEvent),
 		budgets:    make(map[string]domain.Budget),
+		webhooks:   make(map[string]domain.WebhookSubscription),
+		deliveries: make(map[string]domain.WebhookDelivery),
 	}
 }
 
@@ -64,6 +69,7 @@ func (s *Storage) Settings() ports.SettingsRepository    { return settingsReposi
 func (s *Storage) Wakeups() ports.WakeupRepository       { return wakeupRepository{storage: s} }
 func (s *Storage) Usage() ports.UsageRepository          { return usageRepository{storage: s} }
 func (s *Storage) Budgets() ports.BudgetRepository       { return budgetRepository{storage: s} }
+func (s *Storage) Webhooks() ports.WebhookRepository     { return webhookRepository{storage: s} }
 
 func (s *Storage) ResetAllData(ctx context.Context) error {
 	s.mu.Lock()
@@ -80,6 +86,8 @@ func (s *Storage) ResetAllData(ctx context.Context) error {
 	s.wakeups = make(map[string]domain.WakeupRequest)
 	s.usage = make(map[string]domain.UsageEvent)
 	s.budgets = make(map[string]domain.Budget)
+	s.webhooks = make(map[string]domain.WebhookSubscription)
+	s.deliveries = make(map[string]domain.WebhookDelivery)
 	return nil
 }
 
@@ -98,6 +106,8 @@ func (s *Storage) RestoreAllData(ctx context.Context, data ports.BackupData) err
 	s.wakeups = make(map[string]domain.WakeupRequest)
 	s.usage = make(map[string]domain.UsageEvent)
 	s.budgets = make(map[string]domain.Budget)
+	s.webhooks = make(map[string]domain.WebhookSubscription)
+	s.deliveries = make(map[string]domain.WebhookDelivery)
 
 	for k, v := range data.Settings {
 		s.settings[k] = v
@@ -134,6 +144,9 @@ func (s *Storage) RestoreAllData(ctx context.Context, data ports.BackupData) err
 	}
 	for _, x := range data.Budgets {
 		s.budgets[x.ID] = x
+	}
+	for _, x := range data.Webhooks {
+		s.webhooks[x.ID] = x
 	}
 
 	return nil

@@ -151,6 +151,28 @@ func testCoreFlow(t *testing.T, factory StorageFactory) {
 	if len(recent) == 0 {
 		t.Fatal("expected recent events")
 	}
+	subscription := domain.WebhookSubscription{ID: "wh_contract", Name: "Contract", URL: "https://example.test/hook", EventTypes: []domain.EventType{domain.EventRunCompleted}, Enabled: true, CreatedAt: now, UpdatedAt: now}
+	if err := storage.Webhooks().CreateSubscription(ctx, subscription); err != nil {
+		t.Fatal(err)
+	}
+	subscriptions, err := storage.Webhooks().ListSubscriptions(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(subscriptions) != 1 || subscriptions[0].ID != subscription.ID {
+		t.Fatalf("expected webhook subscription, got %#v", subscriptions)
+	}
+	delivery := domain.WebhookDelivery{ID: "whd_contract", SubscriptionID: subscription.ID, EventID: evt.ID, EventType: evt.Type, URL: subscription.URL, Status: domain.WebhookDeliveryPending, RequestBody: "{}", CreatedAt: now, UpdatedAt: now}
+	if err := storage.Webhooks().CreateDelivery(ctx, delivery); err != nil {
+		t.Fatal(err)
+	}
+	deliveries, err := storage.Webhooks().ListDueDeliveries(ctx, now, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(deliveries) != 1 || deliveries[0].ID != delivery.ID {
+		t.Fatalf("expected webhook delivery, got %#v", deliveries)
+	}
 }
 
 func testRuntimes(t *testing.T, factory StorageFactory) {
@@ -196,6 +218,7 @@ func testResetAndRestore(t *testing.T, factory StorageFactory) {
 		Messages:   []domain.Message{{ID: "msg_restore", TaskID: "tsk_restore", Role: domain.MessageRoleUser, Body: "restored", CreatedAt: now}},
 		Events:     []domain.Event{{ID: "evt_restore", Type: domain.EventTaskCreated, TaskID: "tsk_restore", Message: "restored", CreatedAt: now}},
 		Runtimes:   []domain.RuntimeState{{ID: "runtime_restore", RuntimeID: "picoclaw", Mode: domain.InstallModeExisting, Enabled: true, BinPath: "/tmp/picoclaw", InstalledAt: now, UpdatedAt: now, SettingsJSON: "{}", MetadataJSON: "{}"}},
+		Webhooks:   []domain.WebhookSubscription{{ID: "wh_restore", Name: "Restored Webhook", URL: "https://example.test/hook", Enabled: true, CreatedAt: now, UpdatedAt: now}},
 	}
 	if err := storage.RestoreAllData(ctx, backup); err != nil {
 		t.Fatal(err)
@@ -206,6 +229,9 @@ func testResetAndRestore(t *testing.T, factory StorageFactory) {
 	if _, err := storage.Runtimes().GetByRuntimeID(ctx, "picoclaw"); err != nil {
 		t.Fatal(err)
 	}
+	if _, err := storage.Webhooks().GetSubscription(ctx, "wh_restore"); err != nil {
+		t.Fatal(err)
+	}
 	if err := storage.ResetAllData(ctx); err != nil {
 		t.Fatal(err)
 	}
@@ -214,5 +240,8 @@ func testResetAndRestore(t *testing.T, factory StorageFactory) {
 	}
 	if _, err := storage.Runtimes().GetByRuntimeID(ctx, "picoclaw"); err != domain.ErrNotFound {
 		t.Fatalf("expected restored runtime deleted, got %v", err)
+	}
+	if _, err := storage.Webhooks().GetSubscription(ctx, "wh_restore"); err != domain.ErrNotFound {
+		t.Fatalf("expected restored webhook deleted, got %v", err)
 	}
 }

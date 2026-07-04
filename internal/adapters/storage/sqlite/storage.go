@@ -98,8 +98,14 @@ func (s *Storage) Budgets() ports.BudgetRepository {
 	return &BudgetRepository{db: s.db}
 }
 
+func (s *Storage) Webhooks() ports.WebhookRepository {
+	return &WebhookRepository{db: s.db}
+}
+
 func (s *Storage) ResetAllData(ctx context.Context) error {
 	_, err := s.db.ExecContext(ctx, `
+		DELETE FROM webhook_deliveries;
+		DELETE FROM webhook_subscriptions;
 		DELETE FROM budgets;
 		DELETE FROM wakeups;
 		DELETE FROM usage_events;

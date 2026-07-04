@@ -74,6 +74,9 @@ func (s *Server) mountAPIV1(mux *http.ServeMux) {
 	mux.HandleFunc("DELETE /api/v1/skills/{id}", s.handleAPIV1DeleteSkill)
 	mux.HandleFunc("POST /api/v1/skills/{id}/reset", s.handleAPIV1ResetSkill)
 	mux.HandleFunc("PUT /api/v1/skills/{id}/agents", s.handleAPIV1SetSkillAgents)
+	mux.HandleFunc("GET /api/v1/webhooks", s.handleAPIV1Webhooks)
+	mux.HandleFunc("POST /api/v1/webhooks", s.handleAPIV1CreateWebhook)
+	mux.HandleFunc("GET /api/v1/webhooks/{id}/deliveries", s.handleAPIV1WebhookDeliveries)
 	mux.HandleFunc("GET /api/v1/events", s.handleAPIV1Events)
 	mux.HandleFunc("GET /api/v1/activity", s.handleAPIV1Events)
 }

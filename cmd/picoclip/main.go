@@ -111,6 +111,8 @@ func main() {
 
 	outboxWorker := services.NewOutboxWorker(storage, bus)
 	go outboxWorker.Start(ctx)
+	webhookWorker := services.NewWebhookDeliveryWorker(storage, clock, nil)
+	go webhookWorker.Start(ctx)
 
 	diagnostics := services.NewDiagnosticsService(storage, runtimeManager, services.DiagnosticsConfig{StorageType: storageTypeForDiagnostics, DatabasePath: dbPathForDiagnostics, WorkspacePath: workspaceBase, RuntimePath: runtimeBase, LogLevel: logLevel, DebugMode: debugMode})
 	server := web.NewServer(agentService, taskService, skillService, workspaceService, runtimeManager, diagnostics, storage, bus, debugMode)

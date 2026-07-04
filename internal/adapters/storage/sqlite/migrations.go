@@ -433,5 +433,42 @@ func migrations() []migration {
 					CREATE INDEX IF NOT EXISTS idx_tasks_loop_next_run ON tasks(mode, status, loop_next_run_at);
 				`,
 		},
+		{
+			version: 15,
+			name:    "create_webhook_tables",
+			sql: `
+					CREATE TABLE IF NOT EXISTS webhook_subscriptions (
+						id TEXT PRIMARY KEY,
+						name TEXT NOT NULL,
+						url TEXT NOT NULL,
+						secret TEXT NOT NULL DEFAULT '',
+						event_types TEXT NOT NULL DEFAULT '[]',
+						enabled BOOLEAN NOT NULL DEFAULT 1,
+						created_at TIMESTAMP NOT NULL,
+						updated_at TIMESTAMP NOT NULL
+					);
+					CREATE INDEX IF NOT EXISTS idx_webhook_subscriptions_enabled ON webhook_subscriptions(enabled);
+
+					CREATE TABLE IF NOT EXISTS webhook_deliveries (
+						id TEXT PRIMARY KEY,
+						subscription_id TEXT NOT NULL,
+						event_id TEXT NOT NULL,
+						event_type TEXT NOT NULL,
+						url TEXT NOT NULL,
+						status TEXT NOT NULL,
+						attempts INTEGER NOT NULL DEFAULT 0,
+						request_body TEXT NOT NULL DEFAULT '',
+						response_status INTEGER NOT NULL DEFAULT 0,
+						response_body TEXT NOT NULL DEFAULT '',
+						last_error TEXT NOT NULL DEFAULT '',
+						next_attempt_at TIMESTAMP,
+						created_at TIMESTAMP NOT NULL,
+						updated_at TIMESTAMP NOT NULL
+					);
+					CREATE UNIQUE INDEX IF NOT EXISTS idx_webhook_delivery_event_subscription ON webhook_deliveries(event_id, subscription_id);
+					CREATE INDEX IF NOT EXISTS idx_webhook_deliveries_due ON webhook_deliveries(status, next_attempt_at, created_at);
+					CREATE INDEX IF NOT EXISTS idx_webhook_deliveries_subscription ON webhook_deliveries(subscription_id, created_at);
+				`,
+		},
 	}
 }

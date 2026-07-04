@@ -8,18 +8,19 @@ import (
 )
 
 type BackupData struct {
-	Settings   map[string]string      `json:"settings"`
-	Agents     []domain.Agent         `json:"agents"`
-	Workspaces []domain.Workspace     `json:"projects"`
-	Skills     []domain.Skill         `json:"skills"`
-	Tasks      []domain.Task          `json:"tasks"`
-	Runs       []domain.Run           `json:"runs"`
-	Runtimes   []domain.RuntimeState  `json:"runtimes"`
-	Messages   []domain.Message       `json:"messages"`
-	Events     []domain.Event         `json:"events"`
-	Wakeups    []domain.WakeupRequest `json:"wakeups"`
-	Usage      []domain.UsageEvent    `json:"usage"`
-	Budgets    []domain.Budget        `json:"budgets"`
+	Settings   map[string]string            `json:"settings"`
+	Agents     []domain.Agent               `json:"agents"`
+	Workspaces []domain.Workspace           `json:"projects"`
+	Skills     []domain.Skill               `json:"skills"`
+	Tasks      []domain.Task                `json:"tasks"`
+	Runs       []domain.Run                 `json:"runs"`
+	Runtimes   []domain.RuntimeState        `json:"runtimes"`
+	Messages   []domain.Message             `json:"messages"`
+	Events     []domain.Event               `json:"events"`
+	Wakeups    []domain.WakeupRequest       `json:"wakeups"`
+	Usage      []domain.UsageEvent          `json:"usage"`
+	Budgets    []domain.Budget              `json:"budgets"`
+	Webhooks   []domain.WebhookSubscription `json:"webhooks"`
 }
 
 type Storage interface {
@@ -35,6 +36,7 @@ type Storage interface {
 	Wakeups() WakeupRepository
 	Usage() UsageRepository
 	Budgets() BudgetRepository
+	Webhooks() WebhookRepository
 	ResetAllData(ctx context.Context) error
 	RestoreAllData(ctx context.Context, data BackupData) error
 	RunInTx(ctx context.Context, fn func(ctx context.Context) error) error
@@ -131,4 +133,15 @@ type BudgetRepository interface {
 	List(ctx context.Context) ([]domain.Budget, error)
 	Update(ctx context.Context, budget domain.Budget) error
 	Delete(ctx context.Context, id string) error
+}
+
+type WebhookRepository interface {
+	CreateSubscription(ctx context.Context, subscription domain.WebhookSubscription) error
+	GetSubscription(ctx context.Context, id string) (domain.WebhookSubscription, error)
+	ListSubscriptions(ctx context.Context) ([]domain.WebhookSubscription, error)
+	UpdateSubscription(ctx context.Context, subscription domain.WebhookSubscription) error
+	CreateDelivery(ctx context.Context, delivery domain.WebhookDelivery) error
+	ListDueDeliveries(ctx context.Context, now time.Time, limit int) ([]domain.WebhookDelivery, error)
+	UpdateDelivery(ctx context.Context, delivery domain.WebhookDelivery) error
+	ListDeliveries(ctx context.Context, subscriptionID string, limit int) ([]domain.WebhookDelivery, error)
 }

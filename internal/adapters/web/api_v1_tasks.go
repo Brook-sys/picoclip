@@ -376,6 +376,8 @@ func apiV1Paths() map[string]any {
 		"GET /api/v1/runs/{id}",
 		"GET,POST /api/v1/skills",
 		"GET,PATCH,DELETE /api/v1/skills/{id}",
+		"GET,POST /api/v1/webhooks",
+		"GET /api/v1/webhooks/{id}/deliveries",
 		"GET /api/v1/events",
 	}
 	out := make(map[string]any, len(paths))
