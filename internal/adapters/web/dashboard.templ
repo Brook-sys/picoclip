@@ -33,6 +33,30 @@ templ DashboardPage(view DashboardView, agents []domain.Agent, projects []domain
 
 		<section class="dashboard-content-grid">
 			<div class="dashboard-main-col">
+				if len(view.QuestionsForUser) > 0 {
+					<div class="panel dashboard-panel">
+						<div class="dashboard-panel-header">
+							<div>
+								<span class="eyebrow text-info">Questions</span>
+								<h2 class="text-info">Questions for you</h2>
+								<p>Continuous tasks asked for input but will keep running on schedule.</p>
+							</div>
+						</div>
+						<div class="question-list">
+							for _, question := range view.QuestionsForUser {
+								<a class="question-row" href={ templ.URL("/tasks/" + question.TaskID) }>
+									<span class="question-icon">@Icon("help-circle", 15)</span>
+									<span class="question-content">
+										<strong>{ question.Body }</strong>
+										<small>{ question.TaskTitle } · { question.CreatedAt.Format("Jan 02, 15:04") }</small>
+									</span>
+									<span class="activity-action">Answer</span>
+								</a>
+							}
+						</div>
+					</div>
+				}
+
 				if len(view.RuntimeWarnings) > 0 {
 					<div class="panel dashboard-alert">
 						<div class="dashboard-panel-header">

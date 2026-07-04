@@ -26,6 +26,29 @@ templ TaskDetailPage(task taskResponse, rawTask domain.Task, agents []domain.Age
 					</div>
 				</div>
 
+				if rawTask.Mode == domain.TaskModeContinuous && len(openQuestionsForTask(rawTask, messages)) > 0 {
+					<div class="panel dashboard-panel">
+						<div class="dashboard-panel-header">
+							<div>
+								<span class="eyebrow text-info">Questions</span>
+								<h2 class="text-info">Questions for you</h2>
+								<p>Answer in the comment box below. The next scheduled cycle will read your reply.</p>
+							</div>
+						</div>
+						<div class="question-list">
+							for _, question := range openQuestionsForTask(rawTask, messages) {
+								<div class="question-row">
+									<span class="question-icon">@Icon("help-circle", 15)</span>
+									<span class="question-content">
+										<strong>{ question.Body }</strong>
+										<small>{ question.CreatedAt.Format("Jan 02, 15:04") }</small>
+									</span>
+								</div>
+							}
+						</div>
+					</div>
+				}
+
 				<div id="task-live" hx-get={ "/partials/tasks/" + task.ID } hx-trigger="every 3s" hx-swap="innerHTML">
 					@TaskLive(task, messages, runs, events, children, agents, projects)
 				</div>

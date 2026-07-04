@@ -1742,6 +1742,13 @@ pc-tag-multiselect { position: relative; display: flex; flex-wrap: wrap; align-i
 .runs-filter-pill { display: inline-flex; align-items: center; justify-content: center; min-height: 30px; padding: 5px 11px; border-radius: 999px; border: 1px solid var(--border); background: var(--surface-soft); color: var(--muted); font-size: 12px; font-weight: 850; text-transform: capitalize; }
 .runs-empty-wrap { padding: 24px; }
 .run-activity-list { display: flex; flex-direction: column; gap: 14px; padding: 24px; background: color-mix(in srgb, var(--background) 74%, var(--surface-soft)); }
+.question-list { display: flex; flex-direction: column; gap: 12px; padding: 24px; background: color-mix(in srgb, var(--info) 4%, var(--surface-soft)); }
+.question-row { display: grid; grid-template-columns: 36px minmax(0, 1fr) auto; align-items: start; gap: 14px; padding: 16px; border: 1px solid color-mix(in srgb, var(--info) 22%, var(--border)); border-radius: var(--radius-lg); background: var(--surface); color: var(--text); text-decoration: none; box-shadow: var(--shadow-sm); }
+.question-row:hover { border-color: color-mix(in srgb, var(--info) 42%, var(--border)); box-shadow: var(--shadow-md); }
+.question-icon { display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 36px; border-radius: 12px; border: 1px solid color-mix(in srgb, var(--info) 24%, var(--border)); background: color-mix(in srgb, var(--info) 10%, var(--surface-soft)); color: var(--info); }
+.question-content { display: grid; gap: 5px; min-width: 0; }
+.question-content strong { overflow: hidden; color: var(--text); font-size: 14px; font-weight: 800; line-height: 1.45; text-overflow: ellipsis; }
+.question-content small { overflow: hidden; color: var(--muted); font-size: 12px; font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
 .run-activity-row { position: relative; display: grid; grid-template-columns: 40px minmax(0, 1fr) auto; align-items: start; gap: 18px; padding: 20px; border: 1px solid color-mix(in srgb, var(--border) 82%, transparent); border-radius: var(--radius-lg); background: var(--surface); color: var(--text); text-decoration: none; box-shadow: var(--shadow-sm); transition: background 0.12s ease, border-color 0.12s ease, box-shadow 0.12s ease; }
 .run-activity-row:hover { border-color: var(--border-strong); box-shadow: var(--shadow-md); }
 .run-activity-icon { display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px; border: 1px solid var(--border); border-radius: 14px; background: var(--surface-soft); color: var(--info); box-shadow: var(--shadow-sm); }

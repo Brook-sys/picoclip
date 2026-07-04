@@ -4,11 +4,21 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"sort"
+	"strings"
 	"time"
 
 	"picoclip/internal/core/domain"
 	"picoclip/internal/core/ports"
 )
+
+type QuestionForUser struct {
+	TaskID    string
+	TaskTitle string
+	AgentID   string
+	Body      string
+	CreatedAt time.Time
+}
 
 type DashboardView struct {
 	Stats struct {
@@ -30,6 +40,7 @@ type DashboardView struct {
 	NeedsAttention   []taskResponse
 	CurrentlyRunning []domain.Run
 	RecentActivity   []domain.Event
+	QuestionsForUser []QuestionForUser
 	RuntimeWarnings  []string
 }
 
@@ -74,13 +85,14 @@ func loadDashboardView(ctx context.Context, s *Server, r *http.Request) (Dashboa
 	}
 
 	for _, task := range allTasks {
+		view.QuestionsForUser = append(view.QuestionsForUser, questionsForTask(ctx, s, task)...)
 		switch task.Status {
 		case domain.TaskStatusBlocked:
 			view.Stats.BlockedTasks++
 			view.NeedsAttention = append(view.NeedsAttention, s.taskResponse(r, task))
 		case domain.TaskStatusDone:
 			view.Stats.DoneTasks++
-		case domain.TaskStatusTodo, domain.TaskStatusBacklog, domain.TaskStatusInProgress, domain.TaskStatusInReview:
+		case domain.TaskStatusTodo, domain.TaskStatusBacklog, domain.TaskStatusInProgress, domain.TaskStatusWaitingNextCycle, domain.TaskStatusInReview:
 			view.Stats.OpenTasks++
 		}
 	}
@@ -118,12 +130,58 @@ func loadDashboardView(ctx context.Context, s *Server, r *http.Request) (Dashboa
 		view.SystemHealth.LastEventTime = "No events yet"
 	}
 
+	sort.Slice(view.QuestionsForUser, func(i, j int) bool {
+		return view.QuestionsForUser[i].CreatedAt.After(view.QuestionsForUser[j].CreatedAt)
+	})
+	if len(view.QuestionsForUser) > 5 {
+		view.QuestionsForUser = view.QuestionsForUser[:5]
+	}
+
 	// Limit needs attention
 	if len(view.NeedsAttention) > 5 {
 		view.NeedsAttention = view.NeedsAttention[:5]
 	}
 
 	return view, nil
+}
+
+func questionsForTask(ctx context.Context, s *Server, task domain.Task) []QuestionForUser {
+	if task.Mode != domain.TaskModeContinuous || task.Status == domain.TaskStatusDone || task.Status == domain.TaskStatusCancelled {
+		return nil
+	}
+	messages, err := s.storage.Messages().ListByTask(ctx, task.ID)
+	if err != nil {
+		return nil
+	}
+	return openQuestionsForTask(task, messages)
+}
+
+func openQuestionsForTask(task domain.Task, messages []domain.Message) []QuestionForUser {
+	if len(messages) == 0 {
+		return nil
+	}
+	latestUserAt := time.Time{}
+	for _, message := range messages {
+		if message.Role == domain.MessageRoleUser && message.CreatedAt.After(latestUserAt) {
+			latestUserAt = message.CreatedAt
+		}
+	}
+
+	questions := make([]QuestionForUser, 0)
+	for _, message := range messages {
+		if message.CreatedAt.Before(latestUserAt) || message.CreatedAt.Equal(latestUserAt) {
+			continue
+		}
+		if message.Role != domain.MessageRoleAgent && message.Role != domain.MessageRoleSystem {
+			continue
+		}
+		body := strings.TrimSpace(message.Body)
+		if body == "" || !strings.Contains(body, "?") {
+			continue
+		}
+		questions = append(questions, QuestionForUser{TaskID: task.ID, TaskTitle: task.Title, AgentID: task.AgentID, Body: body, CreatedAt: message.CreatedAt})
+	}
+	return questions
 }
 
 func timeSince(t time.Time) string {
