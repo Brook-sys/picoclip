@@ -778,6 +778,30 @@ func (s *Server) handleWebWakeTask(w http.ResponseWriter, r *http.Request) {
 	s.handleWebTaskDetail(w, r)
 }
 
+func (s *Server) handleWebPauseContinuousTask(w http.ResponseWriter, r *http.Request) {
+	if _, err := s.tasks.PauseContinuous(r.Context(), r.PathValue("id")); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	s.handleWebTaskDetail(w, r)
+}
+
+func (s *Server) handleWebResumeContinuousTask(w http.ResponseWriter, r *http.Request) {
+	if _, err := s.tasks.ResumeContinuous(r.Context(), r.PathValue("id")); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	s.handleWebTaskDetail(w, r)
+}
+
+func (s *Server) handleWebRunContinuousTaskNow(w http.ResponseWriter, r *http.Request) {
+	if _, err := s.tasks.RunContinuousNow(r.Context(), r.PathValue("id")); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	s.handleWebTaskDetail(w, r)
+}
+
 func (s *Server) handleWebPostTaskInlineEdit(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)

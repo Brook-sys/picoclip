@@ -372,6 +372,71 @@ func (s *TaskService) Wake(ctx context.Context, id string) (domain.Task, error) 
 	return task, s.storage.Tasks().Update(ctx, task)
 }
 
+func (s *TaskService) PauseContinuous(ctx context.Context, id string) (domain.Task, error) {
+	task, err := s.storage.Tasks().Get(ctx, id)
+	if err != nil {
+		return domain.Task{}, err
+	}
+	if task.Mode != domain.TaskModeContinuous {
+		return domain.Task{}, fmt.Errorf("%w: task is not continuous", domain.ErrInvalidInput)
+	}
+	now := s.clock.Now()
+	task.LoopPausedAt = &now
+	task.LoopNextRunAt = nil
+	task.NeedsRun = false
+	if task.CheckoutRunID == "" {
+		task.Status = domain.TaskStatusWaitingNextCycle
+	}
+	task.UpdatedAt = now
+	return task, s.storage.Tasks().Update(ctx, task)
+}
+
+func (s *TaskService) ResumeContinuous(ctx context.Context, id string) (domain.Task, error) {
+	task, err := s.storage.Tasks().Get(ctx, id)
+	if err != nil {
+		return domain.Task{}, err
+	}
+	if task.Mode != domain.TaskModeContinuous {
+		return domain.Task{}, fmt.Errorf("%w: task is not continuous", domain.ErrInvalidInput)
+	}
+	now := s.clock.Now()
+	delay := task.LoopDelaySeconds
+	if delay < 1 {
+		delay = 60
+		task.LoopDelaySeconds = delay
+	}
+	nextRunAt := now.Add(time.Duration(delay) * time.Second)
+	task.LoopPausedAt = nil
+	if task.CheckoutRunID == "" {
+		task.Status = domain.TaskStatusWaitingNextCycle
+		task.NeedsRun = false
+		task.LoopNextRunAt = &nextRunAt
+	}
+	task.UpdatedAt = now
+	return task, s.storage.Tasks().Update(ctx, task)
+}
+
+func (s *TaskService) RunContinuousNow(ctx context.Context, id string) (domain.Task, error) {
+	task, err := s.storage.Tasks().Get(ctx, id)
+	if err != nil {
+		return domain.Task{}, err
+	}
+	if task.Mode != domain.TaskModeContinuous {
+		return domain.Task{}, fmt.Errorf("%w: task is not continuous", domain.ErrInvalidInput)
+	}
+	now := s.clock.Now()
+	task.LoopPausedAt = nil
+	task.LoopNextRunAt = nil
+	if task.CheckoutRunID == "" {
+		task.Status = domain.TaskStatusTodo
+		task.NeedsRun = true
+		task.FinishedAt = nil
+		task.CompletedAt = nil
+	}
+	task.UpdatedAt = now
+	return task, s.storage.Tasks().Update(ctx, task)
+}
+
 func (s *TaskService) GetMessages(ctx context.Context, id string) ([]domain.Message, error) {
 	return s.storage.Messages().ListByTask(ctx, id)
 }
@@ -399,7 +464,7 @@ func statusIn(status domain.TaskStatus, statuses []domain.TaskStatus) bool {
 
 func validTaskStatus(status domain.TaskStatus) bool {
 	switch status {
-	case domain.TaskStatusBacklog, domain.TaskStatusTodo, domain.TaskStatusInProgress, domain.TaskStatusInReview, domain.TaskStatusBlocked, domain.TaskStatusDone, domain.TaskStatusCancelled:
+	case domain.TaskStatusBacklog, domain.TaskStatusTodo, domain.TaskStatusInProgress, domain.TaskStatusWaitingNextCycle, domain.TaskStatusInReview, domain.TaskStatusBlocked, domain.TaskStatusDone, domain.TaskStatusCancelled:
 		return true
 	default:
 		return false

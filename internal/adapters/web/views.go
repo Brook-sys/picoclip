@@ -418,7 +418,7 @@ func permissionsText(permissions []domain.AgentPermission) string {
 }
 
 func taskStatusOptions(selected domain.TaskStatus) string {
-	statuses := []domain.TaskStatus{domain.TaskStatusBacklog, domain.TaskStatusTodo, domain.TaskStatusInProgress, domain.TaskStatusInReview, domain.TaskStatusBlocked, domain.TaskStatusDone, domain.TaskStatusCancelled}
+	statuses := []domain.TaskStatus{domain.TaskStatusBacklog, domain.TaskStatusTodo, domain.TaskStatusInProgress, domain.TaskStatusWaitingNextCycle, domain.TaskStatusInReview, domain.TaskStatusBlocked, domain.TaskStatusDone, domain.TaskStatusCancelled}
 	var b strings.Builder
 	for _, status := range statuses {
 		selectedAttr := ""

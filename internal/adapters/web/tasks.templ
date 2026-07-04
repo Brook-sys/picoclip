@@ -65,7 +65,7 @@ func taskToneClass(status domain.TaskStatus) string {
 		return "task-tone-attention"
 	case domain.TaskStatusInReview:
 		return "task-tone-review"
-	case domain.TaskStatusInProgress:
+	case domain.TaskStatusInProgress, domain.TaskStatusWaitingNextCycle:
 		return "task-tone-live"
 	case domain.TaskStatusDone:
 		return "task-tone-success"
@@ -80,7 +80,7 @@ func taskStatusIcon(status domain.TaskStatus) string {
 		return "alert-triangle"
 	case domain.TaskStatusInReview:
 		return "eye"
-	case domain.TaskStatusInProgress:
+	case domain.TaskStatusInProgress, domain.TaskStatusWaitingNextCycle:
 		return "activity"
 	case domain.TaskStatusDone:
 		return "check-circle"
@@ -99,6 +99,8 @@ func issuePriorityLabel(status domain.TaskStatus) string {
 		return "Review"
 	case domain.TaskStatusInProgress:
 		return "Active"
+	case domain.TaskStatusWaitingNextCycle:
+		return "Waiting next cycle"
 	case domain.TaskStatusTodo:
 		return "Queued"
 	case domain.TaskStatusDone:

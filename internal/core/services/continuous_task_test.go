@@ -67,3 +67,39 @@ func TestReconcilerActivatesDueContinuousTask(t *testing.T) {
 		t.Fatalf("expected next run cleared, got %v", got.LoopNextRunAt)
 	}
 }
+
+func TestTaskServiceControlsContinuousTask(t *testing.T) {
+	st := memory.NewStorage()
+	clock := fixedClock{t: time.Date(2026, 7, 4, 12, 0, 0, 0, time.UTC)}
+	idgen := &seqID{}
+	svc := NewTaskService(st, clock, idgen, noopBus{})
+	next := clock.t.Add(time.Minute)
+	task := domain.Task{ID: "task_control", AgentID: "agent_control", Title: "continuous", Prompt: "do", Status: domain.TaskStatusWaitingNextCycle, Mode: domain.TaskModeContinuous, LoopDelaySeconds: 60, LoopNextRunAt: &next, CreatedAt: clock.t, UpdatedAt: clock.t}
+	if err := st.Tasks().Create(context.Background(), task); err != nil {
+		t.Fatal(err)
+	}
+
+	paused, err := svc.PauseContinuous(context.Background(), task.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if paused.LoopPausedAt == nil || paused.LoopNextRunAt != nil || paused.NeedsRun {
+		t.Fatalf("unexpected paused task: %#v", paused)
+	}
+
+	resumed, err := svc.ResumeContinuous(context.Background(), task.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resumed.LoopPausedAt != nil || resumed.LoopNextRunAt == nil || resumed.NeedsRun {
+		t.Fatalf("unexpected resumed task: %#v", resumed)
+	}
+
+	queued, err := svc.RunContinuousNow(context.Background(), task.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if queued.Status != domain.TaskStatusTodo || !queued.NeedsRun || queued.LoopNextRunAt != nil || queued.LoopPausedAt != nil {
+		t.Fatalf("unexpected queued task: %#v", queued)
+	}
+}

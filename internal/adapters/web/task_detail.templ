@@ -81,6 +81,18 @@ templ TaskPropertiesRail(task taskResponse, rawTask domain.Task, agents []domain
 				@IssuePropertyRow("Loop delay") {
 					<span>{ fmt.Sprintf("%ds", rawTask.LoopDelaySeconds) }</span>
 				}
+				@IssuePropertyRow("Cycles") {
+					<span>{ fmt.Sprintf("%d", rawTask.LoopRunCount) }</span>
+				}
+				if rawTask.LoopPausedAt != nil {
+					@IssuePropertyRow("Loop") {
+						<span>Paused</span>
+					}
+				} else if rawTask.LoopNextRunAt != nil {
+					@IssuePropertyRow("Next run") {
+						<small>{ rawTask.LoopNextRunAt.Format("2006-01-02T15:04:05Z07:00") }</small>
+					}
+				}
 			}
 			@IssuePropertyRow("Attempts") {
 				if rawTask.MaxAttempts == 0 {
@@ -114,6 +126,24 @@ templ TaskPropertiesRail(task taskResponse, rawTask domain.Task, agents []domain
 			<button class="button secondary" type="submit">Wake agent</button>
 		</form>
 	</div>
+
+	if rawTask.Mode == domain.TaskModeContinuous {
+		<div class="panel issue-action-panel">
+			<h2>Continuous task</h2>
+			<form hx-post={ "/tasks/" + task.ID + "/run-now" } hx-target="body" hx-swap="outerHTML" data-success="Continuous task queued now." class="stacked">
+				<button class="pc-btn pc-btn-primary" type="submit">Run now</button>
+			</form>
+			if rawTask.LoopPausedAt == nil {
+				<form hx-post={ "/tasks/" + task.ID + "/pause" } hx-target="body" hx-swap="outerHTML" data-success="Continuous task paused." class="stacked">
+					<button class="button secondary" type="submit">Pause continuous task</button>
+				</form>
+			} else {
+				<form hx-post={ "/tasks/" + task.ID + "/resume" } hx-target="body" hx-swap="outerHTML" data-success="Continuous task resumed." class="stacked">
+					<button class="button secondary" type="submit">Resume continuous task</button>
+				</form>
+			}
+		</div>
+	}
 	
 	<div class="panel issue-action-panel">
 		<h2>Create subtask</h2>
@@ -169,5 +199,5 @@ templ AgentSelect(agents []domain.Agent, selected string) {
 }
 
 func taskStatuses() []domain.TaskStatus {
-	return []domain.TaskStatus{domain.TaskStatusBacklog, domain.TaskStatusTodo, domain.TaskStatusInProgress, domain.TaskStatusInReview, domain.TaskStatusBlocked, domain.TaskStatusDone, domain.TaskStatusCancelled}
+	return []domain.TaskStatus{domain.TaskStatusBacklog, domain.TaskStatusTodo, domain.TaskStatusInProgress, domain.TaskStatusWaitingNextCycle, domain.TaskStatusInReview, domain.TaskStatusBlocked, domain.TaskStatusDone, domain.TaskStatusCancelled}
 }

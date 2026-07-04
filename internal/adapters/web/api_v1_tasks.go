@@ -83,6 +83,33 @@ func (s *Server) handleAPIV1CancelTask(w http.ResponseWriter, r *http.Request) {
 	s.apiData(w, s.taskResponse(r, task))
 }
 
+func (s *Server) handleAPIV1PauseContinuousTask(w http.ResponseWriter, r *http.Request) {
+	task, err := s.tasks.PauseContinuous(r.Context(), r.PathValue("id"))
+	if err != nil {
+		s.apiError(w, err)
+		return
+	}
+	s.apiData(w, s.taskResponse(r, task))
+}
+
+func (s *Server) handleAPIV1ResumeContinuousTask(w http.ResponseWriter, r *http.Request) {
+	task, err := s.tasks.ResumeContinuous(r.Context(), r.PathValue("id"))
+	if err != nil {
+		s.apiError(w, err)
+		return
+	}
+	s.apiData(w, s.taskResponse(r, task))
+}
+
+func (s *Server) handleAPIV1RunContinuousTaskNow(w http.ResponseWriter, r *http.Request) {
+	task, err := s.tasks.RunContinuousNow(r.Context(), r.PathValue("id"))
+	if err != nil {
+		s.apiError(w, err)
+		return
+	}
+	s.apiData(w, s.taskResponse(r, task))
+}
+
 func (s *Server) handleAPIV1DelegateTask(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		FromAgentID string `json:"from_agent_id"`
@@ -336,6 +363,9 @@ func apiV1Paths() map[string]any {
 		"GET /api/v1/tasks/{id}",
 		"GET /api/v1/tasks/{id}/full",
 		"POST /api/v1/tasks/{id}/cancel",
+		"POST /api/v1/tasks/{id}/pause",
+		"POST /api/v1/tasks/{id}/resume",
+		"POST /api/v1/tasks/{id}/run-now",
 		"POST /api/v1/tasks/{id}/delegate",
 		"GET,POST /api/v1/tasks/{id}/messages",
 		"GET /api/v1/tasks/{id}/runs",
