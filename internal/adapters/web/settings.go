@@ -16,6 +16,9 @@ type SettingsView struct {
 	Runtimes    []RuntimeCardView
 	Diagnostics domain.DiagnosticsReport
 	Stats       SettingsStats
+	Budgets     []domain.Budget
+	Agents      []domain.Agent
+	Projects    []domain.Workspace
 }
 
 type GeneralSettings struct {

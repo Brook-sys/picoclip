@@ -11,32 +11,35 @@ templ PageShell(active string, title string, subtitle string, action templ.Compo
 				(function(){var mode=localStorage.getItem('picoclip.theme')||'system';var dark=window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches;var resolved=mode==='system'?(dark?'dark':'light'):mode;document.documentElement.dataset.theme=resolved;document.documentElement.dataset.themeMode=mode;var density=localStorage.getItem('picoclip.density')||'comfortable';document.documentElement.dataset.density=density;})();
 			</script>
 			<script src="/assets/htmx.min.js"></script>
-			<link rel="stylesheet" href="/assets/app.css?v=4"/>
+			<link rel="stylesheet" href="/assets/app.css?v=18"/>
 		</head>
 		<body>
 			<div class="app-shell">
 				<aside class="sidebar">
 					<a class="brand" href="/">
-						<span>PicoClip</span>
-						<small>agent control plane</small>
+						<span class="brand-mark">@Icon("paperclip", 18)</span>
+						<span class="brand-copy">
+							<strong>PicoClip</strong>
+							<small>agent control plane</small>
+						</span>
 					</a>
 					<nav aria-label="Primary navigation">
 						<div class="nav-group">
 							<div class="nav-group-title">Control</div>
-							<a class={ templ.KV("active", active == "dashboard") } href="/">Dashboard</a>
-							<a class={ templ.KV("active", active == "tasks") } href="/tasks">Tasks</a>
-							<a class={ templ.KV("active", active == "runs") } href="/runs">Runs</a>
-							<a class={ templ.KV("active", active == "activity") } href="/activity">Activity</a>
+							@NavItem("dashboard", active, "/", "layout-dashboard", "Dashboard")
+							@NavItem("tasks", active, "/tasks", "check-square", "Tasks")
+							@NavItem("runs", active, "/runs", "play-circle", "Runs")
+							@NavItem("activity", active, "/activity", "activity", "Activity")
 						</div>
 						<div class="nav-group">
 							<div class="nav-group-title">Core</div>
-							<a class={ templ.KV("active", active == "projects") } href="/projects">Projects</a>
-							<a class={ templ.KV("active", active == "agents") } href="/agents">Agents</a>
-							<a class={ templ.KV("active", active == "skills") } href="/skills">Skills</a>
+							@NavItem("projects", active, "/projects", "folder", "Projects")
+							@NavItem("agents", active, "/agents", "bot", "Agents")
+							@NavItem("skills", active, "/skills", "sparkles", "Skills")
 						</div>
 						<div class="nav-group">
 							<div class="nav-group-title">Admin</div>
-							<a class={ templ.KV("active", active == "settings") } href="/settings">Settings</a>
+							@NavItem("settings", active, "/settings", "settings", "Settings")
 						</div>
 					</nav>
 					<div class="sidebar-footer">
@@ -49,17 +52,20 @@ templ PageShell(active string, title string, subtitle string, action templ.Compo
 					</div>
 				</aside>
 				<main class="main">
-					<header class="page-header">
-						<div>
+					<header class={ "page-header", templ.KV("page-header-with-action", action != nil) }>
+						<div class="page-title-block">
 							<p class="eyebrow"><a href="/">PicoClip</a><span>/</span><span>{ active }</span></p>
-							<h1>{ title }</h1>
+							<div class="page-title-row">
+								<span class="page-title-icon">@Icon(pageIcon(active), 18)</span>
+								<h1>{ title }</h1>
+							</div>
 							<p>{ subtitle }</p>
 						</div>
-						<div class="page-action">
-							if action != nil {
+						if action != nil {
+							<div class="page-action">
 								@action
-							}
-						</div>
+							</div>
+						}
 					</header>
 					{ children... }
 					@CommandPalette()
@@ -348,4 +354,34 @@ templ PageShell(active string, title string, subtitle string, action templ.Compo
 			</div>
 		</body>
 	</html>
+}
+
+templ NavItem(id string, active string, href string, icon string, label string) {
+	<a class={ "nav-link", templ.KV("active", active == id) } href={ templ.URL(href) }>
+		<span class="nav-link-icon">@Icon(icon, 16)</span>
+		<span>{ label }</span>
+	</a>
+}
+
+func pageIcon(active string) string {
+	switch active {
+	case "dashboard":
+		return "layout-dashboard"
+	case "tasks":
+		return "check-square"
+	case "runs":
+		return "play-circle"
+	case "activity":
+		return "activity"
+	case "projects":
+		return "folder"
+	case "agents":
+		return "bot"
+	case "skills":
+		return "sparkles"
+	case "settings":
+		return "settings"
+	default:
+		return "circle"
+	}
 }

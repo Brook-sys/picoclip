@@ -1,15 +1,26 @@
 package web
 
-import "picoclip/internal/core/domain"
+import (
+	"fmt"
+
+	"picoclip/internal/core/domain"
+)
 
 templ AgentsPage(agents []domain.Agent, projects []domain.Workspace, tasks []taskResponse, runtimeOptions []RuntimeOption) {
 	@PageShell("agents", "Agents", "Local workers with runtimes, skills, permissions and assigned workload.", agentsAction()) {
-		<section class="panel">
-			@SectionHeader("Agent Workforce", "Monitor available agents and their task load.") {}
-			<div class="stack-sm" style="margin-bottom: 16px;">
-				@TagFilterLinks(agents)
-			</div>
-			<div class="table-wrapper">
+		<div class="stack">
+			<section class="list-toolbar">
+				<div>
+					<strong>{ agentListSummary(agents) }</strong>
+					<p>Monitor availability, runtime health, permissions and workload.</p>
+				</div>
+			</section>
+			<section class="panel list-panel">
+				@SectionHeader("Agent Workforce", "Filter by tags and inspect operational readiness.") {}
+				<div class="list-filter-row">
+					@TagFilterLinks(agents)
+				</div>
+				<div class="table-wrapper">
 				<table>
 					<thead>
 						<tr>
@@ -27,10 +38,15 @@ templ AgentsPage(agents []domain.Agent, projects []domain.Workspace, tasks []tas
 							<tr><td colspan="7" class="empty">No agents created yet.</td></tr>
 						}
 						for _, agent := range agents {
-							<tr>
+							<tr class={ "agent-list-row", templ.KV("agent-list-row-disabled", !agent.Enabled) }>
 								<td>
-									<a class="primary-link" href={ templ.URL("/agents/" + agent.ID) }>{ agent.Name }</a>
-									<small>{ agent.Description }</small>
+									<div class="agent-list-identity">
+										<span class="agent-list-avatar">@Icon("cpu", 16)</span>
+										<span>
+											<a class="primary-link" href={ templ.URL("/agents/" + agent.ID) }>{ agent.Name }</a>
+											<small>{ agent.Description }</small>
+										</span>
+									</div>
 								</td>
 								<td>
 									if agent.Enabled {
@@ -39,23 +55,24 @@ templ AgentsPage(agents []domain.Agent, projects []domain.Workspace, tasks []tas
 										@Badge("disabled", "bad")
 									}
 								</td>
-								<td>{ agent.Title }</td>
+								<td><span class="agent-role-pill">{ agentTitle(agent) }</span></td>
 								<td>@TagChips(agentDisplayTags(agent, projects))</td>
 								<td>
 									if agent.Type != "noop" && !isRuntimeValid(string(agent.Type), runtimeOptions) {
-										<span class="agent-runtime-warning" title="Runtime indisponível ou desabilitado">{ string(agent.Type) } · Runtime unavailable</span>
+										<span class="agent-runtime-warning" title="Runtime indisponível ou desabilitado">@Icon("alert-triangle", 12) { string(agent.Type) }</span>
 									} else {
-										{ string(agent.Type) }
+										<span class="agent-runtime-badge">@Icon("play", 12) { string(agent.Type) }</span>
 									}
 								</td>
-								<td><span class="badge">{ len(agent.Permissions) }</span></td>
-								<td>{ countTasksForAgent(tasks, agent.ID) }</td>
+								<td><span class="agent-stat-pill">{ len(agent.Permissions) } permissions</span></td>
+								<td><span class="agent-workload-pill">{ countTasksForAgent(tasks, agent.ID) } tasks</span></td>
 							</tr>
 						}
 					</tbody>
 				</table>
-			</div>
-		</section>
+				</div>
+			</section>
+		</div>
 		@AgentQuickModal("agent-quick-modal", agents, runtimeOptions)
 	}
 }
@@ -69,6 +86,23 @@ templ agentsAction() {
 
 templ TagFilterLinks(agents []domain.Agent) {
 	@templ.Raw(renderTagFilterLinks(agents))
+}
+
+func agentTitle(agent domain.Agent) string {
+	if agent.Title != "" {
+		return agent.Title
+	}
+	if agent.Capability != "" {
+		return string(agent.Capability)
+	}
+	return "worker"
+}
+
+func agentListSummary(agents []domain.Agent) string {
+	if len(agents) == 1 {
+		return "1 agent configured"
+	}
+	return fmt.Sprintf("%d agents configured", len(agents))
 }
 
 func isRuntimeValid(id string, options []RuntimeOption) bool {

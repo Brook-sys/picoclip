@@ -10,31 +10,99 @@ import (
 )
 
 templ TaskTable(tasks []taskResponse, agents []domain.Agent, projects []domain.Workspace) {
-	<div class="issue-list">
-		if len(tasks) == 0 {
+	if len(tasks) == 0 {
+		<div class="tasks-empty-wrap">
 			@EmptyState("No tasks", "Create a task to start tracking work.", "check-circle") {}
-		}
-		for _, task := range tasks {
-			<a class="issue-list-row" href={ templ.URL("/tasks/" + task.ID) }>
-				<span class={ "status " + statusClass(task.Status) }></span>
-				<div class="issue-list-main">
-					<div class="issue-list-title-row">
-						<span class="badge">{ task.ID }</span>
-						<strong>{ taskDisplayTitle(task) }</strong>
+		</div>
+	} else {
+		<div class="task-list">
+			for _, task := range tasks {
+				<a class={ "task-list-row", taskToneClass(task.Status) } href={ templ.URL("/tasks/" + task.ID) }>
+					<span class="task-list-icon">@Icon(taskStatusIcon(task.Status), 15)</span>
+					<div class="task-list-main">
+						<div class="task-list-title-row">
+							<span class="task-type">{ issuePriorityLabel(task.Status) }</span>
+							<strong>{ taskDisplayTitle(task) }</strong>
+						</div>
+						if taskExcerpt(task.Prompt) != "" {
+							<p class="task-list-excerpt">{ taskExcerpt(task.Prompt) }</p>
+						}
+						<div class="task-list-meta-grid">
+							<div><span>Agent</span><strong>{ agentName(agents, task.AgentID) }</strong></div>
+							<div><span>Project</span><strong>{ projectName(projects, task.ProjectID) }</strong></div>
+							<div><span>Updated</span><strong>{ task.UpdatedAt }</strong></div>
+						</div>
 					</div>
-					if taskExcerpt(task.Prompt) != "" {
-						<small>{ taskExcerpt(task.Prompt) }</small>
-					}
-				</div>
-				<div class="issue-list-meta">
-					<span>{ agentName(agents, task.AgentID) }</span>
-					<span>{ projectName(projects, task.ProjectID) }</span>
-					<span>{ task.UpdatedAt }</span>
-				</div>
-				<span class="issue-list-status">{ string(task.Status) }</span>
-			</a>
-		}
-	</div>
+					<div class="task-list-action">
+						<span class={ "issue-list-status", statusClass(task.Status) }>{ string(task.Status) }</span>
+						<span class="activity-action">Open task</span>
+					</div>
+				</a>
+			}
+		</div>
+	}
+}
+
+func issueAttentionClass(status domain.TaskStatus) string {
+	switch status {
+	case domain.TaskStatusBlocked:
+		return "issue-attention-high"
+	case domain.TaskStatusInReview:
+		return "issue-attention-review"
+	case domain.TaskStatusInProgress:
+		return "issue-attention-active"
+	default:
+		return ""
+	}
+}
+
+func taskToneClass(status domain.TaskStatus) string {
+	switch status {
+	case domain.TaskStatusBlocked:
+		return "task-tone-attention"
+	case domain.TaskStatusInReview:
+		return "task-tone-review"
+	case domain.TaskStatusInProgress:
+		return "task-tone-live"
+	case domain.TaskStatusDone:
+		return "task-tone-success"
+	default:
+		return "task-tone-muted"
+	}
+}
+
+func taskStatusIcon(status domain.TaskStatus) string {
+	switch status {
+	case domain.TaskStatusBlocked:
+		return "alert-triangle"
+	case domain.TaskStatusInReview:
+		return "eye"
+	case domain.TaskStatusInProgress:
+		return "activity"
+	case domain.TaskStatusDone:
+		return "check-circle"
+	case domain.TaskStatusCancelled:
+		return "x-circle"
+	default:
+		return "circle"
+	}
+}
+
+func issuePriorityLabel(status domain.TaskStatus) string {
+	switch status {
+	case domain.TaskStatusBlocked:
+		return "Needs attention"
+	case domain.TaskStatusInReview:
+		return "Review"
+	case domain.TaskStatusInProgress:
+		return "Active"
+	case domain.TaskStatusTodo:
+		return "Queued"
+	case domain.TaskStatusDone:
+		return "Done"
+	default:
+		return "Normal"
+	}
 }
 
 templ TaskLive(task taskResponse, messages []domain.Message, runs []domain.Run, events []domain.Event, children []taskResponse, agents []domain.Agent, projects []domain.Workspace) {
@@ -113,16 +181,21 @@ templ TimelineEventItem(item timelineItem) {
 }
 
 templ TimelineRunItem(item timelineItem) {
-	<div class="issue-timeline-item">
-		<div class="issue-timeline-icon"><i data-lucide="play-circle"></i></div>
+	<div class={ "issue-timeline-item", "issue-timeline-run", runActivityClass(item.Run.Status) }>
+		<div class="issue-timeline-icon">@Icon(runActivityIcon(item.Run.Status), 14)</div>
 		<div class="issue-timeline-content">
 			<div class="issue-timeline-header">
 				<strong>Agent Run</strong>
-				<span class={ "status " + runStatusClass(item.Run.Status) }>{ string(item.Run.Status) }</span>
-				<small><a href={ templ.URL("/runs/" + item.Run.ID) }>{ item.Run.ID }</a> · attempt { fmt.Sprintf("%d", item.Run.Attempt) }</small>
+				<span class={ "issue-list-status", runStatusClass(item.Run.Status), templ.KV("pulse", item.Run.Status == domain.RunStatusRunning) }>{ string(item.Run.Status) }</span>
+				<small><a href={ templ.URL("/runs/" + item.Run.ID) }>{ item.Run.ID }</a></small>
+			</div>
+			<div class="timeline-run-meta">
+				<span>@Icon("play", 12) { item.Run.DriverType }</span>
+				<span>@Icon("activity", 12) attempt { fmt.Sprintf("%d", item.Run.Attempt) }</span>
+				<span>@Icon("clock", 12) { item.Time.Format("15:04:05") }</span>
 			</div>
 			if item.Run.Error != "" {
-				<div class="issue-timeline-body text-danger">
+				<div class="issue-timeline-body text-danger timeline-run-error">
 					{ item.Run.Error }
 				</div>
 			}
@@ -202,19 +275,23 @@ templ Runs(runs []domain.Run) {
 }
 
 templ EventTimeline(events []domain.Event) {
-	<div class="timeline">
+	<div class="activity-timeline">
 		if len(events) == 0 {
-			<p class="empty">Nenhum evento.</p>
+			@EmptyState("No activity yet", "System events will appear here as they happen.", "activity") {}
 		}
 		for _, event := range events {
-			<article>
-				<span></span>
-				<div>
-					<strong>{ string(event.Type) }</strong>
-					<p>{ event.Message }</p>
-					<small>{ event.CreatedAt.Format("2006-01-02 15:04:05") }</small>
+			<div class="activity-timeline-item">
+				<div class="activity-timeline-icon">@Icon("activity", 14)</div>
+				<div class="activity-timeline-content">
+					<div class="activity-timeline-header">
+						<strong>{ string(event.Type) }</strong>
+						<small>{ event.CreatedAt.Format("2006-01-02 15:04:05") }</small>
+					</div>
+					<div class="activity-timeline-body">
+						{ event.Message }
+					</div>
 				</div>
-			</article>
+			</div>
 		}
 	</div>
 }

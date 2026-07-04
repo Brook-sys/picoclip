@@ -32,42 +32,55 @@ templ AgentQuickModal(id string, agents []domain.Agent, runtimeOptions []Runtime
 
 templ TaskModal(id string, projectID string, projects []domain.Workspace, agents []domain.Agent) {
 	<div class="modal-backdrop" data-modal={ id } hidden style="display: none;">
-		<div class="modal-card">
-			<div class="modal-header">
+		<div class="modal-card modal-card-task">
+			<div class="modal-header modal-header-compact">
 				<div class="modal-header-title">
-					<span class="modal-icon">@Icon("check-circle", 20)</span>
-					<h2>Create new task</h2>
+					<span class="modal-icon">@Icon("check-circle", 18)</span>
+					<span class="modal-header-subtitle">New task</span>
 				</div>
-				<button class="modal-close" type="button" data-close-modal={ id } aria-label="Close">@Icon("x", 20)</button>
+				<button class="modal-close" type="button" data-close-modal={ id } aria-label="Close">@Icon("x", 18)</button>
 			</div>
-			
+
 			<form hx-post="/tasks" hx-target="body" hx-swap="outerHTML" data-success="Task created successfully." class="modal-form">
-				<div class="modal-body">
-					if projectID != "" {
-						<input type="hidden" name="project_id" value={ projectID }/>
-						<div class="modal-info-block">
-							@Icon("folder", 16)
-							<span>This task will be automatically linked to the current project.</span>
+				<div class="modal-body modal-body-task">
+					<div class="task-title-field">
+						<input
+							id="title"
+							name="title"
+							class="pc-input task-title-input"
+							placeholder="e.g., Update database schema"
+							required
+						/>
+					</div>
+
+					<div class="task-meta-inline">
+						<span class="task-meta-word">For</span>
+						<div class="inline-entity-select">
+							@TaskAssigneeSelect(agents, "agent_id", "")
 						</div>
-					} else {
-						@FormField("project_id", "Project", "Optional. Group tasks by workspace.") {
-							@ProjectSelect(projects, "No project (Standalone)", "")
+						<span class="task-meta-word">in</span>
+						if projectID != "" {
+							<input type="hidden" name="project_id" value={ projectID }/>
+							<div class="inline-entity-static">
+								@Icon("folder", 14)
+								<span>Project linked</span>
+							</div>
+						} else {
+							<div class="inline-entity-select">
+								@ProjectSelect(projects, "Project", "")
+							</div>
 						}
-					}
-					
-					@FormField("agent_id", "Assignee", "Search and select the agent to handle this task.") {
-						@AgentPicker(agents, "agent_id", "", "Search by name, title, or tag...")
-					}
-					
-					@FormField("title", "Task Title", "Short summary of what needs to be done.") {
-						<input id="title" name="title" class="pc-input" placeholder="e.g., Update database schema" required />
-					}
-					
-					@FormField("prompt", "Description & Criteria", "Describe the objective, context, and acceptance criteria. Markdown is supported.") {
-						@TextareaField("prompt", "", "Objetivo, contexto e critérios de aceite", 5, false)
-					}
+					</div>
+
+
+					<div class="task-description-field">
+						@FormField("prompt", "Description", "What needs to be done?") {
+							@TextareaField("prompt", "", "Objetivo, contexto e critérios de aceite", 6, false)
+						}
+					</div>
 				</div>
-				<div class="modal-footer">
+
+				<div class="modal-footer modal-footer-compact">
 					<button class="pc-btn pc-btn-ghost" type="button" data-close-modal={ id }>Cancel</button>
 					<button class="pc-btn pc-btn-primary" data-testid="task-create-submit" type="submit">Create task</button>
 				</div>
@@ -123,6 +136,18 @@ templ ProjectSelect(projects []domain.Workspace, emptyLabel string, selected str
 			<option value="">{ emptyLabel }</option>
 			for _, project := range projects {
 				<option value={ project.ID } selected?={ project.ID == selected }>{ project.Name }</option>
+			}
+		</select>
+		<div class="pc-select-icon">@Icon("chevron-down", 16)</div>
+	</div>
+}
+
+templ TaskAssigneeSelect(agents []domain.Agent, fieldName string, selectedID string) {
+	<div class="pc-select-wrapper">
+		<select name={ fieldName } class="pc-input pc-select" required>
+			<option value="">Assignee</option>
+			for _, agent := range agents {
+				<option value={ agent.ID } selected?={ agent.ID == selectedID }>{ agent.Name }</option>
 			}
 		</select>
 		<div class="pc-select-icon">@Icon("chevron-down", 16)</div>

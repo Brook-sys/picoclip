@@ -7,7 +7,7 @@ templ RunDetailPage(run domain.Run, task taskResponse, agent domain.Agent) {
 	@PageShell("runs", "Run " + run.ID, "Execution output, runtime metadata and raw agent context.", runDetailAction(task.ID)) {
 		<section class="detail-grid">
 			if run.Status == domain.RunStatusRunning {
-				<div class="main-column" id="run-live" hx-get={ "/partials/runs/" + run.ID } hx-trigger="every 2s" hx-swap="innerHTML">
+				<div class="main-column" id="run-live" hx-get={ "/partials/runs/" + run.ID } hx-trigger="every 5s" hx-swap="innerHTML">
 					@RunLive(run, task, agent)
 				</div>
 			} else {
@@ -25,29 +25,97 @@ templ RunDetailPage(run domain.Run, task taskResponse, agent domain.Agent) {
 }
 
 templ RunLive(run domain.Run, task taskResponse, agent domain.Agent) {
-	<div class="panel">
-			@SectionHeader("Console Output", "Captured output from the agent runtime.") {
-			<span class={ "status " + runStatusClass(run.Status), templ.KV("pulse", run.Status == domain.RunStatusRunning) }>{ string(run.Status) }</span>
-		}
-		if run.Output != "" {
-			<pre class="log-viewer">{ run.Output }</pre>
-		}
-		if run.Error != "" {
-			<pre class="log-viewer error-log">{ run.Error }</pre>
-		}
-		if run.Output == "" && run.Error == "" {
-			@EmptyState("No console output", "This run has not produced output yet.", "bar-chart") {}
-		}
+	<div class={ "panel", "run-live-card", runActivityClass(run.Status) }>
+		<div class="run-live-header">
+			<div>
+				<span class="run-live-eyebrow">Agent activity</span>
+				<h2>{ runLiveTitle(run.Status) }</h2>
+				<p>{ taskDisplayTitle(task) }</p>
+			</div>
+			<span class={ "issue-list-status", runStatusClass(run.Status), templ.KV("pulse", run.Status == domain.RunStatusRunning) }>{ string(run.Status) }</span>
+		</div>
+		<div class="run-live-summary-grid">
+			<div><small>Agent</small><strong>{ agent.Name }</strong></div>
+			<div><small>Runtime</small><strong>{ run.DriverType }</strong></div>
+			<div><small>Attempt</small><strong>{ runAttemptText(run) }</strong></div>
+			<div><small>Tokens</small><strong>{ tokenUsageText(run.InputTokens, run.OutputTokens, run.TotalTokens) }</strong></div>
+		</div>
 	</div>
 
+	<div class="panel run-console-card" data-run-id={ run.ID }>
+		@SectionHeader("Console Output", "Captured output from the agent runtime.") {}
+		<div id="run-output-empty">
+			if run.Output == "" && run.Error == "" {
+				@EmptyState("No console output", "This run has not produced output yet.", "bar-chart") {}
+			}
+		</div>
+		<div class="run-log-section">
+			<div class="run-log-label">stdout</div>
+			<pre id="run-stdout" class="log-viewer run-log-viewer">{ run.Output }</pre>
+		</div>
+		<div class="run-log-section">
+			<div class="run-log-label">stderr</div>
+			<pre id="run-stderr" class="log-viewer run-log-viewer error-log">{ run.Error }</pre>
+		</div>
+	</div>
+	if run.Status == domain.RunStatusRunning {
+		<script>
+			(function(){
+				var card = document.querySelector('.run-console-card[data-run-id]');
+				var runId = card ? card.getAttribute('data-run-id') : '';
+				if (!runId || !window.EventSource || window.__picoclipRunLogSource === runId) return;
+				if (window.__picoclipRunLogHandle) window.__picoclipRunLogHandle.close();
+				window.__picoclipRunLogSource = runId;
+				var source = new EventSource('/sse/runs/' + runId + '/logs');
+				window.__picoclipRunLogHandle = source;
+				function append(id, value){
+					if (!value) return;
+					var el = document.getElementById(id);
+					if (!el) return;
+					el.textContent += value;
+					el.scrollTop = el.scrollHeight;
+					var empty = document.getElementById('run-output-empty');
+					if (empty) empty.innerHTML = '';
+				}
+				source.onmessage = function(evt){
+					try {
+						var ev = JSON.parse(evt.data);
+						append('run-stdout', ev.data && ev.data.stdout);
+						append('run-stderr', ev.data && ev.data.stderr);
+						if (ev.type === 'run.completed' || ev.type === 'run.failed' || ev.type === 'run.canceled') {
+							source.close();
+							window.__picoclipRunLogHandle = null;
+							if (window.htmx) htmx.ajax('GET', '/partials/runs/' + runId, '#run-live');
+						}
+					} catch(e) {}
+				};
+			})();
+		</script>
+	}
+
 	if run.Input != "" {
-		<div class="panel">
+		<div class="panel run-context-card">
 			@SectionHeader("System Context", "Raw prompt and context sent to the runtime.") {}
 			<details>
 				<summary class="advanced-summary">View input payload</summary>
-				<pre class="log-viewer">{ run.Input }</pre>
+				<pre class="log-viewer run-log-viewer">{ run.Input }</pre>
 			</details>
 		</div>
+	}
+}
+
+func runLiveTitle(status domain.RunStatus) string {
+	switch status {
+	case domain.RunStatusRunning:
+		return "Run in progress"
+	case domain.RunStatusSucceeded:
+		return "Run completed"
+	case domain.RunStatusFailed, domain.RunStatusTimeout:
+		return "Run needs attention"
+	case domain.RunStatusCanceled:
+		return "Run canceled"
+	default:
+		return "Run activity"
 	}
 }
 

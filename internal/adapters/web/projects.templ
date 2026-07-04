@@ -1,13 +1,24 @@
 package web
 
 import (
+	"fmt"
+
 	"picoclip/internal/core/domain"
 )
 
 templ ProjectsPage(projects []domain.Workspace, agents []domain.Agent, tasks []taskResponse, skills []domain.Skill) {
 	@PageShell("projects", "Projetos", "Workspaces isolados com agentes, tasks e skills próprias.", projectsAction()) {
-		<section class="panel">
-			<table>
+		<div class="stack">
+			<section class="list-toolbar">
+				<div>
+					<strong>{ projectListSummary(projects) }</strong>
+					<p>Organize agents, tasks and skills around isolated local workspaces.</p>
+				</div>
+			</section>
+			<section class="panel list-panel">
+				@SectionHeader("Project Workspaces", "Inspect workspace ownership and activity at a glance.") {}
+				<div class="table-wrapper">
+					<table>
 				<thead>
 					<tr>
 						<th>Projeto</th>
@@ -34,9 +45,18 @@ templ ProjectsPage(projects []domain.Workspace, agents []domain.Agent, tasks []t
 						<tr><td colspan="5" class="empty">Nenhum projeto criado.</td></tr>
 					}
 				</tbody>
-			</table>
-		</section>
+					</table>
+				</div>
+			</section>
+		</div>
 	}
+}
+
+func projectListSummary(projects []domain.Workspace) string {
+	if len(projects) == 1 {
+		return "1 project workspace"
+	}
+	return fmt.Sprintf("%d project workspaces", len(projects))
 }
 
 templ projectsAction() {

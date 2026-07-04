@@ -1,10 +1,41 @@
 package web
 
-import "picoclip/internal/core/domain"
+import (
+	"fmt"
 
-templ RunsPage(runs []domain.Run, tasks map[string]taskResponse, agents map[string]domain.Agent, activeStatus string) {
+	"picoclip/internal/core/domain"
+)
+
+templ RunsPage(runs []domain.Run, allRuns []domain.Run, tasks map[string]taskResponse, agents map[string]domain.Agent, activeStatus string) {
 	@PageShell("runs", "Runs", "Execution history, runtime status, and agent output for tasks.", nil) {
-		<div class="stack">
+		<section class="runs-overview-grid">
+			<a class="panel runs-overview-card" href="/runs">
+				<span>Total</span>
+				<strong>{ fmt.Sprintf("%d", len(allRuns)) }</strong>
+				<small>All executions</small>
+			</a>
+			<a class="panel runs-overview-card live" href="/runs?status=running">
+				<span>Running</span>
+				<strong>{ fmt.Sprintf("%d", runStatusCount(allRuns, domain.RunStatusRunning)) }</strong>
+				<small>Currently active</small>
+			</a>
+			<a class="panel runs-overview-card success" href="/runs?status=succeeded">
+				<span>Succeeded</span>
+				<strong>{ fmt.Sprintf("%d", runStatusCount(allRuns, domain.RunStatusSucceeded)) }</strong>
+				<small>Finished successfully</small>
+			</a>
+			<a class="panel runs-overview-card attention" href="/runs?status=failed">
+				<span>Failed</span>
+				<strong>{ fmt.Sprintf("%d", runStatusCount(allRuns, domain.RunStatusFailed)+runStatusCount(allRuns, domain.RunStatusTimeout)) }</strong>
+				<small>Failed or timed out</small>
+			</a>
+			<a class="panel runs-overview-card muted" href="/runs?status=canceled">
+				<span>Canceled</span>
+				<strong>{ fmt.Sprintf("%d", runStatusCount(allRuns, domain.RunStatusCanceled)) }</strong>
+				<small>Stopped before finish</small>
+			</a>
+		</section>
+		<div class="runs-toolbar">
 			@Tabs() {
 				@TabLink("All", "/runs", activeStatus == "")
 				@TabLink("Running", "/runs?status=running", activeStatus == "running")
@@ -12,51 +43,151 @@ templ RunsPage(runs []domain.Run, tasks map[string]taskResponse, agents map[stri
 				@TabLink("Failed", "/runs?status=failed", activeStatus == "failed")
 				@TabLink("Canceled", "/runs?status=canceled", activeStatus == "canceled")
 			}
-			<div class="panel">
-			@SectionHeader("Execution Runs", "Inspect recent and historical agent executions.") {}
+		</div>
+		<section class="panel runs-panel">
+			<div class="runs-panel-header">
+				<div>
+					<span class="eyebrow">Execution history</span>
+					<h2>Run timeline</h2>
+					<p>Scan runtime status, agent, task context and output links.</p>
+				</div>
+				<span class="runs-filter-pill">{ runFilterLabel(activeStatus) }</span>
+			</div>
 			if len(runs) == 0 {
-				@EmptyState("No runs yet", "Runs will appear here when agents start executing tasks.", "bar-chart") {}
+				<div class="runs-empty-wrap">
+					@EmptyState("No runs yet", "Runs will appear here when agents start executing tasks.", "bar-chart") {}
+				</div>
 			} else {
-				<div class="table-wrapper">
-					<table>
-						<thead>
-							<tr>
-								<th>Run</th>
-								<th>Status</th>
-								<th>Task</th>
-								<th>Agent</th>
-								<th>Runtime</th>
-								<th>Started</th>
-							</tr>
-						</thead>
-						<tbody>
-							for _, run := range runs {
-								<tr>
-									<td><a class="primary-link" href={ templ.URL("/runs/" + run.ID) }>{ run.ID }</a></td>
-									<td><span class={ "status", "status-" + string(run.Status) }>{ string(run.Status) }</span></td>
-									<td>
-										if task, ok := tasks[run.TaskID]; ok {
-											<a class="primary-link" href={ templ.URL("/tasks/" + task.ID) }>{ task.Message }</a>
-										} else {
-											<span>{ run.TaskID }</span>
-										}
-									</td>
-									<td>
-										if agent, ok := agents[run.AgentID]; ok {
-											{ agent.Name }
-										} else {
-											{ run.AgentID }
-										}
-									</td>
-									<td>{ run.DriverType }</td>
-									<td>{ run.StartedAt.Format("2006-01-02 15:04") }</td>
-								</tr>
-							}
-						</tbody>
-					</table>
+				<div class="run-activity-list">
+					for _, run := range runs {
+						<a class={ "run-activity-row", runActivityClass(run.Status) } href={ templ.URL("/runs/" + run.ID) }>
+							<span class="run-activity-icon">@Icon(runActivityIcon(run.Status), 15)</span>
+							<div class="run-activity-main">
+								<div class="run-activity-title-row">
+									<span class="run-type">{ runStatusLabel(run.Status) }</span>
+									<strong>{ runTaskTitle(run, tasks) }</strong>
+								</div>
+								<div class="run-activity-meta-grid">
+									<div><span>Agent</span><strong>{ runAgentName(run, agents) }</strong></div>
+									<div><span>Runtime</span><strong>{ run.DriverType }</strong></div>
+									<div><span>Started</span><strong>{ run.StartedAt.Format("Jan 02, 15:04") }</strong></div>
+								</div>
+								<div class="run-activity-footer">
+									<span class="run-id-chip">{ runShortID(run.ID) }</span>
+									<span class="run-attempt-pill">attempt { runAttemptText(run) }</span>
+								</div>
+							</div>
+							<div class="run-activity-action">
+								<span class={ "issue-list-status", runStatusClass(run.Status), templ.KV("pulse", run.Status == domain.RunStatusRunning) }>{ string(run.Status) }</span>
+								<span class="activity-action">Open run</span>
+							</div>
+						</a>
+					}
 				</div>
 			}
-			</div>
-		</div>
+		</section>
+	}
+}
+
+func runShortID(id string) string {
+	if len(id) <= 8 {
+		return id
+	}
+	return id[:8]
+}
+
+func runStatusCount(runs []domain.Run, status domain.RunStatus) int {
+	count := 0
+	for _, run := range runs {
+		if run.Status == status {
+			count++
+		}
+	}
+	return count
+}
+
+func runAttentionCount(runs []domain.Run) int {
+	count := 0
+	for _, run := range runs {
+		switch run.Status {
+		case domain.RunStatusFailed, domain.RunStatusTimeout, domain.RunStatusCanceled:
+			count++
+		}
+	}
+	return count
+}
+
+func runFilterLabel(activeStatus string) string {
+	if activeStatus == "" {
+		return "All runs"
+	}
+	return activeStatus
+}
+
+func runStatusLabel(status domain.RunStatus) string {
+	switch status {
+	case domain.RunStatusRunning:
+		return "Running"
+	case domain.RunStatusSucceeded:
+		return "Succeeded"
+	case domain.RunStatusFailed:
+		return "Failed"
+	case domain.RunStatusTimeout:
+		return "Timed out"
+	case domain.RunStatusCanceled:
+		return "Canceled"
+	default:
+		return string(status)
+	}
+}
+
+func runTaskTitle(run domain.Run, tasks map[string]taskResponse) string {
+	if task, ok := tasks[run.TaskID]; ok {
+		return taskDisplayTitle(task)
+	}
+	return run.TaskID
+}
+
+func runAgentName(run domain.Run, agents map[string]domain.Agent) string {
+	if agent, ok := agents[run.AgentID]; ok {
+		return agent.Name
+	}
+	return run.AgentID
+}
+
+func runAttemptText(run domain.Run) string {
+	if run.Attempt <= 0 {
+		return "1"
+	}
+	return fmt.Sprintf("%d", run.Attempt)
+}
+
+func runActivityClass(status domain.RunStatus) string {
+	switch status {
+	case domain.RunStatusFailed, domain.RunStatusTimeout:
+		return "run-activity-error"
+	case domain.RunStatusCanceled:
+		return "run-activity-muted"
+	case domain.RunStatusRunning:
+		return "run-activity-live"
+	case domain.RunStatusSucceeded:
+		return "run-activity-success"
+	default:
+		return ""
+	}
+}
+
+func runActivityIcon(status domain.RunStatus) string {
+	switch status {
+	case domain.RunStatusFailed, domain.RunStatusTimeout:
+		return "alert-triangle"
+	case domain.RunStatusCanceled:
+		return "x-circle"
+	case domain.RunStatusSucceeded:
+		return "check-circle"
+	case domain.RunStatusRunning:
+		return "activity"
+	default:
+		return "play"
 	}
 }

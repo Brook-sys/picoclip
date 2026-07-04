@@ -6,6 +6,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"picoclip/internal/core/domain"
 	"picoclip/internal/core/ports"
@@ -18,12 +19,14 @@ func (s *Server) handleWebRuns(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	var allRuns []domain.Run
 	var runs []domain.Run
 	statusFilter := r.URL.Query().Get("status")
 	for _, task := range tasks {
 		taskRuns, err := s.storage.Runs().ListByTask(r.Context(), task.ID)
 		if err == nil {
 			for _, run := range taskRuns {
+				allRuns = append(allRuns, run)
 				if statusFilter != "" && string(run.Status) != statusFilter {
 					continue
 				}
@@ -32,7 +35,9 @@ func (s *Server) handleWebRuns(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Sort runs descending by creation
+	sort.Slice(allRuns, func(i, j int) bool {
+		return allRuns[i].StartedAt.After(allRuns[j].StartedAt)
+	})
 	sort.Slice(runs, func(i, j int) bool {
 		return runs[i].StartedAt.After(runs[j].StartedAt)
 	})
@@ -49,7 +54,7 @@ func (s *Server) handleWebRuns(w http.ResponseWriter, r *http.Request) {
 
 	_ = projects
 
-	if err := RunsPage(runs, taskMap, agentMap, statusFilter).Render(r.Context(), w); err != nil {
+	if err := RunsPage(runs, allRuns, taskMap, agentMap, statusFilter).Render(r.Context(), w); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
 }
@@ -193,15 +198,20 @@ func (s *Server) loadSettingsView(r *http.Request) (SettingsView, error) {
 	// Basic Stats
 	if agents, err := s.agents.List(ctx); err == nil {
 		view.Stats.Agents = len(agents)
+		view.Agents = agents
 	}
 	if projects, err := s.projects.List(ctx); err == nil {
 		view.Stats.Projects = len(projects)
+		view.Projects = projects
 	}
 	if skills, err := s.skills.List(ctx, ""); err == nil {
 		view.Stats.Skills = len(skills)
 	}
 	if tasks, err := s.tasks.List(ctx, ports.TaskFilter{}); err == nil {
 		view.Stats.Tasks = len(tasks)
+	}
+	if budgets, err := s.storage.Budgets().List(ctx); err == nil {
+		view.Budgets = budgets
 	}
 
 	return view, nil
@@ -289,6 +299,71 @@ func (s *Server) handleWebPostSettingsEnvironment(w http.ResponseWriter, r *http
 	s.handleWebSettings(w, r)
 }
 
+func (s *Server) handleWebPostSettingsBudgets(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	limitTokens, _ := strconv.Atoi(r.FormValue("limit_tokens"))
+	limitRuns, _ := strconv.Atoi(r.FormValue("limit_runs"))
+	limitCostMicros, _ := strconv.ParseInt(r.FormValue("limit_cost_micros"), 10, 64)
+	now := time.Now().UTC()
+	scope := domain.BudgetScope(r.FormValue("scope"))
+	workspaceID := strings.TrimSpace(r.FormValue("workspace_id"))
+	agentID := strings.TrimSpace(r.FormValue("agent_id"))
+	if scope == domain.BudgetScopeWorkspace && workspaceID == "" {
+		http.Error(w, "workspace budget requires a workspace target", http.StatusBadRequest)
+		return
+	}
+	if scope == domain.BudgetScopeAgent && agentID == "" {
+		http.Error(w, "agent budget requires an agent target", http.StatusBadRequest)
+		return
+	}
+	budget := domain.Budget{
+		ID:              "budget_" + strconv.FormatInt(now.UnixNano(), 10),
+		Scope:           scope,
+		WorkspaceID:     workspaceID,
+		AgentID:         agentID,
+		LimitTokens:     limitTokens,
+		LimitRuns:       limitRuns,
+		LimitCostMicros: limitCostMicros,
+		HardStop:        r.FormValue("hard_stop") == "on",
+		Enabled:         true,
+		CreatedAt:       now,
+		UpdatedAt:       now,
+	}
+	if err := s.storage.Budgets().Create(r.Context(), budget); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	s.handleWebSettings(w, r)
+}
+
+func (s *Server) handleWebToggleBudget(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	budget, err := s.storage.Budgets().Get(r.Context(), id)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusNotFound)
+		return
+	}
+	budget.Enabled = !budget.Enabled
+	budget.UpdatedAt = time.Now().UTC()
+	if err := s.storage.Budgets().Update(r.Context(), budget); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	s.handleWebSettings(w, r)
+}
+
+func (s *Server) handleWebDeleteBudget(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	if err := s.storage.Budgets().Delete(r.Context(), id); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	s.handleWebSettings(w, r)
+}
+
 func (s *Server) handleWebSettingsExport(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	settings, err := s.storage.Settings().List(ctx)
@@ -304,6 +379,7 @@ func (s *Server) handleWebSettingsExport(w http.ResponseWriter, r *http.Request)
 	runs := make([]domain.Run, 0)
 	messages := make([]domain.Message, 0)
 	events := make([]domain.Event, 0)
+	budgets, _ := s.storage.Budgets().List(ctx)
 	for _, task := range tasks {
 		if taskRuns, err := s.storage.Runs().ListByTask(ctx, task.ID); err == nil {
 			runs = append(runs, taskRuns...)
@@ -328,6 +404,7 @@ func (s *Server) handleWebSettingsExport(w http.ResponseWriter, r *http.Request)
 		"runs":     runs,
 		"messages": messages,
 		"events":   events,
+		"budgets":  budgets,
 	})
 }
 
@@ -435,13 +512,20 @@ func (s *Server) handleWebTasks(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	filter := ports.TaskFilter{AgentID: r.URL.Query().Get("agent_id"), ParentID: r.URL.Query().Get("parent_id"), WorkspaceID: r.URL.Query().Get("project_id"), Status: domain.TaskStatus(r.URL.Query().Get("status"))}
+	baseFilter := ports.TaskFilter{AgentID: r.URL.Query().Get("agent_id"), ParentID: r.URL.Query().Get("parent_id"), WorkspaceID: r.URL.Query().Get("project_id")}
+	allTasks, err := s.tasks.List(r.Context(), baseFilter)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	filter := baseFilter
+	filter.Status = domain.TaskStatus(r.URL.Query().Get("status"))
 	tasks, err := s.tasks.List(r.Context(), filter)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	if err := TasksPage(s.taskResponses(r, tasks), agents, projects, r.URL.Query().Get("status")).Render(r.Context(), w); err != nil {
+	if err := TasksPage(s.taskResponses(r, tasks), s.taskResponses(r, allTasks), agents, projects, r.URL.Query().Get("status")).Render(r.Context(), w); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
 }
@@ -508,7 +592,21 @@ func (s *Server) handleWebActivity(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	if err := ActivityPage(events).Render(r.Context(), w); err != nil {
+
+	tasks, _ := s.storage.Tasks().List(r.Context(), ports.TaskFilter{})
+	agents, _ := s.storage.Agents().List(r.Context())
+
+	taskMap := make(map[string]taskResponse)
+	for _, t := range tasks {
+		taskMap[t.ID] = s.taskResponse(r, t)
+	}
+
+	agentMap := make(map[string]domain.Agent)
+	for _, a := range agents {
+		agentMap[a.ID] = a
+	}
+
+	if err := ActivityPage(events, taskMap, agentMap).Render(r.Context(), w); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
 }

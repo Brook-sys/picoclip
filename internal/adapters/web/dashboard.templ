@@ -8,95 +8,141 @@ import (
 
 templ DashboardPage(view DashboardView, agents []domain.Agent, projects []domain.Workspace) {
 	@PageShell("dashboard", "Dashboard", "System health and operational overview.", dashboardAction()) {
-		<section class="metrics">
-			<div class="metric-card"><span>{ strconv.Itoa(view.Stats.OpenTasks) }</span><p>Open Tasks</p></div>
-			<div class="metric-card info"><span>{ strconv.Itoa(view.Stats.RunningRuns) }</span><p>Active Runs</p></div>
-			<div class="metric-card warn"><span>{ strconv.Itoa(view.Stats.BlockedTasks) }</span><p>Blocked Tasks</p></div>
-			<div class="metric-card bad"><span>{ strconv.Itoa(view.Stats.FailedRuns) }</span><p>Failed Runs</p></div>
+		<section class="dashboard-overview-grid">
+			<a class="panel dashboard-overview-card" href="/tasks">
+				<span>Tasks</span>
+				<strong>{ strconv.Itoa(view.Stats.OpenTasks) }</strong>
+				<small>Open Tasks</small>
+			</a>
+			<a class="panel dashboard-overview-card live" href="/runs?status=running">
+				<span>Running</span>
+				<strong>{ strconv.Itoa(view.Stats.RunningRuns) }</strong>
+				<small>Active Runs</small>
+			</a>
+			<a class="panel dashboard-overview-card attention" href="/tasks?status=blocked">
+				<span>Attention</span>
+				<strong>{ strconv.Itoa(view.Stats.BlockedTasks) }</strong>
+				<small>Blocked Tasks</small>
+			</a>
+			<a class="panel dashboard-overview-card error" href="/runs?status=failed">
+				<span>Failed</span>
+				<strong>{ strconv.Itoa(view.Stats.FailedRuns) }</strong>
+				<small>Failed Runs</small>
+			</a>
 		</section>
 
-		<section class="content-grid">
-			<div class="stack">
+		<section class="dashboard-content-grid">
+			<div class="dashboard-main-col">
 				if len(view.RuntimeWarnings) > 0 {
-					<div class="panel border-danger">
-						<div class="section-header">
-							<h2 class="text-danger">Runtime Warning</h2>
-							<a href="/settings#runtimes">Configure runtimes</a>
+					<div class="panel dashboard-alert">
+						<div class="dashboard-panel-header">
+							<div>
+								<span class="eyebrow text-danger">Warning</span>
+								<h2 class="text-danger">Runtime Issues</h2>
+								for _, warning := range view.RuntimeWarnings {
+									<p>{ warning }</p>
+								}
+							</div>
+							<a class="activity-action" href="/settings#runtimes">Configure</a>
 						</div>
-						for _, warning := range view.RuntimeWarnings {
-							<p class="muted">{ warning }</p>
-						}
 					</div>
 				}
+
 				if len(view.NeedsAttention) > 0 {
-					<div class="panel border-danger">
-						<div class="section-header">
-							<h2 class="text-danger">Needs Attention</h2>
+					<div class="panel dashboard-panel">
+						<div class="dashboard-panel-header">
+							<div>
+								<span class="eyebrow text-bad">Action Required</span>
+								<h2 class="text-bad">Needs Attention</h2>
+								<p>Tasks that are blocked or waiting for review.</p>
+							</div>
+							<a class="activity-action" href="/tasks?status=blocked">View all</a>
 						</div>
 						@TaskTable(view.NeedsAttention, agents, projects)
 					</div>
 				}
-				
-				<div class="panel">
-					<div class="section-header">
-						<h2>Currently Running</h2>
-						<a href="/runs">View all runs</a>
+
+				<div class="panel dashboard-panel">
+					<div class="dashboard-panel-header">
+						<div>
+							<span class="eyebrow text-info">Live</span>
+							<h2 class="text-info">Currently Running</h2>
+							<p>Active agent executions and runtime streams.</p>
+						</div>
+						<a class="activity-action" href="/runs?status=running">View all</a>
 					</div>
 					if len(view.CurrentlyRunning) > 0 {
-						<div class="table-wrapper">
-							<table>
-								<thead>
-									<tr>
-										<th>Run</th>
-										<th>Agent</th>
-										<th>Runtime</th>
-										<th>Started</th>
-									</tr>
-								</thead>
-								<tbody>
-									for _, run := range view.CurrentlyRunning {
-										<tr>
-											<td><a class="primary-link" href={ templ.URL("/runs/" + run.ID) }>{ run.ID }</a></td>
-											<td><span class="badge">{ run.AgentID }</span></td>
-											<td>{ run.DriverType }</td>
-											<td><span class="status status-running pulse">running</span></td>
-										</tr>
-									}
-								</tbody>
-							</table>
+						<div class="run-activity-list">
+							for _, run := range view.CurrentlyRunning {
+								<a class={ "run-activity-row", runActivityClass(run.Status) } href={ templ.URL("/runs/" + run.ID) }>
+									<span class="run-activity-icon">@Icon(runActivityIcon(run.Status), 15)</span>
+									<div class="run-activity-main">
+										<div class="run-activity-title-row">
+											<span class="run-type">{ runStatusLabel(run.Status) }</span>
+											<strong>{ run.TaskID }</strong>
+										</div>
+										<div class="run-activity-meta-grid">
+											<div><span>Agent</span><strong>{ run.AgentID }</strong></div>
+											<div><span>Runtime</span><strong>{ run.DriverType }</strong></div>
+											<div><span>Started</span><strong>{ run.StartedAt.Format("Jan 02, 15:04") }</strong></div>
+										</div>
+									</div>
+									<div class="run-activity-action">
+										<span class={ "issue-list-status", runStatusClass(run.Status), templ.KV("pulse", run.Status == domain.RunStatusRunning) }>{ string(run.Status) }</span>
+										<span class="activity-action">Open run</span>
+									</div>
+								</a>
+							}
 						</div>
 					} else {
-						@EmptyState("No active runs", "Agents are currently idle.", "play") {}
+						<div class="dashboard-empty-wrap">
+							@EmptyState("No active runs", "Agents are currently idle.", "play") {}
+						</div>
 					}
 				</div>
 			</div>
 
-			<div class="stack">
+			<div class="dashboard-side-col">
 				if view.Stats.ActiveAgents == 0 || view.Stats.OpenTasks == 0 {
-					<div class="card">
-						<h2>Getting Started</h2>
-						<p class="muted">Finish the basic setup to start orchestrating work.</p>
-						<div class="stack-sm">
-							<a class="button secondary" href="/agents/new">Create your first agent</a>
-							<a class="button secondary" href="/tasks">Create a task</a>
-							<a class="button secondary" href="/settings#runtimes">Configure a runtime</a>
+					<div class="panel dashboard-getting-started">
+						<div class="dashboard-panel-header">
+							<div>
+								<span class="eyebrow">Setup</span>
+								<h2>Getting Started</h2>
+								<p>Finish the basic setup to start orchestrating work.</p>
+							</div>
+						</div>
+						<div class="dashboard-panel-body stack-sm">
+							<a class="pc-btn pc-btn-secondary" href="/agents/new">Create your first agent</a>
+							<a class="pc-btn pc-btn-secondary" href="/tasks">Create a task</a>
+							<a class="pc-btn pc-btn-secondary" href="/settings#runtimes">Configure a runtime</a>
 						</div>
 					</div>
 				}
 
-				<div class="card">
-					<h2>System Health</h2>
-					@PropertyList() {
-						@PropertyItem("Storage", view.SystemHealth.StorageDriver)
-						@PropertyItem("Agents Status", strconv.Itoa(view.SystemHealth.AgentsRunning) + " running / " + strconv.Itoa(view.SystemHealth.AgentsIdle) + " idle")
-						@PropertyItem("Last Event", view.SystemHealth.LastEventTime)
-					}
+				<div class="panel dashboard-panel">
+					<div class="dashboard-panel-header">
+						<div>
+							<span class="eyebrow">Status</span>
+							<h2>System Health</h2>
+						</div>
+					</div>
+					<div class="dashboard-panel-body">
+						@PropertyList() {
+							@PropertyItem("Storage", view.SystemHealth.StorageDriver)
+							@PropertyItem("Agents", strconv.Itoa(view.SystemHealth.AgentsRunning) + " running / " + strconv.Itoa(view.SystemHealth.AgentsIdle) + " idle")
+							@PropertyItem("Last Event", view.SystemHealth.LastEventTime)
+						}
+					</div>
 				</div>
 
-				<div class="card">
-					<div class="section-header">
-						<h2>Recent Activity</h2>
-						<a href="/activity">View all</a>
+				<div class="panel dashboard-panel">
+					<div class="dashboard-panel-header">
+						<div>
+							<span class="eyebrow">Stream</span>
+							<h2>Recent Activity</h2>
+						</div>
+						<a class="activity-action" href="/activity">View all</a>
 					</div>
 					@EventTimeline(view.RecentActivity)
 				</div>

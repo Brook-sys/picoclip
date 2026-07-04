@@ -1,6 +1,10 @@
 package web
 
-import "strconv"
+import (
+	"strconv"
+
+	"picoclip/internal/core/domain"
+)
 
 templ SettingsPanelHeader(title string, description string, iconName string) {
 	<div class="settings-panel-header">
@@ -14,6 +18,20 @@ templ SettingsPanelHeader(title string, description string, iconName string) {
 			}
 		</span>
 	</div>
+}
+
+templ SettingsTabLink(id string, iconName string, label string) {
+	<a class="nav-link settings-tab-link" href={ templ.URL("#" + id) } data-settings-tab={ id }>
+		<span class="nav-link-icon">@Icon(iconName, 16)</span>
+		<span>{ label }</span>
+	</a>
+}
+
+templ SettingsTabLinkDanger(id string, iconName string, label string) {
+	<a class="nav-link settings-tab-link text-danger" href={ templ.URL("#" + id) } data-settings-tab={ id }>
+		<span class="nav-link-icon">@Icon(iconName, 16)</span>
+		<span>{ label }</span>
+	</a>
 }
 
 templ SystemStatusCard(label string, value string, iconName string, variant string) {
@@ -184,13 +202,14 @@ templ SettingsPage(view SettingsView) {
 	@PageShell("settings", "Settings", "Global configuration, environment variables, and system administration.", nil) {
 		<section class="settings-layout">
 			<aside class="settings-sidebar">
-				<nav class="side-nav">
-					<a class="nav-link" href="#general">General</a>
-					<a class="nav-link" href="#appearance">Appearance</a>
-					<a class="nav-link" href="#storage">Storage</a>
-					<a class="nav-link" href="#runtimes">Runtimes</a>
-					<a class="nav-link" href="#environment">Environment</a>
-					<a class="nav-link text-danger" href="#danger-zone">Danger Zone</a>
+				<nav class="side-nav settings-tab-nav" aria-label="Settings sections">
+					@SettingsTabLink("general", "settings", "General")
+					@SettingsTabLink("appearance", "sparkles", "Appearance")
+					@SettingsTabLink("storage", "folder", "Storage")
+					@SettingsTabLink("runtimes", "cpu", "Runtimes")
+					@SettingsTabLink("environment", "book", "Environment")
+					@SettingsTabLink("budgets", "activity", "Budgets")
+					@SettingsTabLinkDanger("danger-zone", "trash", "Danger Zone")
 				</nav>
 				
 				<div class="settings-panel settings-sidebar-card">
@@ -226,7 +245,7 @@ templ SettingsPage(view SettingsView) {
 			</aside>
 			
 			<div class="settings-content">
-				<div id="general" class="settings-panel">
+				<div id="general" class="settings-panel settings-tab-panel">
 					@SettingsPanelHeader("General Settings", "Basic application behaviors and default agent instructions.", "settings")
 					<form hx-post="/settings/general" hx-target="body" hx-swap="outerHTML" data-success="General settings saved." class="settings-form-grid">
 						<label>Theme Preference</label>
@@ -263,7 +282,7 @@ templ SettingsPage(view SettingsView) {
 					</form>
 				</div>
 				
-				<div id="appearance" class="settings-panel">
+				<div id="appearance" class="settings-panel settings-tab-panel">
 					@SettingsPanelHeader("Appearance", "Visual defaults and interaction density.", "zap")
 					<div class="settings-mini-grid">
 						<div class="pc-card settings-info-card">
@@ -277,7 +296,7 @@ templ SettingsPage(view SettingsView) {
 					</div>
 				</div>
 				
-				<div id="storage" class="settings-panel">
+				<div id="storage" class="settings-panel settings-tab-panel">
 					@SettingsPanelHeader("Storage", "Database and file management.", "folder")
 					@PropertyList() {
 						@PropertyItem("Driver", view.Diagnostics.StorageType)
@@ -286,7 +305,7 @@ templ SettingsPage(view SettingsView) {
 					}
 				</div>
 				
-				<div id="runtimes" class="settings-panel settings-runtimes-panel">
+				<div id="runtimes" class="settings-panel settings-runtimes-panel settings-tab-panel">
 					@SettingsPanelHeader("Agent Runtimes", "Manage the execution backends used by agents to run tasks.", "cpu")
 					
 					<div class="settings-runtime-grid">
@@ -338,15 +357,117 @@ templ SettingsPage(view SettingsView) {
 					</div>
 				</div>
 				
-				<div id="environment" class="settings-panel">
+				<div id="environment" class="settings-panel settings-tab-panel">
 					@SettingsPanelHeader("Environment Variables", "Global variables injected into task execution. Values are hidden by default because they often contain secrets.", "book")
 					<form hx-post="/settings/environment" hx-target="body" hx-swap="outerHTML" data-success="Environment saved." class="stacked">
 						@EnvEditorField(view.Environment)
 						<button class="pc-btn pc-btn-primary" type="submit">@Icon("check", 16) Save Environment</button>
 					</form>
 				</div>
-				
-				<div id="danger-zone" class="settings-panel settings-danger-panel">
+
+				<div id="budgets" class="settings-panel settings-tab-panel">
+					@SettingsPanelHeader("Budgets", "Control cost and execution limits. Hard-stop budgets block tasks when limits are exceeded.", "activity")
+					<div class="budget-section-stack">
+						<div class="budget-overview">
+							<div class="budget-overview-item"><strong>{ strconv.Itoa(len(view.Budgets)) }</strong><span>Total</span></div>
+							<div class="budget-overview-item"><strong>{ strconv.Itoa(budgetCountActive(view.Budgets)) }</strong><span>Active</span></div>
+							<div class="budget-overview-item"><strong>{ strconv.Itoa(budgetCountHardStop(view.Budgets)) }</strong><span>Hard-stop</span></div>
+							<div class="budget-overview-item"><strong>{ strconv.Itoa(budgetCountDisabled(view.Budgets)) }</strong><span>Disabled</span></div>
+						</div>
+
+						<div class="budget-grid">
+							for _, budget := range view.Budgets {
+								<div class={ "pc-card", "budget-card", templ.KV("budget-card-disabled", !budget.Enabled) }>
+									<div class="budget-card-header">
+										<div class="budget-card-title">
+											<div class="budget-badges">
+												<span class="pc-badge budget-scope-badge">{ budgetScopeLabel(budget) }</span>
+												<span class={ "pc-badge", templ.KV("pc-badge-muted", !budget.Enabled) }>{ budgetStatus(budget) }</span>
+												<span class={ "pc-badge", templ.KV("pc-badge-bad", budget.HardStop) }>{ budgetRiskLabel(budget) }</span>
+											</div>
+											<strong>{ budgetTitle(budget) }</strong>
+											<p>{ budgetRiskDescription(budget) }</p>
+										</div>
+									</div>
+
+									<div class="budget-limit-list">
+										<div class="budget-limit-row"><span>Tokens</span><strong>{ budgetLimitInt(budget.LimitTokens) }</strong></div>
+										<div class="budget-limit-row"><span>Runs</span><strong>{ budgetLimitInt(budget.LimitRuns) }</strong></div>
+										<div class="budget-limit-row"><span>Cost</span><strong>{ budgetLimitCost(budget.LimitCostMicros) }</strong></div>
+									</div>
+
+									<div class="budget-actions">
+										<form hx-post={ "/settings/budgets/" + budget.ID + "/toggle" } hx-target="body" hx-swap="outerHTML">
+											<button class="pc-btn pc-btn-secondary" type="submit">{ budgetToggleLabel(budget) }</button>
+										</form>
+										<form hx-post={ "/settings/budgets/" + budget.ID + "/delete" } hx-confirm="Delete this budget?" hx-target="body" hx-swap="outerHTML">
+											<button class="pc-btn pc-btn-ghost runtime-danger-action" type="submit">@Icon("trash", 16) Delete</button>
+										</form>
+									</div>
+								</div>
+							}
+							if len(view.Budgets) == 0 {
+								<div class="budget-empty-state">
+									<strong>No budgets configured</strong>
+									<p>Budgets help you make autonomy safer by making execution limits visible before tasks run.</p>
+								</div>
+							}
+						</div>
+
+						<div class="pc-card budget-create-card">
+							<div class="budget-create-header">
+								<h3>Create budget</h3>
+								<p>Choose a scope, set one or more limits, then decide whether the budget should block execution.</p>
+							</div>
+							<form hx-post="/settings/budgets" hx-target="body" hx-swap="outerHTML" class="stacked">
+								<label>Scope</label>
+								<select name="scope" class="pc-input">
+									<option value="global">Global</option>
+									<option value="workspace">Workspace</option>
+									<option value="agent">Agent</option>
+								</select>
+								<p class="form-help">Global budgets ignore target fields. Workspace and agent budgets use the selected target ID.</p>
+								<div class="budget-target-grid">
+									<div class="budget-target-field">
+										<label>Workspace target</label>
+										if len(view.Projects) > 0 {
+											<select name="workspace_id" class="pc-input">
+												<option value="">No workspace target</option>
+												for _, project := range view.Projects {
+													<option value={ project.ID }>{ project.Name }</option>
+												}
+											</select>
+										} else {
+											<input name="workspace_id" class="pc-input" placeholder="Workspace ID" />
+										}
+									</div>
+									<div class="budget-target-field">
+										<label>Agent target</label>
+										if len(view.Agents) > 0 {
+											<select name="agent_id" class="pc-input">
+												<option value="">No agent target</option>
+												for _, agent := range view.Agents {
+													<option value={ agent.ID }>{ agent.Name }</option>
+												}
+											</select>
+										} else {
+											<input name="agent_id" class="pc-input" placeholder="Agent ID" />
+										}
+									</div>
+								</div>
+								<div class="budget-form-grid">
+									<input name="limit_tokens" type="number" class="pc-input" placeholder="Token limit" />
+									<input name="limit_runs" type="number" class="pc-input" placeholder="Run limit" />
+									<input name="limit_cost_micros" type="number" class="pc-input" placeholder="Cost limit (micros)" />
+								</div>
+								<label class="budget-hard-stop-note"><input type="checkbox" name="hard_stop" checked /> <span><strong>Hard stop</strong><small>Block new task execution when any configured limit is reached.</small></span></label>
+								<button class="pc-btn pc-btn-primary" type="submit">@Icon("plus", 16) Create Budget</button>
+							</form>
+						</div>
+					</div>
+				</div>
+
+				<div id="danger-zone" class="settings-panel settings-danger-panel settings-tab-panel">
 					@SettingsPanelHeader("Danger Zone", "Destructive operations for this PicoClip instance.", "trash")
  
 					<div class="pc-card">
@@ -372,6 +493,23 @@ templ SettingsPage(view SettingsView) {
 				</div>
 			</div>
 		</section>
+		<script>
+			(function(){
+				var links = Array.prototype.slice.call(document.querySelectorAll('[data-settings-tab]'));
+				var panels = Array.prototype.slice.call(document.querySelectorAll('.settings-tab-panel'));
+				if (!links.length || !panels.length) return;
+				function activate(id){
+					if (!id) id = 'general';
+					var found = panels.some(function(panel){ return panel.id === id; });
+					if (!found) id = 'general';
+					panels.forEach(function(panel){ panel.hidden = panel.id !== id; panel.classList.toggle('active', panel.id === id); });
+					links.forEach(function(link){ link.classList.toggle('active', link.getAttribute('data-settings-tab') === id); });
+				}
+				links.forEach(function(link){ link.addEventListener('click', function(){ activate(link.getAttribute('data-settings-tab')); }); });
+				window.addEventListener('hashchange', function(){ activate(location.hash.replace('#', '')); });
+				activate(location.hash.replace('#', ''));
+			})();
+		</script>
 		@ResetModal("reset-modal")
 	}
 }
@@ -490,4 +628,104 @@ func adapterSetting(settings map[string]map[string]string, adapter string, key s
 		return ""
 	}
 	return settings[adapter][key]
+}
+
+func budgetStatus(b domain.Budget) string {
+	if !b.Enabled {
+		return "disabled"
+	}
+	if b.HardStop {
+		return "hard-stop"
+	}
+	return "soft"
+}
+
+func budgetTitle(b domain.Budget) string {
+	switch b.Scope {
+	case domain.BudgetScopeWorkspace:
+		return "Workspace budget: " + b.WorkspaceID
+	case domain.BudgetScopeAgent:
+		return "Agent budget: " + b.AgentID
+	default:
+		return "Global budget"
+	}
+}
+
+func budgetToggleLabel(b domain.Budget) string {
+	if b.Enabled {
+		return "Disable"
+	}
+	return "Enable"
+}
+
+func budgetScopeLabel(b domain.Budget) string {
+	switch b.Scope {
+	case domain.BudgetScopeWorkspace:
+		return "Workspace"
+	case domain.BudgetScopeAgent:
+		return "Agent"
+	default:
+		return "Global"
+	}
+}
+
+func budgetRiskLabel(b domain.Budget) string {
+	if b.HardStop {
+		return "Hard-stop"
+	}
+	return "Soft"
+}
+
+func budgetRiskDescription(b domain.Budget) string {
+	if !b.Enabled {
+		return "This budget is disabled and will not affect execution."
+	}
+	if b.HardStop {
+		return "Blocks new task execution when a configured limit is reached."
+	}
+	return "Tracks limits without blocking execution."
+}
+
+func budgetLimitInt(v int) string {
+	if v <= 0 {
+		return "Unlimited"
+	}
+	return strconv.Itoa(v)
+}
+
+func budgetLimitCost(v int64) string {
+	if v <= 0 {
+		return "Unlimited"
+	}
+	return strconv.FormatInt(v, 10)
+}
+
+func budgetCountActive(budgets []domain.Budget) int {
+	count := 0
+	for _, budget := range budgets {
+		if budget.Enabled {
+			count++
+		}
+	}
+	return count
+}
+
+func budgetCountHardStop(budgets []domain.Budget) int {
+	count := 0
+	for _, budget := range budgets {
+		if budget.Enabled && budget.HardStop {
+			count++
+		}
+	}
+	return count
+}
+
+func budgetCountDisabled(budgets []domain.Budget) int {
+	count := 0
+	for _, budget := range budgets {
+		if !budget.Enabled {
+			count++
+		}
+	}
+	return count
 }

@@ -1,10 +1,46 @@
 package web
 
-import "picoclip/internal/core/domain"
+import (
+	"fmt"
 
-templ TasksPage(tasks []taskResponse, agents []domain.Agent, projects []domain.Workspace, activeTab string) {
+	"picoclip/internal/core/domain"
+)
+
+templ TasksPage(tasks []taskResponse, allTasks []taskResponse, agents []domain.Agent, projects []domain.Workspace, activeTab string) {
 	@PageShell("tasks", "Tasks", "Issue-style queue for work, delegation, review and agent execution.", tasksAction()) {
-		<div class="stack">
+		<section class="tasks-overview-grid">
+			<a class="panel tasks-overview-card" href="/tasks">
+				<span>Total</span>
+				<strong>{ fmt.Sprintf("%d", len(allTasks)) }</strong>
+				<small>All tasks</small>
+			</a>
+			<a class="panel tasks-overview-card queued" href="/tasks?status=todo">
+				<span>Todo</span>
+				<strong>{ fmt.Sprintf("%d", taskStatusCount(allTasks, domain.TaskStatusTodo)) }</strong>
+				<small>Waiting to run</small>
+			</a>
+			<a class="panel tasks-overview-card live" href="/tasks?status=in_progress">
+				<span>In Progress</span>
+				<strong>{ fmt.Sprintf("%d", taskStatusCount(allTasks, domain.TaskStatusInProgress)) }</strong>
+				<small>Currently executing</small>
+			</a>
+			<a class="panel tasks-overview-card review" href="/tasks?status=in_review">
+				<span>Review</span>
+				<strong>{ fmt.Sprintf("%d", taskStatusCount(allTasks, domain.TaskStatusInReview)) }</strong>
+				<small>Awaiting review</small>
+			</a>
+			<a class="panel tasks-overview-card attention" href="/tasks?status=blocked">
+				<span>Attention</span>
+				<strong>{ fmt.Sprintf("%d", taskAttentionCount(allTasks)) }</strong>
+				<small>Blocked or needs action</small>
+			</a>
+			<a class="panel tasks-overview-card success" href="/tasks?status=done">
+				<span>Done</span>
+				<strong>{ fmt.Sprintf("%d", taskStatusCount(allTasks, domain.TaskStatusDone)) }</strong>
+				<small>Completed work</small>
+			</a>
+		</section>
+		<div class="runs-toolbar">
 			@Tabs() {
 				@TabLink("All", "/tasks", activeTab == "" || activeTab == "all")
 				@TabLink("Todo", "/tasks?status=todo", activeTab == "todo")
@@ -13,19 +49,70 @@ templ TasksPage(tasks []taskResponse, agents []domain.Agent, projects []domain.W
 				@TabLink("Blocked", "/tasks?status=blocked", activeTab == "blocked")
 				@TabLink("Done", "/tasks?status=done", activeTab == "done")
 			}
-			<section class="panel">
-				@SectionHeader("Task Queue", "Filter and inspect all known work items.") {
-					<a class="button secondary" href="/runs">View runs</a>
-				}
-				<div hx-get="/partials/tasks" hx-trigger="every 2s" hx-swap="innerHTML">
-					@TaskTable(tasks, agents, projects)
-				</div>
-			</section>
 		</div>
+		<section class="panel tasks-panel">
+			<div class="tasks-panel-header">
+				<div>
+					<span class="eyebrow">Work queue</span>
+					<h2>Task board</h2>
+					<p>Live queue refreshes automatically while agents work.</p>
+				</div>
+				<span class="runs-filter-pill">{ taskFilterLabel(activeTab) }</span>
+			</div>
+			<div hx-get="/partials/tasks" hx-trigger="every 5s" hx-swap="innerHTML">
+				@TaskTable(tasks, agents, projects)
+			</div>
+		</section>
 		@TaskModal("task-create-modal", "", projects, agents)
 	}
 }
 
 templ tasksAction() {
-	<button data-testid="task-create-button" class="button" type="button" data-open-modal="task-create-modal">Nova task</button>
+	<button data-testid="task-create-button" class="pc-btn pc-btn-primary" type="button" data-open-modal="task-create-modal">Nova task</button>
+}
+
+func taskStatusCount(tasks []taskResponse, status domain.TaskStatus) int {
+	count := 0
+	for _, t := range tasks {
+		if domain.TaskStatus(t.Status) == status {
+			count++
+		}
+	}
+	return count
+}
+
+func taskAttentionCount(tasks []taskResponse) int {
+	count := 0
+	for _, t := range tasks {
+		if domain.TaskStatus(t.Status) == domain.TaskStatusBlocked {
+			count++
+		}
+	}
+	return count
+}
+
+func taskFilterLabel(activeTab string) string {
+	switch activeTab {
+	case "", "all":
+		return "All tasks"
+	case "todo":
+		return "Todo"
+	case "in_progress":
+		return "In Progress"
+	case "in_review":
+		return "Review"
+	case "blocked":
+		return "Blocked"
+	case "done":
+		return "Done"
+	default:
+		return activeTab
+	}
+}
+
+func taskListSummary(tasks []taskResponse) string {
+	if len(tasks) == 1 {
+		return "1 task in this view"
+	}
+	return fmt.Sprintf("%d tasks in this view", len(tasks))
 }
