@@ -31,16 +31,17 @@ func (s *Server) handleAPIV1CreateTask(w http.ResponseWriter, r *http.Request) {
 	if req.Prompt == "" {
 		req.Prompt = req.Message
 	}
-	task, err := s.tasks.CreateInWorkspace(r.Context(), req.ProjectID, req.AgentID, req.Title, req.Prompt)
-	if err == nil && req.Mode == domain.TaskModeContinuous {
-		if req.LoopDelaySeconds < 1 {
-			req.LoopDelaySeconds = 60
-		}
-		task.Mode = domain.TaskModeContinuous
-		task.MaxAttempts = 0
-		task.LoopDelaySeconds = req.LoopDelaySeconds
-		err = s.storage.Tasks().Update(r.Context(), task)
+	if req.Mode == domain.TaskModeContinuous && req.LoopDelaySeconds < 1 {
+		req.LoopDelaySeconds = 60
 	}
+	task, err := s.tasks.CreateWithOptions(r.Context(), services.CreateTaskInput{
+		WorkspaceID:      req.ProjectID,
+		AgentID:          req.AgentID,
+		Title:            req.Title,
+		Prompt:           req.Prompt,
+		Mode:             req.Mode,
+		LoopDelaySeconds: req.LoopDelaySeconds,
+	})
 	if err != nil {
 		s.apiError(w, err)
 		return

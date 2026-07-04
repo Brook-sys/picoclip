@@ -260,8 +260,14 @@ func (r *TaskRepository) ClaimNextRunnable(ctx context.Context, now time.Time, l
 		return domain.Task{}, domain.Run{}, domain.ErrNoPendingTasks
 	}
 
-	// Re-fetch to get updated fields
-	task, err = r.Get(ctx, task.ID)
+	row = tx.QueryRowContext(ctx, `
+		SELECT id, parent_id, workspace_id, agent_id, title, prompt, status, priority,
+			mode, loop_delay_seconds, loop_run_count, loop_next_run_at, loop_paused_at, loop_audit_prompt,
+			attempts, max_attempts, needs_run, checkout_run_id, checked_out_by_agent_id,
+			execution_locked_at, lock_expires_at, cancel_reason, input_tokens, output_tokens, total_tokens, created_at, updated_at, started_at, finished_at, completed_at, cancelled_at
+		FROM tasks WHERE id = ?
+	`, task.ID)
+	task, err = scanTask(row)
 	if err != nil {
 		return domain.Task{}, domain.Run{}, err
 	}
@@ -276,6 +282,12 @@ func (r *TaskRepository) ClaimNextRunnable(ctx context.Context, now time.Time, l
 		StartedAt:    now,
 		LastOutputAt: &now,
 		StallTimeout: int(lockTTL.Seconds()),
+	}
+	if _, err := tx.ExecContext(ctx, `
+		INSERT INTO runs (id, task_id, agent_id, driver_type, status, attempt, input, output, error, input_tokens, output_tokens, total_tokens, process_id, last_output_at, stall_timeout, started_at, finished_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`, run.ID, run.TaskID, run.AgentID, run.DriverType, string(run.Status), run.Attempt, run.Input, run.Output, run.Error, run.InputTokens, run.OutputTokens, run.TotalTokens, run.ProcessID, run.LastOutputAt, run.StallTimeout, run.StartedAt, run.FinishedAt); err != nil {
+		return domain.Task{}, domain.Run{}, err
 	}
 
 	if err := tx.Commit(); err != nil {

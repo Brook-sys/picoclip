@@ -134,6 +134,7 @@ func (r taskRepository) ClaimNextRunnable(ctx context.Context, now time.Time, lo
 		LastOutputAt: &now,
 		StallTimeout: int(lockTTL.Seconds()),
 	}
+	r.storage.runs[run.ID] = run
 	return task, run, nil
 }
 

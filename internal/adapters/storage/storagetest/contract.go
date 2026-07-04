@@ -100,6 +100,24 @@ func testCoreFlow(t *testing.T, factory StorageFactory) {
 	if _, err := storage.Tasks().ClaimNextPending(ctx); err != domain.ErrNoPendingTasks {
 		t.Fatalf("expected locked and exhausted tasks skipped, got %v", err)
 	}
+	runnable := domain.Task{ID: "tsk_runnable", WorkspaceID: workspace.ID, AgentID: agent.ID, Title: "Runnable", Prompt: "Run me", Status: domain.TaskStatusTodo, NeedsRun: true, CreatedAt: now.Add(5 * time.Second), UpdatedAt: now.Add(5 * time.Second)}
+	if err := storage.Tasks().Create(ctx, runnable); err != nil {
+		t.Fatal(err)
+	}
+	runnableClaim, runnableRun, err := storage.Tasks().ClaimNextRunnable(ctx, now, time.Minute)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if runnableClaim.ID != runnable.ID || runnableClaim.CheckoutRunID == "" || runnableRun.ID != runnableClaim.CheckoutRunID {
+		t.Fatalf("unexpected runnable claim task=%#v run=%#v", runnableClaim, runnableRun)
+	}
+	persistedRun, err := storage.Runs().Get(ctx, runnableRun.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if persistedRun.TaskID != runnable.ID || persistedRun.Status != domain.RunStatusRunning {
+		t.Fatalf("unexpected persisted runnable run: %#v", persistedRun)
+	}
 	run := domain.Run{ID: "run_contract", TaskID: task.ID, AgentID: agent.ID, DriverType: "noop", Status: domain.RunStatusSucceeded, StartedAt: now}
 	if err := storage.Runs().Create(ctx, run); err != nil {
 		t.Fatal(err)

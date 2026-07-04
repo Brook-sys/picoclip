@@ -609,26 +609,38 @@ func (s *Server) handleDelegateTask(w http.ResponseWriter, r *http.Request) {
 }
 
 type taskResponse struct {
-	ID            string            `json:"id"`
-	ParentID      string            `json:"parent_id,omitempty"`
-	ProjectID     string            `json:"project_id,omitempty"`
-	AgentID       string            `json:"agent_id"`
-	Title         string            `json:"title"`
-	Status        domain.TaskStatus `json:"status"`
-	Message       string            `json:"message"`
-	Prompt        string            `json:"prompt"`
-	Response      string            `json:"response"`
-	CancelReason  string            `json:"cancel_reason,omitempty"`
-	CheckoutRunID string            `json:"checkout_run_id,omitempty"`
-	Mode          domain.TaskMode   `json:"mode"`
-	InputTokens   int               `json:"input_tokens"`
-	OutputTokens  int               `json:"output_tokens"`
-	TotalTokens   int               `json:"total_tokens"`
-	CreatedAt     string            `json:"created_at"`
-	UpdatedAt     string            `json:"updated_at"`
+	ID               string            `json:"id"`
+	ParentID         string            `json:"parent_id,omitempty"`
+	ProjectID        string            `json:"project_id,omitempty"`
+	AgentID          string            `json:"agent_id"`
+	Title            string            `json:"title"`
+	Status           domain.TaskStatus `json:"status"`
+	Message          string            `json:"message"`
+	Prompt           string            `json:"prompt"`
+	Response         string            `json:"response"`
+	CancelReason     string            `json:"cancel_reason,omitempty"`
+	CheckoutRunID    string            `json:"checkout_run_id,omitempty"`
+	Mode             domain.TaskMode   `json:"mode"`
+	LoopDelaySeconds int               `json:"loop_delay_seconds"`
+	LoopRunCount     int               `json:"loop_run_count"`
+	LoopNextRunAt    string            `json:"loop_next_run_at,omitempty"`
+	LoopPausedAt     string            `json:"loop_paused_at,omitempty"`
+	InputTokens      int               `json:"input_tokens"`
+	OutputTokens     int               `json:"output_tokens"`
+	TotalTokens      int               `json:"total_tokens"`
+	CreatedAt        string            `json:"created_at"`
+	UpdatedAt        string            `json:"updated_at"`
 }
 
 func (s *Server) taskResponse(r *http.Request, task domain.Task) taskResponse {
+	loopNextRunAt := ""
+	if task.LoopNextRunAt != nil {
+		loopNextRunAt = task.LoopNextRunAt.Format("2006-01-02T15:04:05Z07:00")
+	}
+	loopPausedAt := ""
+	if task.LoopPausedAt != nil {
+		loopPausedAt = task.LoopPausedAt.Format("2006-01-02T15:04:05Z07:00")
+	}
 	runs, _ := s.tasks.GetRuns(r.Context(), task.ID)
 	response := ""
 	if len(runs) > 0 {
@@ -639,23 +651,27 @@ func (s *Server) taskResponse(r *http.Request, task domain.Task) taskResponse {
 		}
 	}
 	return taskResponse{
-		ID:            task.ID,
-		ParentID:      task.ParentID,
-		ProjectID:     task.WorkspaceID,
-		AgentID:       task.AgentID,
-		Title:         task.Title,
-		Message:       task.Prompt,
-		Prompt:        task.Prompt,
-		Response:      response,
-		Status:        task.Status,
-		CancelReason:  task.CancelReason,
-		CheckoutRunID: task.CheckoutRunID,
-		Mode:          task.Mode,
-		InputTokens:   task.InputTokens,
-		OutputTokens:  task.OutputTokens,
-		TotalTokens:   task.TotalTokens,
-		CreatedAt:     task.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
-		UpdatedAt:     task.UpdatedAt.Format("2006-01-02T15:04:05Z07:00"),
+		ID:               task.ID,
+		ParentID:         task.ParentID,
+		ProjectID:        task.WorkspaceID,
+		AgentID:          task.AgentID,
+		Title:            task.Title,
+		Message:          task.Prompt,
+		Prompt:           task.Prompt,
+		Response:         response,
+		Status:           task.Status,
+		CancelReason:     task.CancelReason,
+		CheckoutRunID:    task.CheckoutRunID,
+		Mode:             task.Mode,
+		LoopDelaySeconds: task.LoopDelaySeconds,
+		LoopRunCount:     task.LoopRunCount,
+		LoopNextRunAt:    loopNextRunAt,
+		LoopPausedAt:     loopPausedAt,
+		InputTokens:      task.InputTokens,
+		OutputTokens:     task.OutputTokens,
+		TotalTokens:      task.TotalTokens,
+		CreatedAt:        task.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
+		UpdatedAt:        task.UpdatedAt.Format("2006-01-02T15:04:05Z07:00"),
 	}
 }
 

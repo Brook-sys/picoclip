@@ -44,6 +44,33 @@ func TestRunnerSchedulesNextContinuousCycle(t *testing.T) {
 	}
 }
 
+func TestRunnerClearsCheckoutWhenContinuousTaskPausedMidRun(t *testing.T) {
+	st := memory.NewStorage()
+	clock := fixedClock{t: time.Date(2026, 7, 4, 10, 30, 0, 0, time.UTC)}
+	idgen := &seqID{}
+	pausedAt := clock.t.Add(-time.Second)
+	startedAt := clock.t.Add(-time.Minute)
+	expiresAt := clock.t.Add(time.Minute)
+	task := domain.Task{ID: "task_paused_mid_run", AgentID: "agent_cont", Title: "continuous", Prompt: "do", Status: domain.TaskStatusInProgress, Mode: domain.TaskModeContinuous, LoopDelaySeconds: 60, MaxAttempts: 0, LoopPausedAt: &pausedAt, CheckoutRunID: "run_paused", CheckedOutByAgentID: "agent_cont", ExecutionLockedAt: &startedAt, LockExpiresAt: &expiresAt, CreatedAt: clock.t, UpdatedAt: clock.t}
+	if err := st.Tasks().Create(context.Background(), task); err != nil {
+		t.Fatal(err)
+	}
+
+	runner := NewRunner(st, clock, idgen, noopBus{}, nil, NoopMemoryProvider{}, testLogger{}, Config{})
+	runner.completeContinuousCycle(context.Background(), task, domain.Run{ID: "run_paused"}, clock.t)
+
+	got, err := st.Tasks().Get(context.Background(), task.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.CheckoutRunID != "" || got.CheckedOutByAgentID != "" || got.ExecutionLockedAt != nil || got.LockExpiresAt != nil {
+		t.Fatalf("expected paused task checkout cleared, got %#v", got)
+	}
+	if got.Status != domain.TaskStatusWaitingNextCycle || got.NeedsRun || got.LoopNextRunAt != nil {
+		t.Fatalf("expected paused waiting state without next run, got %#v", got)
+	}
+}
+
 func TestReconcilerActivatesDueContinuousTask(t *testing.T) {
 	st := memory.NewStorage()
 	clock := fixedClock{t: time.Date(2026, 7, 4, 11, 0, 0, 0, time.UTC)}

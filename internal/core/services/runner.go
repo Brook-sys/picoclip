@@ -298,12 +298,28 @@ func (r *Runner) completeContinuousCycle(ctx context.Context, task domain.Task, 
 	if err == nil {
 		task = latest
 	}
-	if task.Status == domain.TaskStatusCancelled || task.Status == domain.TaskStatusDone || task.LoopPausedAt != nil {
+
+	if task.CheckoutRunID == run.ID || run.ID == "" {
+		task.CheckoutRunID = ""
+		task.CheckedOutByAgentID = ""
+		task.ExecutionLockedAt = nil
+		task.LockExpiresAt = nil
+	}
+	task.FinishedAt = &finishedAt
+	task.UpdatedAt = finishedAt
+
+	if task.Status == domain.TaskStatusCancelled || task.Status == domain.TaskStatusDone || task.Mode != domain.TaskModeContinuous {
+		_ = r.storage.Tasks().Update(ctx, task)
 		return
 	}
-	if task.Mode != domain.TaskModeContinuous {
+
+	if task.LoopPausedAt != nil {
+		task.Status = domain.TaskStatusWaitingNextCycle
+		task.NeedsRun = false
+		_ = r.storage.Tasks().Update(ctx, task)
 		return
 	}
+
 	delay := task.LoopDelaySeconds
 	if delay < 1 {
 		delay = 60
@@ -314,14 +330,7 @@ func (r *Runner) completeContinuousCycle(ctx context.Context, task domain.Task, 
 	task.NeedsRun = false
 	task.LoopRunCount++
 	task.LoopNextRunAt = &nextRunAt
-	if task.CheckoutRunID == run.ID || run.ID == "" {
-		task.CheckoutRunID = ""
-		task.CheckedOutByAgentID = ""
-		task.ExecutionLockedAt = nil
-		task.LockExpiresAt = nil
-	}
-	task.FinishedAt = &finishedAt
-	task.UpdatedAt = finishedAt
+
 	_ = r.storage.Tasks().Update(ctx, task)
 }
 

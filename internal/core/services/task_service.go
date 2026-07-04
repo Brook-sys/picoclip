@@ -87,6 +87,9 @@ func (s *TaskService) CreateWithOptions(ctx context.Context, input CreateTaskInp
 	}
 
 	if input.Mode == domain.TaskModeContinuous {
+		if input.LoopDelaySeconds < 1 {
+			input.LoopDelaySeconds = 60
+		}
 		task.Mode = domain.TaskModeContinuous
 		task.MaxAttempts = 0
 		task.LoopDelaySeconds = input.LoopDelaySeconds

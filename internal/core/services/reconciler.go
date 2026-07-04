@@ -99,21 +99,29 @@ func (r *Reconciler) activateDueContinuousTasks(ctx context.Context) int {
 }
 
 func (r *Reconciler) scheduleNextContinuousCycle(ctx context.Context, task domain.Task, finishedAt time.Time) {
-	if task.Status == domain.TaskStatusCancelled || task.Status == domain.TaskStatusDone || task.LoopPausedAt != nil {
+	task.FinishedAt = &finishedAt
+	task.UpdatedAt = finishedAt
+
+	if task.Status == domain.TaskStatusCancelled || task.Status == domain.TaskStatusDone || task.Mode != domain.TaskModeContinuous {
+		_ = r.storage.Tasks().Update(ctx, task)
 		return
 	}
+
+	task.Status = domain.TaskStatusWaitingNextCycle
+	task.NeedsRun = false
+	if task.LoopPausedAt != nil {
+		_ = r.storage.Tasks().Update(ctx, task)
+		return
+	}
+
 	delay := task.LoopDelaySeconds
 	if delay < 1 {
 		delay = 60
 		task.LoopDelaySeconds = delay
 	}
 	nextRunAt := finishedAt.Add(time.Duration(delay) * time.Second)
-	task.Status = domain.TaskStatusWaitingNextCycle
-	task.NeedsRun = false
 	task.LoopRunCount++
 	task.LoopNextRunAt = &nextRunAt
-	task.FinishedAt = &finishedAt
-	task.UpdatedAt = finishedAt
 	_ = r.storage.Tasks().Update(ctx, task)
 }
 
