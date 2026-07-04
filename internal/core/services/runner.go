@@ -567,6 +567,47 @@ func formatTaskSummary(task domain.Task) string {
 	return strings.Join(parts, " · ")
 }
 
+func promptSnippet(value string, limit int) string {
+	value = strings.TrimSpace(strings.Join(strings.Fields(value), " "))
+	if limit <= 0 || len(value) <= limit {
+		return value
+	}
+	return value[:limit] + "..."
+}
+
+func latestMessageSnippet(messages []domain.Message) string {
+	for i := len(messages) - 1; i >= 0; i-- {
+		body := promptSnippet(messages[i].Body, 220)
+		if body != "" {
+			return fmt.Sprintf("%s: %s", messages[i].Role, body)
+		}
+	}
+	return ""
+}
+
+func (r *Runner) formatChildTaskForPrompt(ctx context.Context, child domain.Task) string {
+	parts := []string{formatTaskSummary(child)}
+	if child.Prompt != "" {
+		parts = append(parts, "prompt: "+promptSnippet(child.Prompt, 180))
+	}
+	if runs, err := r.storage.Runs().ListByTask(ctx, child.ID); err == nil && len(runs) > 0 {
+		latest := runs[len(runs)-1]
+		runSummary := fmt.Sprintf("latest run: %s", latest.Status)
+		if latest.Output != "" {
+			runSummary += " output: " + promptSnippet(latest.Output, 220)
+		} else if latest.Error != "" {
+			runSummary += " error: " + promptSnippet(latest.Error, 220)
+		}
+		parts = append(parts, runSummary)
+	}
+	if messages, err := r.storage.Messages().ListByTask(ctx, child.ID); err == nil {
+		if latest := latestMessageSnippet(messages); latest != "" {
+			parts = append(parts, "latest message: "+latest)
+		}
+	}
+	return strings.Join(parts, " | ")
+}
+
 func (r *Runner) taskProtocolContext(ctx context.Context, task domain.Task, run domain.Run, messages []domain.Message) string {
 	var sb strings.Builder
 	sb.WriteString(r.taskProtocolPrompt(ctx))
@@ -592,12 +633,13 @@ func (r *Runner) taskProtocolContext(ctx context.Context, task domain.Task, run 
 	children, _ := r.storage.Tasks().List(ctx, ports.TaskFilter{ParentID: task.ID})
 	if len(children) > 0 {
 		sb.WriteString("\nChild Tasks To Supervise:\n")
+		sb.WriteString("Before delegating, compare the requested work with these child tasks. Update, wait for, or summarize existing children instead of creating duplicates.\n")
 		limit := len(children) - 8
 		if limit < 0 {
 			limit = 0
 		}
 		for _, child := range children[limit:] {
-			sb.WriteString("- " + formatTaskSummary(child) + "\n")
+			sb.WriteString("- " + r.formatChildTaskForPrompt(ctx, child) + "\n")
 		}
 	}
 
