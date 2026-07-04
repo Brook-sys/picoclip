@@ -24,6 +24,19 @@ func (r runRepository) Get(ctx context.Context, id string) (domain.Run, error) {
 	return run, nil
 }
 
+func (r runRepository) ListRunning(ctx context.Context) ([]domain.Run, error) {
+	r.storage.mu.RLock()
+	defer r.storage.mu.RUnlock()
+	runs := make([]domain.Run, 0)
+	for _, run := range r.storage.runs {
+		if run.Status == domain.RunStatusRunning {
+			runs = append(runs, run)
+		}
+	}
+	sort.Slice(runs, func(i, j int) bool { return runs[i].StartedAt.Before(runs[j].StartedAt) })
+	return runs, nil
+}
+
 func (r runRepository) ListByTask(ctx context.Context, taskID string) ([]domain.Run, error) {
 	r.storage.mu.RLock()
 	defer r.storage.mu.RUnlock()

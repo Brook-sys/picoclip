@@ -20,6 +20,9 @@ type Storage struct {
 	skills     map[string]domain.Skill
 	workspaces map[string]domain.Workspace
 	settings   map[string]string
+	wakeups    map[string]domain.WakeupRequest
+	usage      map[string]domain.UsageEvent
+	budgets    map[string]domain.Budget
 }
 
 type agentRepository struct{ storage *Storage }
@@ -30,6 +33,8 @@ type messageRepository struct{ storage *Storage }
 type skillRepository struct{ storage *Storage }
 type workspaceRepository struct{ storage *Storage }
 type settingsRepository struct{ storage *Storage }
+type wakeupRepository struct{ storage *Storage }
+type usageRepository struct{ storage *Storage }
 
 func NewStorage() *Storage {
 	return &Storage{
@@ -42,6 +47,9 @@ func NewStorage() *Storage {
 		skills:     make(map[string]domain.Skill),
 		workspaces: make(map[string]domain.Workspace),
 		settings:   make(map[string]string),
+		wakeups:    make(map[string]domain.WakeupRequest),
+		usage:      make(map[string]domain.UsageEvent),
+		budgets:    make(map[string]domain.Budget),
 	}
 }
 
@@ -53,6 +61,9 @@ func (s *Storage) Messages() ports.MessageRepository     { return messageReposit
 func (s *Storage) Skills() ports.SkillRepository         { return skillRepository{storage: s} }
 func (s *Storage) Workspaces() ports.WorkspaceRepository { return workspaceRepository{storage: s} }
 func (s *Storage) Settings() ports.SettingsRepository    { return settingsRepository{storage: s} }
+func (s *Storage) Wakeups() ports.WakeupRepository       { return wakeupRepository{storage: s} }
+func (s *Storage) Usage() ports.UsageRepository          { return usageRepository{storage: s} }
+func (s *Storage) Budgets() ports.BudgetRepository       { return budgetRepository{storage: s} }
 
 func (s *Storage) ResetAllData(ctx context.Context) error {
 	s.mu.Lock()
@@ -66,6 +77,9 @@ func (s *Storage) ResetAllData(ctx context.Context) error {
 	s.skills = make(map[string]domain.Skill)
 	s.workspaces = make(map[string]domain.Workspace)
 	s.settings = make(map[string]string)
+	s.wakeups = make(map[string]domain.WakeupRequest)
+	s.usage = make(map[string]domain.UsageEvent)
+	s.budgets = make(map[string]domain.Budget)
 	return nil
 }
 
@@ -81,6 +95,9 @@ func (s *Storage) RestoreAllData(ctx context.Context, data ports.BackupData) err
 	s.skills = make(map[string]domain.Skill)
 	s.workspaces = make(map[string]domain.Workspace)
 	s.settings = make(map[string]string)
+	s.wakeups = make(map[string]domain.WakeupRequest)
+	s.usage = make(map[string]domain.UsageEvent)
+	s.budgets = make(map[string]domain.Budget)
 
 	for k, v := range data.Settings {
 		s.settings[k] = v
@@ -109,9 +126,22 @@ func (s *Storage) RestoreAllData(ctx context.Context, data ports.BackupData) err
 	for _, x := range data.Events {
 		s.events[x.ID] = x
 	}
+	for _, x := range data.Wakeups {
+		s.wakeups[x.ID] = x
+	}
+	for _, x := range data.Usage {
+		s.usage[x.ID] = x
+	}
+	for _, x := range data.Budgets {
+		s.budgets[x.ID] = x
+	}
+
 	return nil
 }
 
+func (s *Storage) RunInTx(ctx context.Context, fn func(ctx context.Context) error) error {
+	return fn(ctx)
+}
 func (r settingsRepository) Get(ctx context.Context, key string) (string, error) {
 	r.storage.mu.RLock()
 	defer r.storage.mu.RUnlock()

@@ -64,7 +64,7 @@ func (s *AgentService) CreateFull(ctx context.Context, input CreateAgentInput) (
 		input.Capability = domain.CapabilityWorker
 	}
 	if len(input.Permissions) == 0 {
-		input.Permissions = PermissionsForPreset("executor")
+		input.Permissions = PermissionsForCapability(input.Capability)
 	}
 
 	now := s.clock.Now()

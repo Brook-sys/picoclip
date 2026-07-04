@@ -52,47 +52,85 @@ func (s *TaskService) CreateChild(ctx context.Context, parentID, agentID, title,
 	return s.CreateChildInWorkspace(ctx, "", parentID, agentID, title, prompt)
 }
 
-func (s *TaskService) CreateChildInWorkspace(ctx context.Context, workspaceID, parentID, agentID, title, prompt string) (domain.Task, error) {
-	if agentID == "" || prompt == "" {
+type CreateTaskInput struct {
+	WorkspaceID      string
+	ParentID         string
+	AgentID          string
+	Title            string
+	Prompt           string
+	Mode             domain.TaskMode
+	LoopDelaySeconds int
+}
+
+func (s *TaskService) CreateWithOptions(ctx context.Context, input CreateTaskInput) (domain.Task, error) {
+	if input.AgentID == "" || input.Prompt == "" {
 		return domain.Task{}, fmt.Errorf("%w: agent_id and prompt are required", domain.ErrInvalidInput)
 	}
-	if title == "" {
-		title = firstLine(prompt)
+	if input.Title == "" {
+		input.Title = firstLine(input.Prompt)
 	}
 
 	now := s.clock.Now()
 	task := domain.Task{
 		ID:          s.idGen.NewID("tsk"),
-		ParentID:    parentID,
-		WorkspaceID: workspaceID,
-		AgentID:     agentID,
-		Title:       title,
-		Prompt:      prompt,
+		ParentID:    input.ParentID,
+		WorkspaceID: input.WorkspaceID,
+		AgentID:     input.AgentID,
+		Title:       input.Title,
+		Prompt:      input.Prompt,
 		Status:      domain.TaskStatusTodo,
+		Mode:        domain.TaskModeOnce,
 		MaxAttempts: 1,
 		NeedsRun:    true,
 		CreatedAt:   now,
 		UpdatedAt:   now,
 	}
 
-	if err := s.storage.Tasks().Create(ctx, task); err != nil {
+	if input.Mode == domain.TaskModeContinuous {
+		task.Mode = domain.TaskModeContinuous
+		task.MaxAttempts = 0
+		task.LoopDelaySeconds = input.LoopDelaySeconds
+	}
+
+	err := s.storage.RunInTx(ctx, func(txCtx context.Context) error {
+		if err := s.storage.Tasks().Create(txCtx, task); err != nil {
+			return err
+		}
+
+		event := domain.Event{
+			ID:        s.idGen.NewID("evt"),
+			Type:      domain.EventTaskCreated,
+			TaskID:    task.ID,
+			AgentID:   task.AgentID,
+			Message:   "Task created",
+			Data:      map[string]string{"actor": "user"},
+			CreatedAt: now,
+		}
+		if err := s.storage.Events().Create(txCtx, event); err != nil {
+			return err
+		}
+		if err := s.storage.Events().CreateOutbox(txCtx, event); err != nil {
+			return err
+		}
+		return nil
+	})
+	if err != nil {
 		return domain.Task{}, err
 	}
 
-	event := domain.Event{
-		ID:        s.idGen.NewID("evt"),
-		Type:      domain.EventTaskCreated,
-		TaskID:    task.ID,
-		AgentID:   task.AgentID,
-		Message:   "Task created",
-		Data:      map[string]string{"actor": "user"},
-		CreatedAt: now,
-	}
-	_ = s.storage.Events().Create(ctx, event)
-	_ = s.bus.Publish(ctx, event)
 	_, _ = NewWakeupService(s.storage, s.clock, s.idGen).Create(ctx, CreateWakeupInput{AgentID: task.AgentID, TaskID: task.ID, Reason: domain.WakeupReasonAssignment, Priority: task.Priority})
 
 	return task, nil
+}
+
+func (s *TaskService) CreateChildInWorkspace(ctx context.Context, workspaceID, parentID, agentID, title, prompt string) (domain.Task, error) {
+	return s.CreateWithOptions(ctx, CreateTaskInput{
+		WorkspaceID: workspaceID,
+		ParentID:    parentID,
+		AgentID:     agentID,
+		Title:       title,
+		Prompt:      prompt,
+	})
 }
 
 func (s *TaskService) List(ctx context.Context, filter ports.TaskFilter) ([]domain.Task, error) {
@@ -122,35 +160,44 @@ func (s *TaskService) AddMessage(ctx context.Context, taskID, fromID, toID strin
 		Body:      body,
 		CreatedAt: now,
 	}
-	if err := s.storage.Messages().Create(ctx, message); err != nil {
-		return domain.Message{}, err
-	}
-	if task, err := s.storage.Tasks().Get(ctx, taskID); err == nil {
-		if role == domain.MessageRoleUser && task.Status != domain.TaskStatusCancelled {
-			if task.Status == domain.TaskStatusDone {
-				subPrompt := fmt.Sprintf("Follow-up on completed task %s:\nOriginal objective: %s\nUser follow-up: %s", task.ID, task.Prompt, body)
-				childTitle := "Follow-up: " + firstLine(body)
-				if len(childTitle) > 100 {
-					childTitle = childTitle[:100] + "..."
+	err := s.storage.RunInTx(ctx, func(txCtx context.Context) error {
+		if err := s.storage.Messages().Create(txCtx, message); err != nil {
+			return err
+		}
+		if task, err := s.storage.Tasks().Get(txCtx, taskID); err == nil {
+			if role == domain.MessageRoleUser && task.Status != domain.TaskStatusCancelled {
+				if task.Status == domain.TaskStatusDone {
+					subPrompt := fmt.Sprintf("Follow-up on completed task %s:\nOriginal objective: %s\nUser follow-up: %s", task.ID, task.Prompt, body)
+					childTitle := "Follow-up: " + firstLine(body)
+					if len(childTitle) > 100 {
+						childTitle = childTitle[:100] + "..."
+					}
+					if child, childErr := s.CreateChildInWorkspace(txCtx, task.WorkspaceID, task.ID, task.AgentID, childTitle, subPrompt); childErr == nil {
+						_ = s.storage.Messages().Create(txCtx, domain.Message{ID: s.idGen.NewID("msg"), TaskID: task.ID, FromID: fromID, ToID: toID, Role: domain.MessageRoleSystem, Body: "Created follow-up subtask " + child.ID + " from this comment.", CreatedAt: now})
+					}
+				} else {
+					task.NeedsRun = true
+					if task.Status == domain.TaskStatusInReview || task.Status == domain.TaskStatusBlocked {
+						task.Status = domain.TaskStatusTodo
+					}
+					task.FinishedAt = nil
+					task.CompletedAt = nil
+					task.UpdatedAt = now
+					if err := s.storage.Tasks().Update(txCtx, task); err != nil {
+						return err
+					}
 				}
-				if child, childErr := s.CreateChildInWorkspace(ctx, task.WorkspaceID, task.ID, task.AgentID, childTitle, subPrompt); childErr == nil {
-					_ = s.storage.Messages().Create(ctx, domain.Message{ID: s.idGen.NewID("msg"), TaskID: task.ID, FromID: fromID, ToID: toID, Role: domain.MessageRoleSystem, Body: "Created follow-up subtask " + child.ID + " from this comment.", CreatedAt: now})
-				}
-			} else {
-				task.NeedsRun = true
-				if task.Status == domain.TaskStatusInReview || task.Status == domain.TaskStatusBlocked {
-					task.Status = domain.TaskStatusTodo
-				}
-				task.FinishedAt = nil
-				task.CompletedAt = nil
-				task.UpdatedAt = now
-				_ = s.storage.Tasks().Update(ctx, task)
 			}
 		}
+		event := domain.Event{ID: s.idGen.NewID("evt"), Type: domain.EventMessageCreated, TaskID: taskID, AgentID: toID, Message: "Message created", Data: map[string]string{"role": string(role)}, CreatedAt: now}
+		if err := s.storage.Events().Create(txCtx, event); err != nil {
+			return err
+		}
+		return s.storage.Events().CreateOutbox(txCtx, event)
+	})
+	if err != nil {
+		return domain.Message{}, err
 	}
-	event := domain.Event{ID: s.idGen.NewID("evt"), Type: domain.EventMessageCreated, TaskID: taskID, AgentID: toID, Message: "Message created", Data: map[string]string{"role": string(role)}, CreatedAt: now}
-	_ = s.storage.Events().Create(ctx, event)
-	_ = s.bus.Publish(ctx, event)
 	if role == domain.MessageRoleUser {
 		if task, err := s.storage.Tasks().Get(ctx, taskID); err == nil {
 			_, _ = NewWakeupService(s.storage, s.clock, s.idGen).Create(ctx, CreateWakeupInput{AgentID: task.AgentID, TaskID: task.ID, Reason: domain.WakeupReasonComment, Priority: task.Priority})
@@ -169,11 +216,16 @@ func (s *TaskService) Delegate(ctx context.Context, parentID, fromAgentID, toAge
 		return domain.Task{}, err
 	}
 	now := s.clock.Now()
-	_ = s.storage.Messages().Create(ctx, domain.Message{ID: s.idGen.NewID("msg"), TaskID: parentID, FromID: fromAgentID, ToID: toAgentID, Role: domain.MessageRoleDelegated, Body: "Delegated task " + task.ID + ": " + prompt, CreatedAt: now})
-	event := domain.Event{ID: s.idGen.NewID("evt"), Type: domain.EventTaskDelegated, TaskID: parentID, AgentID: toAgentID, Message: "Task delegated", Data: map[string]string{"child_task_id": task.ID, "from_agent_id": fromAgentID, "to_agent_id": toAgentID}, CreatedAt: now}
-	_ = s.storage.Events().Create(ctx, event)
-	_ = s.bus.Publish(ctx, event)
-	return task, nil
+
+	err = s.storage.RunInTx(ctx, func(txCtx context.Context) error {
+		_ = s.storage.Messages().Create(txCtx, domain.Message{ID: s.idGen.NewID("msg"), TaskID: parentID, FromID: fromAgentID, ToID: toAgentID, Role: domain.MessageRoleDelegated, Body: "Delegated task " + task.ID + ": " + prompt, CreatedAt: now})
+		event := domain.Event{ID: s.idGen.NewID("evt"), Type: domain.EventTaskDelegated, TaskID: parentID, AgentID: toAgentID, Message: "Task delegated", Data: map[string]string{"child_task_id": task.ID, "from_agent_id": fromAgentID, "to_agent_id": toAgentID}, CreatedAt: now}
+		if err := s.storage.Events().Create(txCtx, event); err != nil {
+			return err
+		}
+		return s.storage.Events().CreateOutbox(txCtx, event)
+	})
+	return task, err
 }
 
 func (s *TaskService) Cancel(ctx context.Context, id, reason string) (domain.Task, error) {
@@ -197,8 +249,17 @@ func (s *TaskService) Cancel(ctx context.Context, id, reason string) (domain.Tas
 	task.FinishedAt = &now
 	task.CancelledAt = &now
 	task.UpdatedAt = now
-
-	if err := s.storage.Tasks().Update(ctx, task); err != nil {
+	err = s.storage.RunInTx(ctx, func(txCtx context.Context) error {
+		if err := s.storage.Tasks().Update(txCtx, task); err != nil {
+			return err
+		}
+		event := domain.Event{ID: s.idGen.NewID("evt"), Type: domain.EventTaskCanceled, TaskID: task.ID, AgentID: task.AgentID, Message: reason, CreatedAt: now}
+		if err := s.storage.Events().Create(txCtx, event); err != nil {
+			return err
+		}
+		return s.storage.Events().CreateOutbox(txCtx, event)
+	})
+	if err != nil {
 		return domain.Task{}, err
 	}
 
@@ -214,9 +275,6 @@ func (s *TaskService) Cancel(ctx context.Context, id, reason string) (domain.Tas
 		}
 	}
 
-	event := domain.Event{ID: s.idGen.NewID("evt"), Type: domain.EventTaskCanceled, TaskID: task.ID, AgentID: task.AgentID, Message: reason, CreatedAt: now}
-	_ = s.storage.Events().Create(ctx, event)
-	_ = s.bus.Publish(ctx, event)
 	return task, nil
 }
 

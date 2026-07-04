@@ -17,7 +17,8 @@ func (r *MessageRepository) Create(ctx context.Context, message domain.Message) 
 		INSERT INTO messages (id, task_id, from_id, to_id, role, body, created_at)
 		VALUES (?, ?, ?, ?, ?, ?, ?)
 	`
-	_, err := r.db.ExecContext(ctx, query,
+	q := getQueryer(ctx, r.db)
+	_, err := q.ExecContext(ctx, query,
 		message.ID, message.TaskID, message.FromID, message.ToID, string(message.Role), message.Body, message.CreatedAt,
 	)
 	return err

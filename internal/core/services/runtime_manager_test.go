@@ -43,6 +43,9 @@ func (a fakeRuntimeAdapter) WriteConfig(context.Context, domain.RuntimeState, st
 func (a fakeRuntimeAdapter) Execute(ctx context.Context, state domain.RuntimeState, input ports.RuntimeExecutionInput) (ports.RuntimeExecutionResult, error) {
 	return ports.RuntimeExecutionResult{Output: a.out}, a.err
 }
+func (a fakeRuntimeAdapter) Cancel(ctx context.Context, state domain.RuntimeState, run domain.Run) error {
+	return nil
+}
 
 func TestRuntimeManagerTestAISavesMetadataAndHandlesError(t *testing.T) {
 	ctx := context.Background()

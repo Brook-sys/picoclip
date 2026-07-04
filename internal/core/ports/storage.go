@@ -37,6 +37,7 @@ type Storage interface {
 	Budgets() BudgetRepository
 	ResetAllData(ctx context.Context) error
 	RestoreAllData(ctx context.Context, data BackupData) error
+	RunInTx(ctx context.Context, fn func(ctx context.Context) error) error
 }
 
 type SettingsRepository interface {
@@ -104,6 +105,10 @@ type WakeupRepository interface {
 
 type EventRepository interface {
 	Create(ctx context.Context, event domain.Event) error
+	CreateOutbox(ctx context.Context, event domain.Event) error
+	ListOutbox(ctx context.Context, limit int) ([]domain.Event, error)
+	DeleteOutbox(ctx context.Context, id string) error
+	MarkOutboxFailed(ctx context.Context, id string, message string, nextAttemptAt time.Time) error
 	ListByTask(ctx context.Context, taskID string) ([]domain.Event, error)
 	ListRecent(ctx context.Context, limit int) ([]domain.Event, error)
 }

@@ -25,6 +25,9 @@ type Run struct {
 	InputTokens  int        `json:"input_tokens"`
 	OutputTokens int        `json:"output_tokens"`
 	TotalTokens  int        `json:"total_tokens"`
+	ProcessID    int        `json:"process_id,omitempty"`
+	LastOutputAt *time.Time `json:"last_output_at,omitempty"`
+	StallTimeout int        `json:"stall_timeout,omitempty"`
 	StartedAt    time.Time  `json:"started_at"`
 	FinishedAt   *time.Time `json:"finished_at,omitempty"`
 }

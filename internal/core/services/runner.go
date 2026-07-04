@@ -37,6 +37,11 @@ func NewRunner(storage ports.Storage, clock ports.Clock, idGen ports.IDGenerator
 	}
 }
 
+func (r *Runner) emitEvent(ctx context.Context, ev domain.Event) {
+	_ = r.storage.Events().Create(ctx, ev)
+	_ = r.storage.Events().CreateOutbox(ctx, ev)
+}
+
 func (r *Runner) blockIfBudgetExceeded(ctx context.Context, task domain.Task, now time.Time) bool {
 	stopped, budget, usage, err := NewBudgetService(r.storage, r.clock, r.idGen).IsHardStopped(ctx, task.WorkspaceID, task.AgentID)
 	if err != nil {
@@ -50,11 +55,21 @@ func (r *Runner) blockIfBudgetExceeded(ctx context.Context, task domain.Task, no
 	task.Status = domain.TaskStatusBlocked
 	task.NeedsRun = false
 	task.UpdatedAt = now
-	_ = r.storage.Tasks().Update(ctx, task)
 
 	message := fmt.Sprintf("Task blocked by budget %s: usage is %d tokens across %d runs.", budget.ID, usage.TotalTokens, usage.Runs)
-	_ = r.storage.Messages().Create(ctx, domain.Message{ID: r.idGen.NewID("msg"), TaskID: task.ID, Role: domain.MessageRoleSystem, Body: message, CreatedAt: now})
-	_ = r.bus.Publish(ctx, domain.Event{ID: r.idGen.NewID("evt"), Type: domain.EventBudgetBlocked, TaskID: task.ID, AgentID: task.AgentID, Message: message, Data: map[string]string{"budget_id": budget.ID}, CreatedAt: now})
+	_ = r.storage.RunInTx(ctx, func(txCtx context.Context) error {
+		if err := r.storage.Tasks().Update(txCtx, task); err != nil {
+			return err
+		}
+		if err := r.storage.Messages().Create(txCtx, domain.Message{ID: r.idGen.NewID("msg"), TaskID: task.ID, Role: domain.MessageRoleSystem, Body: message, CreatedAt: now}); err != nil {
+			return err
+		}
+		ev := domain.Event{ID: r.idGen.NewID("evt"), Type: domain.EventBudgetBlocked, TaskID: task.ID, AgentID: task.AgentID, Message: message, Data: map[string]string{"budget_id": budget.ID}, CreatedAt: now}
+		if err := r.storage.Events().Create(txCtx, ev); err != nil {
+			return err
+		}
+		return r.storage.Events().CreateOutbox(txCtx, ev)
+	})
 	r.logger.Warn("runner.budget_hard_stop", "task_id", task.ID, "agent_id", task.AgentID, "budget_id", budget.ID)
 	return true
 }
@@ -131,7 +146,7 @@ func (r *Runner) Run(ctx context.Context, task domain.Task) {
 		adapter, ok := r.runtimes.Adapter(runtimeID)
 		if stateErr != nil || !state.Enabled || !ok || adapter.Resolve(ctx, state) != nil {
 			r.logger.Warn("runner.runtime_unavailable", "task_id", task.ID, "agent_id", agent.ID, "type", agent.Type)
-			_ = r.bus.Publish(ctx, domain.Event{ID: r.idGen.NewID("evt"), Type: domain.EventDriverMissing, TaskID: task.ID, AgentID: agent.ID, Message: "Runtime unavailable", CreatedAt: r.clock.Now()})
+			r.emitEvent(ctx, domain.Event{ID: r.idGen.NewID("evt"), Type: domain.EventDriverMissing, TaskID: task.ID, AgentID: agent.ID, Message: "Runtime unavailable", CreatedAt: r.clock.Now()})
 			r.failTask(ctx, task, "runtime unavailable")
 			return
 		}
@@ -165,7 +180,7 @@ func (r *Runner) Run(ctx context.Context, task domain.Task) {
 	_ = r.storage.Runs().Update(ctx, run)
 
 	r.logger.Debug("runner.run_started", "task_id", task.ID, "agent_id", agent.ID, "run_id", run.ID, "runtime", agent.Type)
-	_ = r.bus.Publish(ctx, domain.Event{ID: r.idGen.NewID("evt"), Type: domain.EventRunStarted, TaskID: task.ID, AgentID: agent.ID, RunID: run.ID, Message: "Run started", CreatedAt: r.clock.Now()})
+	r.emitEvent(ctx, domain.Event{ID: r.idGen.NewID("evt"), Type: domain.EventRunStarted, TaskID: task.ID, AgentID: agent.ID, RunID: run.ID, Message: "Run started", CreatedAt: r.clock.Now()})
 
 	runCtx, cancel := context.WithTimeout(ctx, r.config.TaskTimeout)
 	defer cancel()
@@ -197,6 +212,16 @@ func (r *Runner) Run(ctx context.Context, task domain.Task) {
 				run.Error = appendRunStream(run.Error, stderr)
 				run.LastOutputAt = &now
 				_ = r.storage.Runs().Update(ctx, run)
+				_ = r.bus.Publish(ctx, domain.Event{
+					ID:        r.idGen.NewID("evt"),
+					Type:      domain.EventRunOutput,
+					TaskID:    task.ID,
+					AgentID:   agent.ID,
+					RunID:     run.ID,
+					Message:   "Run output",
+					Data:      map[string]string{"stdout": string(stdout), "stderr": string(stderr)},
+					CreatedAt: now,
+				})
 			},
 		})
 	}
@@ -208,6 +233,7 @@ func (r *Runner) Run(ctx context.Context, task domain.Task) {
 		run.Status = domain.RunStatusCanceled
 		run.Error = latest.CancelReason
 		_ = r.storage.Runs().Update(ctx, run)
+		r.emitEvent(ctx, domain.Event{ID: r.idGen.NewID("evt"), Type: domain.EventRunCanceled, TaskID: task.ID, AgentID: agent.ID, RunID: run.ID, Message: "Run canceled", CreatedAt: finishedAt})
 		return
 	}
 
@@ -221,7 +247,12 @@ func (r *Runner) Run(ctx context.Context, task domain.Task) {
 		run.TotalTokens = run.InputTokens + run.OutputTokens
 		r.logger.Warn("runner.run_failed", "task_id", task.ID, "run_id", run.ID, "runtime", agent.Type, "err", err)
 		_ = r.storage.Runs().Update(ctx, run)
-		r.failTask(ctx, task, fmt.Sprintf("%v", err))
+		r.emitEvent(ctx, domain.Event{ID: r.idGen.NewID("evt"), Type: domain.EventRunFailed, TaskID: task.ID, AgentID: agent.ID, RunID: run.ID, Message: err.Error(), CreatedAt: finishedAt})
+		if task.Mode == domain.TaskModeContinuous {
+			r.completeContinuousCycle(ctx, task, run, finishedAt)
+		} else {
+			r.failTask(ctx, task, fmt.Sprintf("%v", err))
+		}
 		r.recordTokenUsage(ctx, run)
 		return
 	}
@@ -241,21 +272,57 @@ func (r *Runner) Run(ctx context.Context, task domain.Task) {
 	}
 	latest, latestErr = r.storage.Tasks().Get(ctx, task.ID)
 	if latestErr == nil && latest.Status != domain.TaskStatusDone && latest.Status != domain.TaskStatusCancelled {
-		if agent.Type == "noop" {
-			latest.Status = domain.TaskStatusTodo
+		if latest.Mode == domain.TaskModeContinuous {
+			r.completeContinuousCycle(ctx, latest, run, now)
 		} else {
-			latest.Status = domain.TaskStatusInProgress
+			if agent.Type == "noop" {
+				latest.Status = domain.TaskStatusTodo
+			} else {
+				latest.Status = domain.TaskStatusInProgress
+			}
+			if latest.CheckoutRunID == run.ID {
+				latest.CheckoutRunID = ""
+				latest.CheckedOutByAgentID = ""
+				latest.ExecutionLockedAt = nil
+				latest.LockExpiresAt = nil
+			}
+			latest.UpdatedAt = now
+			_ = r.storage.Tasks().Update(ctx, latest)
 		}
-		if latest.CheckoutRunID == run.ID {
-			latest.CheckoutRunID = ""
-			latest.CheckedOutByAgentID = ""
-			latest.ExecutionLockedAt = nil
-			latest.LockExpiresAt = nil
-		}
-		latest.UpdatedAt = now
-		_ = r.storage.Tasks().Update(ctx, latest)
 	}
-	_ = r.bus.Publish(ctx, domain.Event{ID: r.idGen.NewID("evt"), Type: domain.EventRunCompleted, TaskID: task.ID, AgentID: agent.ID, RunID: run.ID, Message: "Run completed", CreatedAt: now})
+	r.emitEvent(ctx, domain.Event{ID: r.idGen.NewID("evt"), Type: domain.EventRunCompleted, TaskID: task.ID, AgentID: agent.ID, RunID: run.ID, Message: "Run completed", CreatedAt: now})
+}
+
+func (r *Runner) completeContinuousCycle(ctx context.Context, task domain.Task, run domain.Run, finishedAt time.Time) {
+	latest, err := r.storage.Tasks().Get(ctx, task.ID)
+	if err == nil {
+		task = latest
+	}
+	if task.Status == domain.TaskStatusCancelled || task.Status == domain.TaskStatusDone || task.LoopPausedAt != nil {
+		return
+	}
+	if task.Mode != domain.TaskModeContinuous {
+		return
+	}
+	delay := task.LoopDelaySeconds
+	if delay < 1 {
+		delay = 60
+		task.LoopDelaySeconds = delay
+	}
+	nextRunAt := finishedAt.Add(time.Duration(delay) * time.Second)
+	task.Status = domain.TaskStatusWaitingNextCycle
+	task.NeedsRun = false
+	task.LoopRunCount++
+	task.LoopNextRunAt = &nextRunAt
+	if task.CheckoutRunID == run.ID || run.ID == "" {
+		task.CheckoutRunID = ""
+		task.CheckedOutByAgentID = ""
+		task.ExecutionLockedAt = nil
+		task.LockExpiresAt = nil
+	}
+	task.FinishedAt = &finishedAt
+	task.UpdatedAt = finishedAt
+	_ = r.storage.Tasks().Update(ctx, task)
 }
 
 func (r *Runner) failTask(ctx context.Context, task domain.Task, message string) {
@@ -268,13 +335,26 @@ func (r *Runner) failTask(ctx context.Context, task domain.Task, message string)
 	task.LockExpiresAt = nil
 	task.FinishedAt = nil
 	task.UpdatedAt = now
-	_ = r.storage.Tasks().Update(ctx, task)
-	_ = r.storage.Messages().Create(ctx, domain.Message{ID: r.idGen.NewID("msg"), TaskID: task.ID, FromID: task.AgentID, Role: domain.MessageRoleSystem, Body: "Run failed: " + message, CreatedAt: now})
-	_ = r.bus.Publish(ctx, domain.Event{ID: r.idGen.NewID("evt"), Type: domain.EventTaskFailed, TaskID: task.ID, AgentID: task.AgentID, Message: message, CreatedAt: now})
+	_ = r.storage.RunInTx(ctx, func(txCtx context.Context) error {
+		if err := r.storage.Tasks().Update(txCtx, task); err != nil {
+			return err
+		}
+		if err := r.storage.Messages().Create(txCtx, domain.Message{ID: r.idGen.NewID("msg"), TaskID: task.ID, FromID: task.AgentID, Role: domain.MessageRoleSystem, Body: "Run failed: " + message, CreatedAt: now}); err != nil {
+			return err
+		}
+		ev := domain.Event{ID: r.idGen.NewID("evt"), Type: domain.EventTaskFailed, TaskID: task.ID, AgentID: task.AgentID, Message: message, CreatedAt: now}
+		if err := r.storage.Events().Create(txCtx, ev); err != nil {
+			return err
+		}
+		return r.storage.Events().CreateOutbox(txCtx, ev)
+	})
 }
 
 func (r *Runner) maxAttemptsExceeded(task domain.Task) bool {
 	limit := task.MaxAttempts
+	if limit <= 0 && task.Mode == domain.TaskModeContinuous {
+		return false
+	}
 	if limit <= 0 {
 		limit = r.config.MaxAttempts
 	}

@@ -3,6 +3,7 @@ package memory
 import (
 	"context"
 	"sort"
+	"time"
 
 	"picoclip/internal/core/domain"
 )
@@ -11,6 +12,22 @@ func (r eventRepository) Create(ctx context.Context, event domain.Event) error {
 	r.storage.mu.Lock()
 	defer r.storage.mu.Unlock()
 	r.storage.events[event.ID] = event
+	return nil
+}
+
+func (r eventRepository) CreateOutbox(ctx context.Context, event domain.Event) error {
+	return nil
+}
+
+func (r eventRepository) ListOutbox(ctx context.Context, limit int) ([]domain.Event, error) {
+	return nil, nil
+}
+
+func (r eventRepository) DeleteOutbox(ctx context.Context, id string) error {
+	return nil
+}
+
+func (r eventRepository) MarkOutboxFailed(ctx context.Context, id string, message string, nextAttemptAt time.Time) error {
 	return nil
 }
 

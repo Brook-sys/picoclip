@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"time"
 
 	"picoclip/internal/core/domain"
 )
@@ -21,10 +22,67 @@ func (r *EventRepository) Create(ctx context.Context, event domain.Event) error 
 			id, type, task_id, agent_id, run_id, message, data, created_at
 		) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
 	`
-	_, err := r.db.ExecContext(ctx, query,
+	q := getQueryer(ctx, r.db)
+	_, err := q.ExecContext(ctx, query,
 		event.ID, string(event.Type), event.TaskID, event.AgentID, event.RunID,
 		event.Message, string(dataJSON), event.CreatedAt,
 	)
+	return err
+}
+
+func (r *EventRepository) CreateOutbox(ctx context.Context, event domain.Event) error {
+	payload, _ := json.Marshal(event)
+	query := `
+		INSERT INTO outbox_events (id, type, payload, created_at)
+		VALUES (?, ?, ?, ?)
+	`
+	q := getQueryer(ctx, r.db)
+	_, err := q.ExecContext(ctx, query, event.ID, string(event.Type), string(payload), event.CreatedAt)
+	return err
+}
+
+func (r *EventRepository) ListOutbox(ctx context.Context, limit int) ([]domain.Event, error) {
+	query := `
+		SELECT payload FROM outbox_events
+		WHERE attempts < 10 AND (next_attempt_at IS NULL OR next_attempt_at <= CURRENT_TIMESTAMP)
+		ORDER BY created_at ASC LIMIT ?
+	`
+	q := getQueryer(ctx, r.db)
+	rows, err := q.QueryContext(ctx, query, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var events []domain.Event
+	for rows.Next() {
+		var payload string
+		if err := rows.Scan(&payload); err != nil {
+			return nil, err
+		}
+		var ev domain.Event
+		if err := json.Unmarshal([]byte(payload), &ev); err == nil {
+			events = append(events, ev)
+		}
+	}
+	return events, rows.Err()
+}
+
+func (r *EventRepository) DeleteOutbox(ctx context.Context, id string) error {
+	query := `DELETE FROM outbox_events WHERE id = ?`
+	q := getQueryer(ctx, r.db)
+	_, err := q.ExecContext(ctx, query, id)
+	return err
+}
+
+func (r *EventRepository) MarkOutboxFailed(ctx context.Context, id string, message string, nextAttemptAt time.Time) error {
+	query := `
+		UPDATE outbox_events
+		SET attempts = attempts + 1, last_error = ?, next_attempt_at = ?
+		WHERE id = ?
+	`
+	q := getQueryer(ctx, r.db)
+	_, err := q.ExecContext(ctx, query, message, nextAttemptAt, id)
 	return err
 }
 
