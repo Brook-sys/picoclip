@@ -489,7 +489,7 @@ templ SettingsPage(view SettingsView) {
 													<span class="pc-badge">Signed</span>
 												}
 											</div>
-											<strong>{ webhook.Name }</strong>
+											<strong><a href={ templ.URL("/settings/webhooks/" + webhook.ID) }>{ webhook.Name }</a></strong>
 											<p>{ webhook.URL }</p>
 											<small class="muted">{ webhookEventLabel(webhook.EventTypes) }</small>
 										</div>

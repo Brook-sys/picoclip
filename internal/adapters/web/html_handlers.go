@@ -496,7 +496,48 @@ func (s *Server) handleWebRetryWebhookDelivery(w http.ResponseWriter, r *http.Re
 		return
 	}
 	services.NewWebhookDeliveryWorker(s.storage, services.SystemClock{}, nil).ProcessDue(r.Context())
-	s.handleWebSettings(w, r)
+	s.handleWebSettings(w, r) // Or referer if available
+}
+
+type webhookDetailView struct {
+	Webhook    domain.WebhookSubscription
+	Deliveries []domain.WebhookDelivery
+}
+
+func (s *Server) handleWebWebhookDetail(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	webhook, err := s.storage.Webhooks().GetSubscription(r.Context(), id)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusNotFound)
+		return
+	}
+	deliveries, _ := s.storage.Webhooks().ListDeliveries(r.Context(), id, 200) // Paginable later if needed
+
+	// Format JSON payloads for display
+	for i := range deliveries {
+		var parsed map[string]any
+		if err := json.Unmarshal([]byte(deliveries[i].RequestBody), &parsed); err == nil {
+			if pretty, err := json.MarshalIndent(parsed, "", "  "); err == nil {
+				deliveries[i].RequestBody = string(pretty)
+			}
+		}
+		if deliveries[i].ResponseBody != "" && strings.HasPrefix(strings.TrimSpace(deliveries[i].ResponseBody), "{") {
+			var respParsed map[string]any
+			if err := json.Unmarshal([]byte(deliveries[i].ResponseBody), &respParsed); err == nil {
+				if pretty, err := json.MarshalIndent(respParsed, "", "  "); err == nil {
+					deliveries[i].ResponseBody = string(pretty)
+				}
+			}
+		}
+	}
+
+	view := webhookDetailView{
+		Webhook:    webhook,
+		Deliveries: deliveries,
+	}
+	if err := WebhookDetailPage(view).Render(r.Context(), w); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
 }
 
 func (s *Server) handleWebSettingsExport(w http.ResponseWriter, r *http.Request) {

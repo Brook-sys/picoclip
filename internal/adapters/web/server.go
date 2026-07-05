@@ -120,6 +120,7 @@ func (s *Server) Mount(mux *http.ServeMux) {
 	mux.HandleFunc("POST /settings/webhooks/{id}/test", s.handleWebTestWebhook)
 	mux.HandleFunc("POST /settings/webhooks/{id}/delete", s.handleWebDeleteWebhook)
 	mux.HandleFunc("POST /settings/webhook-deliveries/{id}/retry", s.handleWebRetryWebhookDelivery)
+	mux.HandleFunc("GET /settings/webhooks/{id}", s.handleWebWebhookDetail)
 	mux.HandleFunc("GET /settings/export", s.handleWebSettingsExport)
 	mux.HandleFunc("POST /settings/import", s.handleWebSettingsImport)
 	mux.HandleFunc("POST /settings/reset", s.handleWebPostSettingsReset)

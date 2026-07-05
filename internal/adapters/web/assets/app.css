@@ -1470,6 +1470,25 @@ pc-tag-multiselect { position: relative; display: flex; flex-wrap: wrap; align-i
 .webhook-edit-panel { margin-top: 14px; padding: 12px; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface-soft); }
 .webhook-edit-panel summary { cursor: pointer; font-weight: 800; color: var(--text); }
 .webhook-edit-panel form { margin-top: 12px; }
+
+/* Webhook Detail Page */
+.webhook-detail-header { padding: 24px; border-bottom: 1px solid var(--border); background: var(--surface); }
+.webhook-detail-header .back-link { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 700; color: var(--muted); margin-bottom: 16px; text-decoration: none; transition: color 0.15s; }
+.webhook-detail-header .back-link:hover { color: var(--text); }
+.webhook-detail-title { display: flex; align-items: center; gap: 12px; margin-bottom: 8px; }
+.webhook-detail-title h2 { margin: 0; font-size: 24px; }
+.webhook-event-tags { margin-top: 12px; }
+.webhook-deliveries-list { padding: 24px; display: grid; gap: 12px; }
+.webhook-delivery-card { border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface); overflow: hidden; }
+.webhook-delivery-summary { cursor: pointer; padding: 12px 16px; background: var(--surface-soft); font-weight: normal; list-style: none; }
+.webhook-delivery-summary::-webkit-details-marker { display: none; }
+.webhook-delivery-summary:hover { background: var(--surface-hover); }
+.webhook-delivery-details { padding: 16px; border-top: 1px solid var(--border-subtle); display: grid; gap: 20px; }
+.webhook-delivery-actions { display: flex; justify-content: flex-end; }
+.webhook-payload-section pre, .webhook-response-section pre { background: var(--code-bg); padding: 12px; border-radius: var(--radius-sm); font-size: 13px; overflow-x: auto; white-space: pre-wrap; margin: 8px 0 0 0; }
+.webhook-payload-section h4, .webhook-response-section h4 { margin: 0; font-size: 13px; font-weight: 700; color: var(--muted); }
+.webhook-error-notice { color: var(--bad); font-weight: 700; margin: 8px 0; font-size: 13px; }
+
 .webhook-delivery-row { display: grid; grid-template-columns: auto minmax(120px, 1fr) minmax(120px, 1.2fr) auto; gap: 10px; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--border-subtle); }
 .webhook-delivery-row:last-child { border-bottom: 0; }
 .webhook-delivery-row small { color: var(--muted); }

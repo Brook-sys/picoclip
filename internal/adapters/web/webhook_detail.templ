@@ -1,0 +1,72 @@
+package web
+
+import "strconv"
+
+templ WebhookDetailPage(view webhookDetailView) {
+	@PageShell("settings", view.Webhook.Name, "Webhook subscription details and delivery history.", nil) {
+		<div class="webhook-detail-header">
+			<a href="/settings#webhooks" class="back-link">@Icon("arrow-left", 14) Back to Settings</a>
+			<div class="webhook-detail-title">
+				<h2>{ view.Webhook.Name }</h2>
+				<span class={ "pc-badge", templ.KV("pc-badge-muted", !view.Webhook.Enabled) }>{ webhookStatusLabel(view.Webhook) }</span>
+				if view.Webhook.Secret != "" {
+					<span class="pc-badge">Signed</span>
+				}
+			</div>
+			<p class="muted">{ view.Webhook.URL }</p>
+			<div class="webhook-event-tags">
+				<small><strong>Subscribed events:</strong> { webhookEventLabel(view.Webhook.EventTypes) }</small>
+			</div>
+		</div>
+
+		<section class="panel webhook-deliveries-panel">
+			<div class="panel-header">
+				<h3>Delivery History</h3>
+				<span class="muted">Recent events sent to this webhook.</span>
+			</div>
+			<div class="webhook-deliveries-list">
+				if len(view.Deliveries) == 0 {
+					<p class="muted">No deliveries recorded yet.</p>
+				}
+				for _, delivery := range view.Deliveries {
+					<details class="webhook-delivery-card">
+						<summary class="webhook-delivery-summary">
+							<div class="webhook-delivery-row">
+								<span class={ "pc-badge", webhookDeliveryBadgeClass(delivery) }>{ string(delivery.Status) }</span>
+								<strong>{ string(delivery.EventType) }</strong>
+								<small>{ webhookDeliveryMeta(delivery) }</small>
+								<small class="muted">{ delivery.CreatedAt.Format("Jan 02, 15:04:05") }</small>
+							</div>
+						</summary>
+						<div class="webhook-delivery-details">
+							<div class="webhook-delivery-actions">
+								<form hx-post={ "/settings/webhook-deliveries/" + delivery.ID + "/retry" } hx-target="body" hx-swap="outerHTML" data-success="Delivery retried.">
+									<button class="pc-btn pc-btn-secondary" type="submit">@Icon("refresh-cw", 14) Retry Delivery</button>
+								</form>
+							</div>
+
+							<div class="webhook-payload-section">
+								<h4>Request Payload</h4>
+								<pre><code>{ delivery.RequestBody }</code></pre>
+							</div>
+
+							if delivery.Attempts > 0 {
+								<div class="webhook-response-section">
+									<h4>Response (Status { strconv.Itoa(delivery.ResponseStatus) })</h4>
+									if delivery.LastError != "" {
+										<div class="webhook-error-notice">{ delivery.LastError }</div>
+									}
+									if delivery.ResponseBody != "" {
+										<pre><code>{ delivery.ResponseBody }</code></pre>
+									} else {
+										<p class="muted">No response body.</p>
+									}
+								</div>
+							}
+						</div>
+					</details>
+				}
+			</div>
+		</section>
+	}
+}
