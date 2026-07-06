@@ -313,7 +313,8 @@ Padrão esperado:
 - `EventSource` como progressive enhancement;
 - stream SSE filtra no servidor quando a página tem escopo claro (`task_id`, `run_id`);
 - evento SSE não precisa carregar HTML: ele pode apenas acionar refresh de um partial pequeno;
-- fallback continua útil sem SSE;
+- fallback continua útil sem SSE: em erro de conexão, a região live pode degradar para refresh parcial espaçado, sem voltar a polling agressivo;
+- conexões `EventSource` devem ser fechadas em navegação/saída da página para evitar streams órfãos;
 - eventos importantes aparecem em Activity e/ou run/task detail.
 
 Eventos de robustez, retry, driver e budget devem ser visíveis o suficiente para investigação operacional. Veja [Robustness](ROBUSTNESS.md) e [Operations Runbook](OPERATIONS.md).

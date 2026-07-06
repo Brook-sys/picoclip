@@ -321,6 +321,9 @@ func TestTaskDetailUsesSSEDrivenPartialRefresh(t *testing.T) {
 	if !strings.Contains(html, `data-task-id="`+taskID+`"`) || !strings.Contains(html, `new EventSource('/sse/tasks/' + taskID)`) {
 		t.Fatalf("task detail should subscribe to task-scoped SSE")
 	}
+	if !strings.Contains(html, `source.addEventListener('error', scheduleFallback)`) || !strings.Contains(html, `window.addEventListener('pagehide', stopTaskLive`) {
+		t.Fatalf("task detail SSE should degrade gracefully and clean up connections")
+	}
 
 	partialRes, err := client.Get(ts.URL + "/partials/tasks/" + taskID)
 	if err != nil {

@@ -60,12 +60,32 @@ templ TaskDetailPage(task taskResponse, rawTask domain.Task, agents []domain.Age
 						if (window.__picoclipTaskLiveHandle) window.__picoclipTaskLiveHandle.close();
 						window.__picoclipTaskLiveSource = taskID;
 						var source = new EventSource('/sse/tasks/' + taskID);
+						var fallbackTimer = null;
 						window.__picoclipTaskLiveHandle = source;
 						function refresh(){
-							if (window.htmx) htmx.ajax('GET', root.getAttribute('data-task-live-url'), '#task-live');
+							var liveRoot = document.getElementById('task-live');
+							if (window.htmx && liveRoot) htmx.ajax('GET', liveRoot.getAttribute('data-task-live-url'), '#task-live');
+						}
+						function clearFallback(){
+							if (fallbackTimer) window.clearTimeout(fallbackTimer);
+							fallbackTimer = null;
+						}
+						function scheduleFallback(){
+							if (fallbackTimer) return;
+							fallbackTimer = window.setTimeout(function(){ fallbackTimer = null; refresh(); scheduleFallback(); }, 10000);
+						}
+						function stopTaskLive(){
+							clearFallback();
+							if (window.__picoclipTaskLiveHandle) window.__picoclipTaskLiveHandle.close();
+							window.__picoclipTaskLiveHandle = null;
+							window.__picoclipTaskLiveSource = '';
 						}
 						source.onmessage = refresh;
+						source.addEventListener('open', clearFallback);
+						source.addEventListener('error', scheduleFallback);
 						source.addEventListener('ping', function(){});
+						window.addEventListener('pagehide', stopTaskLive, { once: true });
+						window.addEventListener('beforeunload', stopTaskLive, { once: true });
 					})();
 				</script>
 
