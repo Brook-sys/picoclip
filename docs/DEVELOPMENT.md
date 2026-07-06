@@ -19,13 +19,13 @@ Defaults:
 
 ```sh
 BIND=0.0.0.0
-PORT=8080
+PORT=8088
 ```
 
 Run manually:
 
 ```sh
-BIND=0.0.0.0 PORT=8080 go run cmd/picoclip/main.go
+BIND=0.0.0.0 PORT=8088 go run cmd/picoclip/main.go
 ```
 
 ## Install development tools
@@ -81,7 +81,7 @@ make dev
 or:
 
 ```sh
-BIND=0.0.0.0 PORT=8080 air -c .air.toml
+BIND=0.0.0.0 PORT=8088 air -c .air.toml
 ```
 
 Air builds to `tmp/picoclip` and restarts when Go, CSS, JS, HTML, or templ files change.
@@ -211,6 +211,6 @@ When changing UI or handlers:
 
 ```sh
 make help
-make kill-8080
+make kill-8088
 make clean
 ```

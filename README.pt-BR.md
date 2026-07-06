@@ -79,10 +79,10 @@ Expand-Archive picoclip-v0.0.1-windows-amd64.zip
 Depois abra:
 
 ```text
-http://127.0.0.1:8080
+http://127.0.0.1:8088
 ```
 
-Por padrão, o PicoClip escuta em `0.0.0.0:8080`. Você pode mudar isso com:
+Por padrão, o PicoClip escuta em `0.0.0.0:8088`. Você pode mudar isso com:
 
 ```sh
 BIND=127.0.0.1 PORT=9090 ./picoclip-v0.0.1-linux-amd64
@@ -93,7 +93,7 @@ BIND=127.0.0.1 PORT=9090 ./picoclip-v0.0.1-linux-amd64
 Imagem padrão baseada em Alpine:
 
 ```sh
-docker run --rm -p 8080:8080 \
+docker run --rm -p 8088:8088 \
   -v picoclip-data:/app/data \
   -v picoclip-workspaces:/app/workspaces \
   ghcr.io/brook-sys/picoclip:latest
@@ -102,7 +102,7 @@ docker run --rm -p 8080:8080 \
 Se você precisa do runtime Claurst, use a variante Debian/glibc, porque o binário Linux oficial do Claurst não roda de forma confiável em Alpine/musl:
 
 ```sh
-docker run --rm -p 8080:8080 \
+docker run --rm -p 8088:8088 \
   -v picoclip-data:/app/data \
   -v picoclip-workspaces:/app/workspaces \
   ghcr.io/brook-sys/picoclip:latest-debian
@@ -111,7 +111,7 @@ docker run --rm -p 8080:8080 \
 Depois abra:
 
 ```text
-http://127.0.0.1:8080
+http://127.0.0.1:8088
 ```
 
 Você também pode usar `podman run` com os mesmos argumentos.
@@ -133,7 +133,7 @@ make run
 Depois abra:
 
 ```text
-http://127.0.0.1:8080
+http://127.0.0.1:8088
 ```
 
 Dados de demonstração opcionais:

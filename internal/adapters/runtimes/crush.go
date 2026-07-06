@@ -170,7 +170,7 @@ func (a *CrushAdapter) Execute(ctx context.Context, state domain.RuntimeState, i
 		return ports.RuntimeExecutionResult{}, err
 	}
 
-	if err := cmd.Start(); err != nil {
+	if err := startRuntimeCommand(cmd); err != nil {
 		return ports.RuntimeExecutionResult{}, fmt.Errorf("crush start failed: %w", err)
 	}
 	if input.OnStart != nil && cmd.Process != nil {
@@ -237,9 +237,5 @@ func (a *CrushAdapter) Cancel(ctx context.Context, state domain.RuntimeState, ru
 	if run.ProcessID <= 0 {
 		return nil
 	}
-	p, err := os.FindProcess(run.ProcessID)
-	if err != nil {
-		return nil
-	}
-	return p.Kill()
+	return cancelRuntimeProcess(ctx, run.ProcessID)
 }

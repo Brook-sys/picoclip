@@ -113,11 +113,17 @@ test.describe('PicoClip smoke UI', () => {
     });
     expect(commentResponse.ok()).toBeTruthy();
 
-    const detailResponse = await request.get(`/agent-api/tasks/${task.id}`);
-    expect(detailResponse.ok()).toBeTruthy();
-    const detail = await detailResponse.json();
-    expect(detail.task.status).toBe('todo');
-    expect(detail.messages.some((message: { body: string }) => message.body === 'Unblocked, continue.')).toBeTruthy();
+    await expect
+      .poll(async () => {
+        const detailResponse = await request.get(`/agent-api/tasks/${task.id}`);
+        expect(detailResponse.ok()).toBeTruthy();
+        const detail = await detailResponse.json();
+        return {
+          status: detail.task.status,
+          hasComment: detail.messages.some((message: { body: string }) => message.body === 'Unblocked, continue.'),
+        };
+      })
+      .toEqual({ status: 'todo', hasComment: true });
   });
 
   test('danger zone factory reset clears the database', async ({ page }) => {

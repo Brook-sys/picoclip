@@ -2,14 +2,14 @@ SHELL := /bin/sh
 
 APP := picoclip
 BIND ?= 0.0.0.0
-PORT ?= 8080
+PORT ?= 8088
 BASE_URL ?= http://127.0.0.1:$(PORT)
 TMP_DIR := tmp
 DEV_BIN := $(TMP_DIR)/$(APP)
 AIR := ./bin/air
 TEMPL := ./bin/templ
 
-.PHONY: help tools templ-generate build build-dev run dev seed test test-go test-coverage test-e2e test-e2e-headed vet fmt lint check clean kill-8080
+.PHONY: help tools templ-generate build build-dev run dev seed test test-go test-coverage test-e2e test-e2e-headed vet fmt lint check clean kill-8088
 
 help:
 	@printf '%s\n' \
@@ -25,7 +25,7 @@ help:
 	  '  make test-coverage  Run Go tests with coverage report' \
 	  '  make test-e2e       Run Playwright E2E tests' \
 	  '  make check          Run full validation' \
-	  '  make kill-8080      Kill process bound to port 8080'
+	  '  make kill-8088      Kill process bound to port 8088'
 
 tools:
 	mkdir -p bin
@@ -78,8 +78,8 @@ test: test-go
 
 check: templ-generate fmt test-go vet build test-e2e
 
-kill-8080:
-	-fuser -k 8080/tcp
+kill-8088:
+	-fuser -k 8088/tcp
 
 clean:
 	rm -rf $(TMP_DIR) $(APP) e2e/test-results e2e/playwright-report

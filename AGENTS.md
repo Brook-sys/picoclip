@@ -140,7 +140,7 @@ Fluxo atual:
 
 Limitações conhecidas:
 
-- cancelamento ainda não mata processo externo imediatamente;
+- cancelamento agora sinaliza o grupo de processos do runtime, mas liveness/recovery ainda precisam ser ampliados;
 - eventos não são persistidos de forma uniforme;
 - concorrência do dispatcher precisa ser revista;
 - logs não são streamados.
@@ -268,7 +268,7 @@ make templ-generate
 go run cmd/picoclip/main.go
 ```
 
-Padrão oficial do projeto: `0.0.0.0:8080`.
+Padrão oficial do projeto: `0.0.0.0:8088`.
 
 Configuração:
 

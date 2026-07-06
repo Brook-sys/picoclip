@@ -1,7 +1,8 @@
 import { defineConfig, devices } from '@playwright/test';
 
-const baseURL = process.env.BASE_URL || 'http://127.0.0.1:8080';
-const port = new URL(baseURL).port || '8080';
+const baseURL = process.env.BASE_URL || 'http://127.0.0.1:8088';
+const port = new URL(baseURL).port || '8088';
+const reuseExistingServer = process.env.PLAYWRIGHT_REUSE_SERVER === 'true';
 
 export default defineConfig({
   testDir: '.',
@@ -12,7 +13,7 @@ export default defineConfig({
     command: `mkdir -p data && rm -f data/e2e-picoclip.db && BIND=127.0.0.1 PORT=${port} PICOCLIP_DEBUG=true PICOCLIP_DB_PATH=data/e2e-picoclip.db go run cmd/picoclip/main.go`,
     cwd: '..',
     url: baseURL,
-    reuseExistingServer: false,
+    reuseExistingServer,
     timeout: 30_000,
     stdout: 'pipe',
     stderr: 'pipe',

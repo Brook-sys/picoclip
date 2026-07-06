@@ -142,17 +142,25 @@ Critério de aceite:
 
 #### 1.7 Cancelamento e Recuperação Fortes
 
-Entregas:
+Entregas concluídas:
 
-- `Cancel` mata processo externo.
+- `TaskService.Cancel` passa pelo `TaskLifecycle`, marca a task como `cancelled`, limpa checkout/lock e fecha o run ativo como `canceled`.
+- `RuntimeManager.CancelRun` encaminha o cancelamento para o adapter ativo.
+- Adapters Crush, Claurst e PicoClaw iniciam subprocessos em grupo próprio no Unix e cancelam o grupo inteiro com SIGTERM seguido de SIGKILL.
+- Regressão automatizada cobre cancelamento de filhos que ignoram SIGTERM.
+
+Próximas entregas:
+
 - Run liveness (`LastOutputAt`, `ProcessID`, `StallTimeout`).
 - Retry queue com backoff e retryable vs non-retryable.
 - Reconciliação de locks/runs silenciosos.
+- UI/API de recovery para runs órfãos, travados ou parcialmente cancelados.
 
 Critério de aceite:
 
-- cancelamento de run mata subprocesso;
-- run travado é detectado e recuperado.
+- cancelamento de run mata subprocesso e filhos;
+- run travado é detectado e recuperado;
+- locks órfãos são reconciliados sem intervenção manual.
 
 ### Fase 2 — Heartbeat Completo e Inbox Operacional
 

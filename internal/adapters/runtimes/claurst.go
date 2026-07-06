@@ -166,7 +166,7 @@ func (a *ClaurstAdapter) Execute(ctx context.Context, state domain.RuntimeState,
 		return ports.RuntimeExecutionResult{}, err
 	}
 
-	if err := cmd.Start(); err != nil {
+	if err := startRuntimeCommand(cmd); err != nil {
 		return ports.RuntimeExecutionResult{}, fmt.Errorf("claurst start failed: %w", err)
 	}
 	if input.OnStart != nil && cmd.Process != nil {
@@ -233,9 +233,5 @@ func (a *ClaurstAdapter) Cancel(ctx context.Context, state domain.RuntimeState, 
 	if run.ProcessID <= 0 {
 		return nil
 	}
-	p, err := os.FindProcess(run.ProcessID)
-	if err != nil {
-		return nil
-	}
-	return p.Kill()
+	return cancelRuntimeProcess(ctx, run.ProcessID)
 }
