@@ -169,7 +169,7 @@ func (r *Reconciler) detectStalledRuns(ctx context.Context) int {
 				task.UpdatedAt = now
 				_ = r.storage.Tasks().Update(ctx, task)
 			} else {
-				task.NeedsRun = true
+				task.NeedsRun = false
 				task.UpdatedAt = now
 				_ = r.storage.Tasks().Update(ctx, task)
 				requeued = true

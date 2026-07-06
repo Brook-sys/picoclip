@@ -2,6 +2,7 @@ package services
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -106,8 +107,8 @@ func TestReconcilerDetectsStalledRuns(t *testing.T) {
 	}
 
 	gotTask, _ := st.Tasks().Get(context.Background(), task.ID)
-	if gotTask.CheckoutRunID != "" || !gotTask.NeedsRun {
-		t.Fatalf("expected task unlocked and needs_run, got run=%q needs=%v", gotTask.CheckoutRunID, gotTask.NeedsRun)
+	if gotTask.CheckoutRunID != "" || gotTask.NeedsRun {
+		t.Fatalf("expected task unlocked and waiting for retry wakeup, got run=%q needs=%v", gotTask.CheckoutRunID, gotTask.NeedsRun)
 	}
 
 	wakeups, _ := st.Wakeups().ListPending(context.Background(), clock.t.Add(time.Hour), 10)
@@ -182,6 +183,66 @@ func TestReconcilerSchedulesRetryWakeupWithExponentialBackoffMetadata(t *testing
 	}
 	if wakeups[0].Payload["previous_run_id"] != run.ID || wakeups[0].Payload["attempt"] != "4" || wakeups[0].Payload["backoff_seconds"] != "240" || wakeups[0].Payload["retryable"] != "true" {
 		t.Fatalf("unexpected retry payload: %#v", wakeups[0].Payload)
+	}
+}
+
+func TestStalledRunRetryWaitsForBackoffWakeupBeforeDispatch(t *testing.T) {
+	st := memory.NewStorage()
+	clock := fixedClock{t: time.Date(2026, 6, 25, 14, 45, 0, 0, time.UTC)}
+	idgen := &seqID{}
+	bus := noopBus{}
+	logger := testLogger{}
+
+	agent := domain.Agent{ID: "agt_retry", Name: "retry", Type: "noop", Enabled: true, Capability: domain.CapabilityWorker, CreatedAt: clock.t, UpdatedAt: clock.t}
+	if err := st.Agents().Create(context.Background(), agent); err != nil {
+		t.Fatalf("create agent: %v", err)
+	}
+	svc := NewTaskService(st, clock, idgen, bus)
+	task, err := svc.Create(context.Background(), agent.ID, "retry later", "do")
+	if err != nil {
+		t.Fatalf("create task: %v", err)
+	}
+	locked, err := svc.Checkout(context.Background(), task.ID, agent.ID, "run_retry", nil)
+	if err != nil {
+		t.Fatalf("checkout: %v", err)
+	}
+	locked.Attempts = 2
+	locked.MaxAttempts = 5
+	if err := st.Tasks().Update(context.Background(), locked); err != nil {
+		t.Fatalf("update locked task: %v", err)
+	}
+	last := clock.t.Add(-3 * time.Minute)
+	if err := st.Runs().Create(context.Background(), domain.Run{ID: "run_retry", TaskID: task.ID, AgentID: agent.ID, Status: domain.RunStatusRunning, Attempt: 2, LastOutputAt: &last, StallTimeout: 60, StartedAt: clock.t.Add(-5 * time.Minute)}); err != nil {
+		t.Fatalf("create run: %v", err)
+	}
+
+	reconciler := NewReconciler(st, clock, bus, idgen, logger)
+	reconciler.Reconcile(context.Background())
+
+	beforeDispatch, _, err := st.Tasks().ClaimNextRunnable(context.Background(), clock.t, 30*time.Minute)
+	if !errors.Is(err, domain.ErrNoPendingTasks) {
+		t.Fatalf("expected retry to wait for wakeup due, claimed=%#v err=%v", beforeDispatch, err)
+	}
+
+	wakeupDue := clock.t.Add(1 * time.Minute)
+	_, _, err = st.Tasks().ClaimNextRunnable(context.Background(), wakeupDue, 30*time.Minute)
+	if !errors.Is(err, domain.ErrNoPendingTasks) {
+		t.Fatalf("expected dispatcher alone not to bypass pending wakeup, err=%v", err)
+	}
+
+	processed, err := NewWakeupService(st, fixedClock{t: wakeupDue}, idgen).ProcessDue(context.Background(), 10)
+	if err != nil {
+		t.Fatalf("process wakeup: %v", err)
+	}
+	if processed != 1 {
+		t.Fatalf("processed wakeups=%d want 1", processed)
+	}
+	claimed, _, err := st.Tasks().ClaimNextRunnable(context.Background(), wakeupDue, 30*time.Minute)
+	if err != nil {
+		t.Fatalf("expected retry task claimable after wakeup due: %v", err)
+	}
+	if claimed.ID != task.ID {
+		t.Fatalf("claimed task=%s want %s", claimed.ID, task.ID)
 	}
 }
 
