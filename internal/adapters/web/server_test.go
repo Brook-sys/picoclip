@@ -155,6 +155,58 @@ func TestAgentAPIPermissionEnforcement(t *testing.T) {
 	}
 }
 
+func TestAPIV1EventsSupportsValidatedLimit(t *testing.T) {
+	ts := newTestServer(t)
+	defer ts.Close()
+
+	client := ts.Client()
+	agent := postJSON(t, client, ts.URL+"/api/agents", map[string]any{"name": "API Events Agent", "type": "noop"})
+	_ = postJSON(t, client, ts.URL+"/api/v1/tasks", map[string]any{"agent_id": agent["id"], "title": "Event one", "prompt": "Expose event one"})
+	_ = postJSON(t, client, ts.URL+"/api/v1/tasks", map[string]any{"agent_id": agent["id"], "title": "Event two", "prompt": "Expose event two"})
+
+	limitedRes, err := client.Get(ts.URL + "/api/v1/events?limit=1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer limitedRes.Body.Close()
+	if limitedRes.StatusCode != http.StatusOK {
+		t.Fatalf("limited events status = %d", limitedRes.StatusCode)
+	}
+	var limited struct {
+		Data []map[string]any `json:"data"`
+		Meta map[string]any   `json:"meta"`
+	}
+	if err := json.NewDecoder(limitedRes.Body).Decode(&limited); err != nil {
+		t.Fatal(err)
+	}
+	if len(limited.Data) != 1 {
+		t.Fatalf("limited events count = %d, want 1", len(limited.Data))
+	}
+	if limited.Meta["limit"] != float64(1) {
+		t.Fatalf("events meta limit = %v, want 1", limited.Meta["limit"])
+	}
+
+	invalidRes, err := client.Get(ts.URL + "/api/v1/events?limit=invalid")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer invalidRes.Body.Close()
+	if invalidRes.StatusCode != http.StatusBadRequest {
+		t.Fatalf("invalid limit status = %d, want 400", invalidRes.StatusCode)
+	}
+	var invalid struct {
+		Error struct {
+			Code string `json:"code"`
+		} `json:"error"`
+	}
+	if err := json.NewDecoder(invalidRes.Body).Decode(&invalid); err != nil {
+		t.Fatal(err)
+	}
+	if invalid.Error.Code != "invalid_input" {
+		t.Fatalf("invalid limit code = %q, want invalid_input", invalid.Error.Code)
+	}
+}
+
 func TestAPIV1TaskFullIncludesWakeupsAndTaskWakeupsEndpoint(t *testing.T) {
 	ts := newTestServer(t)
 	defer ts.Close()

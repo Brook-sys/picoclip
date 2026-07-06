@@ -106,8 +106,19 @@ Erros usam `error.code` estável, por exemplo `invalid_input`, `not_found`, `dri
 | `GET` | `/api/v1/webhooks` | Lista webhooks sem expor secrets. |
 | `POST` | `/api/v1/webhooks` | Cria webhook. |
 | `GET` | `/api/v1/webhooks/{id}/deliveries` | Lista deliveries de webhook. |
-| `GET` | `/api/v1/events` | Lista eventos recentes com filtros. |
+| `GET` | `/api/v1/events` | Lista eventos recentes com filtros e `limit` validado. |
 | `GET` | `/api/v1/activity` | Alias de eventos recentes. |
+
+### Filtros comuns de API v1
+
+`GET /api/v1/events` aceita filtros por `task_id`, `agent_id`, `type` e `limit`.
+
+| Parâmetro | Uso |
+| --- | --- |
+| `task_id` | Retorna apenas eventos da task. |
+| `agent_id` | Retorna apenas eventos do agente. |
+| `type` | Retorna apenas eventos do tipo informado. |
+| `limit` | Limita a busca inicial de eventos recentes. Padrão `100`, máximo `500`; valores inválidos retornam `400` com `error.code=invalid_input`. |
 
 ### Filtros comuns de tasks
 

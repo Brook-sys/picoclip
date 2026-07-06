@@ -2,7 +2,9 @@ package web
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
+	"strconv"
 
 	"picoclip/internal/core/domain"
 	"picoclip/internal/core/ports"
@@ -326,7 +328,11 @@ func (s *Server) handleAPIV1SetSkillAgents(w http.ResponseWriter, r *http.Reques
 }
 
 func (s *Server) handleAPIV1Events(w http.ResponseWriter, r *http.Request) {
-	limit := 100
+	limit, err := parseAPILimit(r, 100, 500)
+	if err != nil {
+		s.apiError(w, err)
+		return
+	}
 	events, err := s.storage.Events().ListRecent(r.Context(), limit)
 	if err != nil {
 		s.apiError(w, err)
@@ -345,7 +351,22 @@ func (s *Server) handleAPIV1Events(w http.ResponseWriter, r *http.Request) {
 		}
 		out = append(out, event)
 	}
-	s.apiList(w, out, map[string]any{"count": len(out)})
+	s.apiList(w, out, map[string]any{"count": len(out), "limit": limit})
+}
+
+func parseAPILimit(r *http.Request, defaultLimit, maxLimit int) (int, error) {
+	value := r.URL.Query().Get("limit")
+	if value == "" {
+		return defaultLimit, nil
+	}
+	limit, err := strconv.Atoi(value)
+	if err != nil || limit < 1 {
+		return 0, fmt.Errorf("%w: limit must be a positive integer", domain.ErrInvalidInput)
+	}
+	if limit > maxLimit {
+		return 0, fmt.Errorf("%w: limit must be <= %d", domain.ErrInvalidInput, maxLimit)
+	}
+	return limit, nil
 }
 
 func (s *Server) apiTasksWithFilter(w http.ResponseWriter, r *http.Request, filter ports.TaskFilter) {
