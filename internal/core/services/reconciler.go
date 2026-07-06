@@ -176,7 +176,7 @@ func (r *Reconciler) detectStalledRuns(ctx context.Context) int {
 			}
 		}
 
-		if requeued {
+		if requeued && !r.retryWakeupExists(ctx, run) {
 			delay := retryBackoff(run.Attempt)
 			payload := map[string]string{
 				"previous_run_id": run.ID,
@@ -215,6 +215,22 @@ func retryBackoff(attempt int) time.Duration {
 		return 5 * time.Minute
 	}
 	return delay
+}
+
+func (r *Reconciler) retryWakeupExists(ctx context.Context, run domain.Run) bool {
+	wakeups, err := r.storage.Wakeups().ListByTask(ctx, run.TaskID)
+	if err != nil {
+		return false
+	}
+	for _, wakeup := range wakeups {
+		if wakeup.Reason != domain.WakeupReasonRetry || wakeup.Status != domain.WakeupStatusPending {
+			continue
+		}
+		if wakeup.Payload["previous_run_id"] == run.ID {
+			return true
+		}
+	}
+	return false
 }
 
 func (r *Reconciler) recoverOrphanedRuns(ctx context.Context) int {

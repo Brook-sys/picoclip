@@ -104,6 +104,8 @@ reason
 
 Para recovery de timeout, `reason` é atualmente `run_timeout` e `retryable=true`.
 
+Antes de criar um retry de timeout, o reconciler verifica se já existe um retry wakeup pendente para o mesmo `previous_run_id`. Isso mantém recovery idempotente em sweeps repetidos e evita wakeups/eventos duplicados para o mesmo run com falha.
+
 Essa metadata também é copiada para o evento de activity, para que humanos e futuras automações entendam por que o retry foi agendado.
 
 ## Eventos de Activity usados para diagnóstico

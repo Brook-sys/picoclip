@@ -104,6 +104,8 @@ reason
 
 For timeout recovery, `reason` is currently `run_timeout` and `retryable=true`.
 
+Before creating a timeout retry, the reconciler checks whether a pending retry wakeup for the same `previous_run_id` already exists. This keeps recovery idempotent across repeated sweeps and prevents duplicate retry wakeups/events for the same failed run.
+
 This metadata is intentionally duplicated into the activity event so humans and future automation can understand why the retry was scheduled.
 
 ## Activity events used for diagnosis

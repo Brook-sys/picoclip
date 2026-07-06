@@ -263,6 +263,79 @@ func TestStalledRunRetryWaitsForBackoffWakeupBeforeDispatch(t *testing.T) {
 	}
 }
 
+func TestReconcilerDoesNotCreateDuplicateRetryWakeupsForSameRun(t *testing.T) {
+	st := memory.NewStorage()
+	clock := fixedClock{t: time.Date(2026, 6, 25, 14, 55, 0, 0, time.UTC)}
+	idgen := &seqID{}
+	bus := noopBus{}
+	logger := testLogger{}
+
+	agent := domain.Agent{ID: "agt_1", Name: "a", Type: "internal", Enabled: true, Capability: domain.CapabilityWorker, CreatedAt: clock.t, UpdatedAt: clock.t}
+	if err := st.Agents().Create(context.Background(), agent); err != nil {
+		t.Fatalf("create agent: %v", err)
+	}
+
+	svc := NewTaskService(st, clock, idgen, bus)
+	task, err := svc.Create(context.Background(), agent.ID, "dedupe retry", "do")
+	if err != nil {
+		t.Fatalf("create task: %v", err)
+	}
+	locked, err := svc.Checkout(context.Background(), task.ID, agent.ID, "run_dedupe", nil)
+	if err != nil {
+		t.Fatalf("checkout: %v", err)
+	}
+	locked.Attempts = 2
+	locked.MaxAttempts = 5
+	if err := st.Tasks().Update(context.Background(), locked); err != nil {
+		t.Fatalf("update locked task: %v", err)
+	}
+
+	last := clock.t.Add(-3 * time.Minute)
+	run := domain.Run{ID: "run_dedupe", TaskID: task.ID, AgentID: agent.ID, Status: domain.RunStatusRunning, Attempt: 2, LastOutputAt: &last, StallTimeout: 60, StartedAt: clock.t.Add(-5 * time.Minute)}
+	if err := st.Runs().Create(context.Background(), run); err != nil {
+		t.Fatalf("create run: %v", err)
+	}
+	existing := domain.WakeupRequest{
+		ID:        "wakeup_existing",
+		TaskID:    task.ID,
+		AgentID:   agent.ID,
+		Reason:    domain.WakeupReasonRetry,
+		Status:    domain.WakeupStatusPending,
+		Priority:  5,
+		DueAt:     clock.t.Add(time.Minute),
+		Payload:   map[string]string{"previous_run_id": run.ID, "reason": "run_timeout"},
+		CreatedAt: clock.t.Add(-time.Minute),
+		UpdatedAt: clock.t.Add(-time.Minute),
+	}
+	if err := st.Wakeups().Create(context.Background(), existing); err != nil {
+		t.Fatalf("create existing wakeup: %v", err)
+	}
+
+	reconciler := NewReconciler(st, clock, bus, idgen, logger)
+	reconciler.Reconcile(context.Background())
+
+	wakeups, _ := st.Wakeups().ListByTask(context.Background(), task.ID)
+	retryWakeups := 0
+	for _, wakeup := range wakeups {
+		if wakeup.Reason == domain.WakeupReasonRetry && wakeup.Payload["previous_run_id"] == run.ID {
+			retryWakeups++
+		}
+	}
+	if retryWakeups != 1 {
+		t.Fatalf("expected exactly one retry wakeup for run %s, got %d: %#v", run.ID, retryWakeups, wakeups)
+	}
+	events, _ := st.Events().ListByTask(context.Background(), task.ID)
+	retryEvents := 0
+	for _, event := range events {
+		if event.Type == domain.EventRetryScheduled && event.RunID == run.ID {
+			retryEvents++
+		}
+	}
+	if retryEvents != 0 {
+		t.Fatalf("expected no duplicate retry scheduled event, got %d events: %#v", retryEvents, events)
+	}
+}
+
 func TestReconcilerRecoversRunningRunWithMissingTask(t *testing.T) {
 	st := memory.NewStorage()
 	clock := fixedClock{t: time.Date(2026, 6, 25, 15, 0, 0, 0, time.UTC)}
