@@ -184,6 +184,23 @@ func TestReconcilerSchedulesRetryWakeupWithExponentialBackoffMetadata(t *testing
 	if wakeups[0].Payload["previous_run_id"] != run.ID || wakeups[0].Payload["attempt"] != "4" || wakeups[0].Payload["backoff_seconds"] != "240" || wakeups[0].Payload["retryable"] != "true" {
 		t.Fatalf("unexpected retry payload: %#v", wakeups[0].Payload)
 	}
+	events, _ := st.Events().ListByTask(context.Background(), task.ID)
+	if !hasEventType(events, domain.EventRetryScheduled) {
+		t.Fatalf("expected retry scheduled event, got %#v", events)
+	}
+	var retryEvent domain.Event
+	for _, event := range events {
+		if event.Type == domain.EventRetryScheduled {
+			retryEvent = event
+			break
+		}
+	}
+	if retryEvent.RunID != run.ID || retryEvent.Message != "Retry scheduled after run timeout" {
+		t.Fatalf("unexpected retry event: %#v", retryEvent)
+	}
+	if retryEvent.Data["previous_run_id"] != run.ID || retryEvent.Data["attempt"] != "4" || retryEvent.Data["backoff_seconds"] != "240" || retryEvent.Data["retryable"] != "true" || retryEvent.Data["reason"] != "run_timeout" {
+		t.Fatalf("unexpected retry event data: %#v", retryEvent.Data)
+	}
 }
 
 func TestStalledRunRetryWaitsForBackoffWakeupBeforeDispatch(t *testing.T) {

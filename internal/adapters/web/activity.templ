@@ -91,7 +91,7 @@ func activityAttentionCount(events []domain.Event) int {
 	count := 0
 	for _, event := range events {
 		switch event.Type {
-		case domain.EventTaskFailed, domain.EventRunFailed, domain.EventTaskCanceled, domain.EventRunCanceled, domain.EventBudgetBlocked, domain.EventDriverMissing:
+		case domain.EventTaskFailed, domain.EventRunFailed, domain.EventTaskCanceled, domain.EventRunCanceled, domain.EventRunTimeout, domain.EventBudgetBlocked, domain.EventDriverMissing:
 			count++
 		}
 	}
@@ -110,11 +110,11 @@ func activityCompletedCount(events []domain.Event) int {
 
 func activityToneClass(event domain.Event) string {
 	switch event.Type {
-	case domain.EventTaskFailed, domain.EventRunFailed, domain.EventTaskCanceled, domain.EventRunCanceled, domain.EventBudgetBlocked, domain.EventDriverMissing:
+	case domain.EventTaskFailed, domain.EventRunFailed, domain.EventTaskCanceled, domain.EventRunCanceled, domain.EventRunTimeout, domain.EventBudgetBlocked, domain.EventDriverMissing:
 		return "activity-tone-attention"
 	case domain.EventRunCompleted, domain.EventTaskCompleted:
 		return "activity-tone-success"
-	case domain.EventRunStarted, domain.EventTaskStarted, domain.EventTaskCreated, domain.EventMessageCreated, domain.EventTaskDelegated:
+	case domain.EventRunStarted, domain.EventTaskStarted, domain.EventTaskCreated, domain.EventMessageCreated, domain.EventTaskDelegated, domain.EventRetryScheduled:
 		return "activity-tone-info"
 	default:
 		return "activity-tone-muted"
@@ -135,6 +135,8 @@ func activityTypeLabel(event domain.Event) string {
 		return "Run timed out"
 	case domain.EventRunRecovered:
 		return "Run recovered"
+	case domain.EventRetryScheduled:
+		return "Retry scheduled"
 	case domain.EventTaskCreated:
 		return "Task created"
 	case domain.EventTaskDelegated:
@@ -227,6 +229,12 @@ func friendlyEventMessage(event domain.Event, tasks map[string]taskResponse, age
 		return agentName + " timed out while executing task " + taskName + "."
 	case domain.EventRunRecovered:
 		return "PicoClip recovered a stale or orphaned run for task " + taskName + "."
+	case domain.EventRetryScheduled:
+		backoff := event.Data["backoff_seconds"]
+		if backoff != "" {
+			return "PicoClip learned from a timeout and scheduled retry for task " + taskName + " after " + backoff + " seconds."
+		}
+		return "PicoClip learned from a timeout and scheduled retry for task " + taskName + "."
 	case domain.EventTaskCanceled:
 		return "User canceled task " + taskName + "."
 	case domain.EventTaskDelegated:
