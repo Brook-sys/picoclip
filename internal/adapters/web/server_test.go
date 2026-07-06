@@ -155,6 +155,68 @@ func TestAgentAPIPermissionEnforcement(t *testing.T) {
 	}
 }
 
+func TestAPIV1TaskFullIncludesWakeupsAndTaskWakeupsEndpoint(t *testing.T) {
+	ts := newTestServer(t)
+	defer ts.Close()
+
+	client := ts.Client()
+	agent := postJSON(t, client, ts.URL+"/api/agents", map[string]any{"name": "API Wakeup Agent", "type": "noop"})
+	task := postJSON(t, client, ts.URL+"/api/v1/tasks", map[string]any{"agent_id": agent["id"], "title": "Wakeup visibility", "prompt": "Expose wakeups"})
+	taskID := task["data"].(map[string]any)["id"].(string)
+	_ = postJSON(t, client, ts.URL+"/agent-api/tasks/"+taskID+"/comments", map[string]any{"from_id": agent["id"], "role": "user", "body": "Please wake this task."})
+
+	fullRes, err := client.Get(ts.URL + "/api/v1/tasks/" + taskID + "/full")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer fullRes.Body.Close()
+	if fullRes.StatusCode != http.StatusOK {
+		t.Fatalf("full task status = %d", fullRes.StatusCode)
+	}
+	var full struct {
+		Data struct {
+			Wakeups []struct {
+				TaskID string `json:"task_id"`
+				Reason string `json:"reason"`
+				Status string `json:"status"`
+			} `json:"wakeups"`
+		} `json:"data"`
+	}
+	if err := json.NewDecoder(fullRes.Body).Decode(&full); err != nil {
+		t.Fatal(err)
+	}
+	if len(full.Data.Wakeups) < 2 {
+		t.Fatalf("expected assignment and comment wakeups in full task response, got %#v", full.Data.Wakeups)
+	}
+
+	wakeupsRes, err := client.Get(ts.URL + "/api/v1/tasks/" + taskID + "/wakeups")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer wakeupsRes.Body.Close()
+	if wakeupsRes.StatusCode != http.StatusOK {
+		t.Fatalf("wakeups status = %d", wakeupsRes.StatusCode)
+	}
+	var wakeups struct {
+		Data []struct {
+			TaskID string `json:"task_id"`
+			Reason string `json:"reason"`
+		} `json:"data"`
+		Meta map[string]any `json:"meta"`
+	}
+	if err := json.NewDecoder(wakeupsRes.Body).Decode(&wakeups); err != nil {
+		t.Fatal(err)
+	}
+	if len(wakeups.Data) != len(full.Data.Wakeups) {
+		t.Fatalf("wakeups endpoint count=%d full count=%d", len(wakeups.Data), len(full.Data.Wakeups))
+	}
+	for _, wakeup := range wakeups.Data {
+		if wakeup.TaskID != taskID {
+			t.Fatalf("unexpected wakeup task id: %#v", wakeup)
+		}
+	}
+}
+
 func TestAgentInboxLiteAndHeartbeatContext(t *testing.T) {
 	ts := newTestServer(t)
 	defer ts.Close()

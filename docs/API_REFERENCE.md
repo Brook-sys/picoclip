@@ -49,6 +49,66 @@ http://127.0.0.1:8080
 | `GET` | `/api/runtimes` | Lista estado dos runtimes. |
 | `GET` | `/api/diagnostics` | Health/config diagnostics. |
 
+## API v1
+
+A API v1 usa envelope JSON consistente:
+
+```json
+{"data": {}, "meta": {}, "error": null}
+```
+
+Erros usam `error.code` estável, por exemplo `invalid_input`, `not_found`, `driver_unavailable` e `no_pending_tasks`.
+
+| Método | Rota | Finalidade |
+| --- | --- | --- |
+| `GET` | `/api/v1/health` | Health check simples. |
+| `GET` | `/api/v1/version` | Versão da API e runtime Go. |
+| `GET` | `/api/v1/openapi.json` | Índice OpenAPI simples das rotas v1. |
+| `GET` | `/api/v1/dashboard` | Snapshot consolidado de dashboard. |
+| `GET` | `/api/v1/projects` | Lista projetos. |
+| `POST` | `/api/v1/projects` | Cria projeto. |
+| `GET` | `/api/v1/projects/{id}` | Detalhe de projeto. |
+| `GET` | `/api/v1/projects/{id}/agents` | Agentes do projeto. |
+| `GET` | `/api/v1/projects/{id}/tasks` | Tasks do projeto. |
+| `GET` | `/api/v1/projects/{id}/skills` | Skills do projeto. |
+| `GET` | `/api/v1/agents` | Lista agentes, com filtro `tag`. |
+| `POST` | `/api/v1/agents` | Cria agente completo. |
+| `GET` | `/api/v1/agents/{id}` | Detalhe de agente. |
+| `PATCH` | `/api/v1/agents/{id}` | Atualiza campos do agente. |
+| `DELETE` | `/api/v1/agents/{id}` | Remove agente. |
+| `GET` | `/api/v1/agents/{id}/tasks` | Tasks do agente. |
+| `GET` | `/api/v1/agents/{id}/runs` | Runs do agente. |
+| `PUT` | `/api/v1/agents/{id}/skills` | Define skills do agente. |
+| `GET` | `/api/v1/tasks` | Lista tasks com filtros. |
+| `POST` | `/api/v1/tasks` | Cria task. |
+| `GET` | `/api/v1/tasks/{id}` | Detalhe compacto de task. |
+| `GET` | `/api/v1/tasks/{id}/full` | Detalhe completo com mensagens, runs, eventos, wakeups e subtasks. |
+| `GET` | `/api/v1/tasks/{id}/wakeups` | Lista wakeups da task para diagnóstico de retry/schedule/comment. |
+| `GET` | `/api/v1/tasks/{id}/messages` | Lista mensagens da task. |
+| `POST` | `/api/v1/tasks/{id}/messages` | Adiciona mensagem. |
+| `GET` | `/api/v1/tasks/{id}/runs` | Lista runs da task. |
+| `GET` | `/api/v1/tasks/{id}/events` | Lista eventos da task. |
+| `GET` | `/api/v1/tasks/{id}/children` | Lista subtasks. |
+| `POST` | `/api/v1/tasks/{id}/cancel` | Cancela task. |
+| `POST` | `/api/v1/tasks/{id}/pause` | Pausa task contínua. |
+| `POST` | `/api/v1/tasks/{id}/resume` | Retoma task contínua. |
+| `POST` | `/api/v1/tasks/{id}/run-now` | Executa task contínua agora. |
+| `POST` | `/api/v1/tasks/{id}/delegate` | Cria subtarefa. |
+| `GET` | `/api/v1/runs` | Lista runs com filtros. |
+| `GET` | `/api/v1/runs/{id}` | Detalhe de run. |
+| `GET` | `/api/v1/skills` | Lista skills. |
+| `POST` | `/api/v1/skills` | Cria skill. |
+| `GET` | `/api/v1/skills/{id}` | Detalhe de skill. |
+| `PATCH` | `/api/v1/skills/{id}` | Atualiza skill. |
+| `DELETE` | `/api/v1/skills/{id}` | Remove skill. |
+| `POST` | `/api/v1/skills/{id}/reset` | Reseta skill built-in. |
+| `PUT` | `/api/v1/skills/{id}/agents` | Define atribuições de skill. |
+| `GET` | `/api/v1/webhooks` | Lista webhooks sem expor secrets. |
+| `POST` | `/api/v1/webhooks` | Cria webhook. |
+| `GET` | `/api/v1/webhooks/{id}/deliveries` | Lista deliveries de webhook. |
+| `GET` | `/api/v1/events` | Lista eventos recentes com filtros. |
+| `GET` | `/api/v1/activity` | Alias de eventos recentes. |
+
 ### Filtros comuns de tasks
 
 `GET /api/tasks` aceita query params observados no handler:

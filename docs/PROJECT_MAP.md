@@ -199,7 +199,7 @@ Diretório: `internal/adapters/web/`
 Responsabilidades:
 
 - registrar rotas em `server.go`;
-- expor APIs admin e Agent API;
+- expor APIs admin, Agent API e API v1 envelopada;
 - renderizar UI server-side com Templ;
 - servir assets;
 - expor SSE e partials HTMX;

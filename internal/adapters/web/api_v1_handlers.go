@@ -12,11 +12,12 @@ import (
 )
 
 type taskFullResponse struct {
-	Task     taskResponse     `json:"task"`
-	Messages []domain.Message `json:"messages"`
-	Runs     []domain.Run     `json:"runs"`
-	Events   []domain.Event   `json:"events"`
-	Children []taskResponse   `json:"children"`
+	Task     taskResponse           `json:"task"`
+	Messages []domain.Message       `json:"messages"`
+	Runs     []domain.Run           `json:"runs"`
+	Events   []domain.Event         `json:"events"`
+	Wakeups  []domain.WakeupRequest `json:"wakeups"`
+	Children []taskResponse         `json:"children"`
 }
 
 type dashboardResponse struct {
@@ -64,6 +65,7 @@ func (s *Server) mountAPIV1(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/v1/tasks/{id}/messages", s.handleAPIV1CreateTaskMessage)
 	mux.HandleFunc("GET /api/v1/tasks/{id}/runs", s.handleAPIV1TaskRuns)
 	mux.HandleFunc("GET /api/v1/tasks/{id}/events", s.handleAPIV1TaskEvents)
+	mux.HandleFunc("GET /api/v1/tasks/{id}/wakeups", s.handleAPIV1TaskWakeups)
 	mux.HandleFunc("GET /api/v1/tasks/{id}/children", s.handleAPIV1TaskChildren)
 	mux.HandleFunc("GET /api/v1/runs", s.handleAPIV1Runs)
 	mux.HandleFunc("GET /api/v1/runs/{id}", s.handleAPIV1Run)

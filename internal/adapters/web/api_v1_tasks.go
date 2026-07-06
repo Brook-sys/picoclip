@@ -67,8 +67,9 @@ func (s *Server) handleAPIV1TaskFull(w http.ResponseWriter, r *http.Request) {
 	messages, _ := s.tasks.GetMessages(r.Context(), task.ID)
 	runs, _ := s.tasks.GetRuns(r.Context(), task.ID)
 	events, _ := s.storage.Events().ListByTask(r.Context(), task.ID)
+	wakeups, _ := s.storage.Wakeups().ListByTask(r.Context(), task.ID)
 	children, _ := s.tasks.List(r.Context(), ports.TaskFilter{ParentID: task.ID})
-	s.apiData(w, taskFullResponse{Task: s.taskResponse(r, task), Messages: messages, Runs: runs, Events: events, Children: s.taskResponses(r, children)})
+	s.apiData(w, taskFullResponse{Task: s.taskResponse(r, task), Messages: messages, Runs: runs, Events: events, Wakeups: wakeups, Children: s.taskResponses(r, children)})
 }
 
 func (s *Server) handleAPIV1CancelTask(w http.ResponseWriter, r *http.Request) {
@@ -181,6 +182,20 @@ func (s *Server) handleAPIV1TaskEvents(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.apiList(w, events, map[string]any{"count": len(events)})
+}
+
+func (s *Server) handleAPIV1TaskWakeups(w http.ResponseWriter, r *http.Request) {
+	taskID := r.PathValue("id")
+	if _, err := s.tasks.Get(r.Context(), taskID); err != nil {
+		s.apiError(w, err)
+		return
+	}
+	wakeups, err := s.storage.Wakeups().ListByTask(r.Context(), taskID)
+	if err != nil {
+		s.apiError(w, err)
+		return
+	}
+	s.apiList(w, wakeups, map[string]any{"count": len(wakeups)})
 }
 
 func (s *Server) handleAPIV1TaskChildren(w http.ResponseWriter, r *http.Request) {
@@ -371,6 +386,7 @@ func apiV1Paths() map[string]any {
 		"GET,POST /api/v1/tasks/{id}/messages",
 		"GET /api/v1/tasks/{id}/runs",
 		"GET /api/v1/tasks/{id}/events",
+		"GET /api/v1/tasks/{id}/wakeups",
 		"GET /api/v1/tasks/{id}/children",
 		"GET /api/v1/runs",
 		"GET /api/v1/runs/{id}",
