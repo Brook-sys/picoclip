@@ -11,6 +11,7 @@ Antes de alterar código, leia:
 3. O documento específico da área que você vai mudar:
    - `docs/DEVELOPMENT.md` para comandos, testes e workflow local.
    - `docs/API_REFERENCE.md` para endpoints e contratos HTTP.
+   - `docs/OPERATIONS.md` para runbooks, diagnostics, incidentes locais, backup/restore e troubleshooting operacional.
    - `docs/ROBUSTNESS.md` para scheduler, dispatcher, runner, reconciler, locks, retry e cancelamento.
    - `docs/STORAGE.md` para SQLite, migrations, repositories e restore.
    - `docs/DESIGN.md` para UI, Templ, HTMX e padrões visuais.

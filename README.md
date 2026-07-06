@@ -214,6 +214,7 @@ See:
 - [Project Map](docs/PROJECT_MAP.md)
 - [Documentation Policy](docs/DOCUMENTATION_POLICY.md)
 - [API Reference](docs/API_REFERENCE.md)
+- [Operations Runbook](docs/OPERATIONS.md)
 - [Roadmap](docs/ROADMAP.md)
 - [Current State](docs/CURRENT_STATE.md)
 - [Storage Architecture](docs/STORAGE.md)

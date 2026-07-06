@@ -214,6 +214,7 @@ Veja:
 - [Mapa do Projeto](docs/PROJECT_MAP.md)
 - [Política de Documentação](docs/DOCUMENTATION_POLICY.md)
 - [Referência de API](docs/API_REFERENCE.md)
+- [Runbook Operacional](docs/OPERATIONS.md)
 - [Roadmap](docs/ROADMAP.md)
 - [Estado Atual](docs/CURRENT_STATE.md)
 - [Arquitetura de Storage](docs/STORAGE.md)

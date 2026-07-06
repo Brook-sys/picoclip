@@ -9,6 +9,7 @@ Este diretório contém a documentação canônica do PicoClip. Use este índice
 | [Project Map](PROJECT_MAP.md) | Mapa geral do projeto: diretórios, módulos, fluxos e onde mexer. |
 | [Documentation Policy](DOCUMENTATION_POLICY.md) | Política obrigatória para manter documentação junto com novas funcionalidades. |
 | [Development Guide](DEVELOPMENT.md) | Manual de desenvolvimento local, comandos, testes e troubleshooting. |
+| [Operations Runbook](OPERATIONS.md) | Guia operacional para diagnóstico, recovery, backup/restore e incidentes locais. |
 | [Current State](CURRENT_STATE.md) | Estado real atual do projeto, capacidades implementadas e limitações. |
 | [Roadmap](ROADMAP.md) | Plano de evolução e prioridades por fase. |
 
@@ -17,6 +18,7 @@ Este diretório contém a documentação canônica do PicoClip. Use este índice
 | Área | Documento |
 | --- | --- |
 | APIs administrativas, Agent API e rotas web | [API Reference](API_REFERENCE.md) |
+| Operação local, incidentes, diagnostics, backup/restore e runbooks | [Operations Runbook](OPERATIONS.md) |
 | Robustez, locks, retry, wakeups, recovery e cancelamento | [Robustness](ROBUSTNESS.md) / [pt-BR](ROBUSTNESS.pt-BR.md) |
 | SQLite, memory storage, migrations, backup/restore | [Storage Architecture](STORAGE.md) |
 | UI, Templ, HTMX, componentes e design system | [Design System](DESIGN.md) |
@@ -42,10 +44,11 @@ Este diretório contém a documentação canônica do PicoClip. Use este índice
 
 ### Quero operar/debugar localmente
 
-1. [Development Guide](DEVELOPMENT.md)
-2. [API Reference](API_REFERENCE.md)
-3. [Robustness](ROBUSTNESS.md)
-4. [Storage Architecture](STORAGE.md)
+1. [Operations Runbook](OPERATIONS.md)
+2. [Development Guide](DEVELOPMENT.md)
+3. [API Reference](API_REFERENCE.md)
+4. [Robustness](ROBUSTNESS.md)
+5. [Storage Architecture](STORAGE.md)
 
 ### Sou um agente de IA trabalhando no repo
 

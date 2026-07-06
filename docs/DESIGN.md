@@ -1,184 +1,525 @@
 # PicoClip Design System
 
-PicoClip uses a lightweight server-rendered design system built with Templ, HTMX and plain CSS. The goal is to keep the UI attractive, consistent and easy to extend without adding a heavy SPA framework.
+PicoClip usa um design system leve, server-rendered e local-first construído com Templ, HTMX, JavaScript pequeno e CSS puro. O objetivo é manter a UI consistente, operável e fácil de estender sem transformar o projeto em uma SPA pesada.
 
-## Principles
+Leia junto com:
 
-- Server-rendered first.
-- Components over ad-hoc markup.
-- Small CSS surface with design tokens.
-- HTMX partials for live or interactive regions.
-- View models prepare page data before rendering templates.
-- Prefer progressive disclosure for advanced controls.
-- Destructive operations require clear danger styling and typed confirmation.
+- [Project Map](PROJECT_MAP.md) — onde vivem handlers, templates, rotas e assets.
+- [Development Guide](DEVELOPMENT.md) — workflow Templ, validação e E2E.
+- [API Reference](API_REFERENCE.md) — rotas web, partials, SSE e endpoints usados pela UI.
+- [Operations Runbook](OPERATIONS.md) — padrões operacionais que a UI deve expor com clareza.
+- [Documentation Policy](DOCUMENTATION_POLICY.md) — quando atualizar este documento.
 
-## Navigation Architecture
+## Objetivos
 
-The shell groups navigation by product area:
+A UI do PicoClip deve:
 
-- **Control**: Dashboard, Tasks, Runs, Activity.
-- **Core**: Projects, Agents, Skills.
-- **Admin**: Settings.
+- ser rápida e simples de renderizar no servidor;
+- funcionar bem em um binário Go local;
+- usar HTMX apenas para interações e regiões live bem delimitadas;
+- expor falhas, runs, retries e diagnostics de forma operacional;
+- manter formulários HTML normais e progressivamente aprimorados;
+- evitar dependências visuais pesadas;
+- manter componentes reutilizáveis em vez de markup ad-hoc;
+- permanecer navegável para humanos e agentes.
 
-This keeps future additions predictable. New pages should be placed into one of these groups instead of appending random links.
+## Princípios
 
-## Layout Components
+1. **Server-rendered first**
+   - O HTML inicial deve vir do servidor.
+   - Templ é a fonte dos templates.
+   - JavaScript melhora interações, mas não deve ser requisito para entender a página.
 
-Core CSS/layout primitives:
+2. **Componentes antes de variações locais**
+   - Use `ui.templ` antes de criar classes ou blocos novos.
+   - Se uma forma visual aparece duas vezes, considere componente reutilizável.
 
-- `.app-shell`: fixed sidebar + main content.
-- `.sidebar`: grouped navigation.
-- `.page-header`: breadcrumb, title, subtitle and action slot.
-- `.content-grid`: primary + secondary column layout.
-- `.detail-grid`: main column + right rail.
-- `.grid-cols-2`, `.grid-cols-3`, `.grid-cols-4`: responsive metric/action grids.
-- `.stack`, `.stack-sm`: vertical composition helpers.
+3. **HTMX com escopo pequeno**
+   - Use HTMX para forms, ações e partials.
+   - Evite atualizar `<body>` por polling.
+   - Polling deve mirar regiões pequenas em `/partials/...`.
 
-## Tokens
+4. **Observabilidade visível**
+   - Estados de erro, timeout, retry e recovery devem aparecer com badges, activity e run details.
+   - Dashboard deve priorizar o que exige atenção humana.
 
-The CSS foundation lives in `internal/adapters/web/assets/app.css` and follows a three-layer token model inspired by Anvil2, implemented with plain CSS variables:
+5. **Acessibilidade básica sempre**
+   - Botões icon-only precisam de `aria-label`.
+   - Forms precisam de labels.
+   - Modais devem focar primeiro controle e fechar com Escape.
+   - Estados destrutivos devem ser claros visualmente e semanticamente.
 
-- Primitive tokens: `--a2-neutral-*`, `--a2-blue-*`, `--a2-green-*`, `--a2-red-*`, `--a2-yellow-*`.
-- Semantic tokens: `--a2-background-color-primary`, `--a2-surface-color`, `--a2-surface-hover`, `--a2-foreground-color-primary`, `--a2-foreground-color-secondary`, `--a2-border-color-default`, `--a2-border-color-hover`, `--a2-focus-color`.
-- Spacing tokens: `--space-1`, `--space-2`, `--space-3`, `--space-4`, `--space-5`, `--space-6`, `--space-8`.
-- Shape/elevation tokens: `--radius-sm`, `--radius-md`, `--radius-lg`, `--shadow-sm`, `--shadow-md`.
+6. **Sem segredos na UI/docs**
+   - Valores sensíveis de env vars devem ser mascarados por padrão.
+   - Exemplos em documentação devem usar placeholders.
 
-Legacy variables such as `--bg`, `--surface`, `--text`, `--muted`, `--border`, `--good`, `--bad`, `--warn` and `--info` are mapped to the new token layer so old templates can migrate gradually.
+## Arquivos principais
 
-## Templ Components
+| Arquivo | Papel |
+| --- | --- |
+| `internal/adapters/web/layout.templ` | Shell principal, navegação, tema, command palette, JS global e custom elements. |
+| `internal/adapters/web/ui.templ` | Componentes reutilizáveis: botões, cards, forms, badges, tabs, rows, empty states. |
+| `internal/adapters/web/icons.templ` | Ícones SVG inline. |
+| `internal/adapters/web/modals.templ` | Modais reutilizáveis. |
+| `internal/adapters/web/*_page.templ` | Páginas de lista/área. |
+| `internal/adapters/web/*_detail.templ` | Páginas de detalhe. |
+| `internal/adapters/web/assets/app.css` | Tokens, layout, componentes, padrões de página e responsividade. |
+| `internal/adapters/web/server.go` | Registro de rotas web, APIs, partials e SSE. |
 
-Defined in `internal/adapters/web/ui.templ` and `internal/adapters/web/icons.templ`:
+## Shell e navegação
 
-- `Icon`: inline SVG icon component, no webfont or external dependency.
-- `Button`, `ButtonLink`, `IconButton`: action primitives with `primary`, `secondary`, `ghost` and `danger` variants.
-- `Card`, `CardEdit`: content containers.
-- `SectionHeader`: section title, description and action slot.
-- `PropertyList`, `PropertyItem`, `PropertyItemHTML`: detail rail metadata.
-- `FieldLabel`, `FieldMessage`, `FormField`: accessible form wrapper and helper text.
-- `TextField`, `TextareaField`, `SelectField`: styled form controls.
-- `TagMultiSelectField`: chip-based tag editor backed by a lightweight custom element.
-- `EnvEditorField`: dynamic environment variable editor with key validation, masked values, reveal buttons and add/remove rows.
-- `Chip`, `Badge`, `StatusBadge`: compact metadata/status display.
-- `EmptyState`: icon-based empty content state.
-- `Tabs`, `TabLink`: page-level tabs.
-- `EntityRow`: compact linked list row with icon and arrow.
+O shell principal é `PageShell(active, title, subtitle, action)` em `layout.templ`.
 
-When adding UI, prefer composing these components before introducing new CSS.
+Ele fornece:
 
-## Iconography
+- HTML base;
+- carregamento do HTMX local em `/assets/htmx.min.js`;
+- CSS em `/assets/app.css`;
+- sidebar;
+- header padrão de página;
+- slot de ação da página;
+- command palette;
+- toast root;
+- script global de interações.
 
-Icons are inline SVGs rendered by `Icon(name, size)`. This avoids icon fonts, external requests and runtime dependencies. Add only icons that are actually used by the interface.
+A navegação é agrupada por área:
 
-Current icon names include:
+| Grupo | Páginas |
+| --- | --- |
+| Control | Dashboard, Tasks, Runs, Activity |
+| Core | Projects, Agents, Skills |
+| Admin | Settings |
 
+Regra: novas páginas devem entrar em um grupo existente ou justificar um novo grupo. Não adicione links aleatórios na sidebar.
+
+## Tema e densidade
+
+O shell aplica preferências antes do CSS principal para evitar flash visual:
+
+- tema salvo em `localStorage['picoclip.theme']`;
+- valores: `system`, `light`, `dark`;
+- tema resolvido em `document.documentElement.dataset.theme`;
+- densidade salva em `localStorage['picoclip.density']`;
+- densidade aplicada em `document.documentElement.dataset.density`.
+
+Tokens de tema vivem em `app.css`:
+
+- `:root` para tema claro;
+- `[data-theme="dark"]` para tema escuro;
+- variáveis legadas continuam mapeadas para migração gradual.
+
+## Modelo de tokens CSS
+
+`app.css` usa três camadas principais.
+
+### Primitive tokens
+
+Exemplos:
+
+- `--a2-neutral-*`
+- `--a2-blue-*`
+- `--a2-green-*`
+- `--a2-red-*`
+- `--a2-yellow-*`
+
+### Semantic tokens
+
+Exemplos:
+
+- `--a2-background-color-primary`
+- `--a2-surface-color`
+- `--a2-surface-hover`
+- `--a2-foreground-color-primary`
+- `--a2-foreground-color-secondary`
+- `--a2-border-color-default`
+- `--a2-border-color-hover`
+- `--a2-focus-color`
+
+### Layout/shape tokens
+
+Exemplos:
+
+- spacing: `--space-1` até `--space-8`;
+- radius: `--radius-sm`, `--radius-md`, `--radius-lg`;
+- elevation: `--shadow-sm`, `--shadow-md`.
+
+Regra: ao criar CSS novo, use tokens existentes antes de codificar cores/espaçamentos literais.
+
+## Componentes Templ canônicos
+
+Definidos principalmente em `internal/adapters/web/ui.templ`.
+
+| Componente | Uso |
+| --- | --- |
+| `Card`, `CardEdit` | Containers de conteúdo. |
+| `SectionHeader` | Cabeçalho de seção com descrição e actions. |
+| `Button`, `ButtonLink`, `IconButton` | Ações primárias, secundárias, ghost e danger. |
+| `InlineTextField`, `InlineTextareaField` | Edição inline com HTMX. |
+| `FormField`, `FieldLabel`, `FieldMessage` | Estrutura acessível para campos. |
+| `TextField`, `TextareaField`, `SelectField` | Inputs base. |
+| `TagMultiSelectField` | Editor de tags com chips e hidden inputs. |
+| `EnvEditorField` | Editor de variáveis de ambiente com máscara, validação e reveal. |
+| `Chip`, `Badge`, `StatusBadge` | Metadados, tags e status. |
+| `PropertyList`, `PropertyItem`, `PropertyItemHTML` | Detail rails e metadados estruturados. |
+| `EmptyState` | Estados vazios com ícone, título, mensagem e actions. |
+| `Tabs`, `TabLink` | Navegação local por abas. |
+| `EntityRow` | Lista compacta de entidades navegáveis. |
+| `CommandPalette` | Modal global de busca/comandos. |
+
+Antes de criar um novo helper visual, procure se um destes já resolve o caso.
+
+## Ícones
+
+Ícones são SVG inline via `Icon(name, size)` em `icons.templ`.
+
+Regras:
+
+- adicionar somente ícones usados pela UI;
+- não introduzir icon font;
+- não depender de CDN;
+- usar `IconButton` com `aria-label` para ações icon-only;
+- manter nomes semânticos e consistentes.
+
+Ícones vistos em navegação/componentes incluem, entre outros:
+
+- `paperclip`
+- `layout-dashboard`
+- `check-square`
+- `play-circle`
+- `activity`
+- `folder`
+- `bot`
+- `sparkles`
+- `settings`
 - `check`
 - `x`
-- `chevron-down`
-- `chevron-right`
 - `plus`
 - `trash`
-- `settings`
-- `play`
-- `stop`
-- `users`
-- `folder`
-- `check-circle`
+- `eye`
+- `chevron-down`
+- `chevron-right`
 - `cpu`
-- `zap`
 - `book`
-- `bar-chart`
+- `zap`
 
-## Interactive Components
+## Layout patterns
 
-The shell registers lightweight vanilla custom elements in `layout.templ`. These are intentionally small and compatible with HTMX swaps.
+### Page header
 
-### `pc-tag-multiselect`
+Toda página principal deve usar o header do `PageShell`:
 
-Use `TagMultiSelectField(name, selectedTags, availableTagsJSON)` for tag inputs.
+- eyebrow com área ativa;
+- ícone derivado de `pageIcon(active)`;
+- título;
+- subtítulo;
+- action slot quando necessário.
 
-Behavior:
+Não recrie headers locais sem necessidade.
 
-- client-side filtering over the provided tag list;
-- creates new tags inline when the typed value does not exist;
-- renders selected values as chips;
-- submits standard hidden inputs, so normal form handlers keep working;
-- supports keyboard navigation with ArrowUp, ArrowDown, Enter, Escape and Backspace.
+### Detail pages
 
-Server handlers should read repeated `tags` values before falling back to legacy newline textareas.
+Use `detail-grid` para páginas de detalhe:
 
-## Task Detail Pattern
+- coluna principal: conteúdo, conversas, runs, activity, formulários principais;
+- rail lateral: propriedades, actions, delegation, danger zone.
 
-Task detail pages should use a `detail-grid`:
+Exemplos de detalhe:
 
-- main column: prompt, conversation, subtask tree, runs and activity;
-- right rail: properties, workflow actions, delegation and danger zone;
-- task comments remain separate from system activity;
-- runs remain separate from comments and link to `/runs/{id}`.
+- task detail;
+- run detail;
+- agent detail;
+- project detail;
+- skill detail;
+- webhook detail.
 
-## Live Observability
-
-Activity now supports Server-Sent Events through `/sse/activity`. The Activity page keeps a standard server-rendered initial timeline and progressively enhances it with live events when `EventSource` is available.
-
-## Runs Pattern
-
-Runs are first-class observability records:
-
-- `/runs` lists executions with status tabs;
-- `/runs/{id}` shows output, error, input context and metadata;
-- duration and attempt metadata belong in the run detail rail;
-- running runs use a focused `/partials/runs/{id}` polling region instead of refreshing the full page.
-
-## Dashboard Pattern
-
-The dashboard should behave like an operational command center:
-
-- top row: open work, running runs, blocked work and failed executions;
-- left column: work that needs attention and active runs;
-- right column: system health and recent activity;
-- avoid hiding critical failures below the fold.
-
-## Data Display
+### Dashboards e listas
 
 Use:
 
-- `.table-wrapper` around every table.
-- `StatusBadge` for lifecycle/status output.
-- `Badge` for metadata and labels.
-- `EntityRow` for compact linked lists.
-- `PropertyList` for detail rails.
+- `metrics`/`metrics-dashboard` para métricas;
+- cards com status visual para atenção operacional;
+- `table-wrapper` para tabelas;
+- tabs para filtros de status;
+- empty states quando listas estiverem vazias.
 
-## Command Palette
+## HTMX patterns
 
-The shell includes a lightweight command palette:
+### Forms
 
-- open with `Ctrl+K` / `Cmd+K`;
-- search tasks, agents, projects, skills and quick commands;
-- results are powered by `/api/search`;
-- use Enter to navigate to the selected result.
+Para ações que modificam estado:
 
-## Interaction Patterns
+- use `hx-post` ou método apropriado;
+- adicione mensagens de sucesso/erro via toast quando aplicável;
+- preserve comportamento de form sempre que possível;
+- evite swaps grandes quando uma resposta pequena basta.
 
-- Use HTMX for form submissions and partial refreshes.
-- Avoid polling entire pages; poll fragments only.
-- Use `hx-target="body" hx-swap="outerHTML"` for simple full-page form refreshes.
-- Use dedicated `/partials/...` routes for live sections.
-- Use toast feedback via the shell for non-GET HTMX requests.
+O shell escuta eventos HTMX para:
 
-## Modals
+- colocar forms em loading;
+- desabilitar botão submit;
+- restaurar botão após request;
+- mostrar toast para requests não-GET;
+- ler `HX-Trigger` com evento `picoclip-toast`.
 
-Modals are controlled by `data-open-modal` and `data-close-modal` from `layout.templ`.
+### Full page refresh vs partials
 
-Rules:
+Aceitável para ações simples:
 
-- Keep modals outside polling fragments.
-- Escape closes all modals.
-- The first focusable element receives focus when opened.
-- Destructive modals should use `.border-danger`, `.text-danger`, and typed confirmation.
+```html
+hx-target="body" hx-swap="outerHTML"
+```
 
-## Extensibility Rules
+Preferido para regiões live:
 
-- Do not create one-off visual patterns for new features.
-- Add a reusable component if the same shape appears twice.
-- Keep page-specific CSS rare.
-- Prefer ViewModels in Go for derived display data.
-- Every new primary page should have a short E2E smoke check.
+```html
+hx-get="/partials/tasks/{id}"
+hx-trigger="every 3s"
+hx-swap="innerHTML"
+```
+
+Nunca faça polling frequente de `<body>` inteiro.
+
+### Partials
+
+Use `/partials/...` para regiões que precisam atualizar sem destruir estado local da página.
+
+Padrões atuais:
+
+- task live/detail regions;
+- run live output/status regions.
+
+Ao criar partial:
+
+1. registre rota em `server.go`;
+2. mantenha payload pequeno;
+3. garanta que o fragmento é válido isoladamente;
+4. não coloque modais ou forms críticos dentro de containers pollados;
+5. documente rota em [API Reference](API_REFERENCE.md) se for relevante para agentes/manutenção.
+
+## SSE e live observability
+
+Activity usa SSE em `/sse/activity`.
+
+Padrão esperado:
+
+- página inicial server-rendered;
+- `EventSource` como progressive enhancement;
+- fallback continua útil sem SSE;
+- eventos importantes aparecem em Activity e/ou run/task detail.
+
+Eventos de robustez, retry, driver e budget devem ser visíveis o suficiente para investigação operacional. Veja [Robustness](ROBUSTNESS.md) e [Operations Runbook](OPERATIONS.md).
+
+## Custom elements leves
+
+O shell registra custom elements pequenos em `layout.templ`.
+
+### `pc-tag-multiselect`
+
+Usado por `TagMultiSelectField`.
+
+Comportamento:
+
+- filtra tags disponíveis localmente;
+- cria tag nova inline;
+- renderiza chips;
+- submete hidden inputs repetidos;
+- suporta ArrowUp, ArrowDown, Enter, Escape e Backspace.
+
+Handlers devem ler valores repetidos do campo antes de fallback legado.
+
+### `pc-env-editor`
+
+Usado por `EnvEditorField`.
+
+Comportamento:
+
+- adiciona/remove linhas;
+- normaliza chaves para uppercase com `_`;
+- remove caracteres inválidos;
+- impede chaves começando por dígitos;
+- destaca duplicatas;
+- mascara valores por padrão;
+- permite reveal manual.
+
+Regra: não exibir valores sensíveis em docs, logs ou screenshots. Na UI, valores sensíveis devem ser revelados apenas por ação explícita.
+
+## Command palette
+
+A command palette global é aberta por `Ctrl+K` / `Cmd+K`.
+
+Ela:
+
+- pesquisa via `/api/search?q=...`;
+- renderiza resultados client-side;
+- permite navegação por setas;
+- usa Enter para abrir item selecionado;
+- fecha com Escape ou clique no backdrop.
+
+Ao adicionar novo tipo pesquisável:
+
+1. atualize `/api/search`;
+2. ajuste rendering se necessário;
+3. documente no [API Reference](API_REFERENCE.md);
+4. adicione teste/smoke se o fluxo for importante.
+
+## Modais
+
+Modais usam atributos de dados:
+
+- `data-open-modal`
+- `data-close-modal`
+- `data-modal`
+
+Regras:
+
+- manter modais fora de fragments com polling;
+- Escape fecha todos;
+- clique no backdrop fecha;
+- abrir modal foca primeiro input/textarea/select/button;
+- ações destrutivas devem usar estilo danger e confirmação explícita;
+- danger zones devem ficar visualmente separadas de actions normais.
+
+## Padrões por página
+
+### Dashboard
+
+Dashboard deve ser centro operacional:
+
+- top row com open work, running runs, blocked work, failures;
+- coluna principal com trabalho que precisa atenção;
+- coluna lateral com saúde do sistema e activity recente;
+- falhas críticas não devem ficar escondidas abaixo da dobra.
+
+### Tasks
+
+Tasks devem deixar claro:
+
+- status;
+- agent/workspace;
+- modo `once` vs `continuous`;
+- tentativas;
+- lock/run ativo;
+- subtasks/delegation quando houver;
+- comments separados de system activity.
+
+### Runs
+
+Runs são registros de observabilidade:
+
+- `/runs` lista execuções com filtros/status tabs;
+- `/runs/{id}` mostra output, erro, input context e metadata;
+- running runs usam partial polling focado;
+- timeout/retry deve ser legível sem abrir o banco.
+
+### Activity
+
+Activity deve transformar eventos técnicos em mensagens humanas.
+
+Eventos importantes:
+
+- `run.timeout`;
+- `run.recovered`;
+- `retry.scheduled`;
+- `budget.blocked`;
+- `driver.missing`.
+
+### Settings
+
+Settings contém configuração operacional e danger zone.
+
+Regras:
+
+- separar adapters/runtimes de danger zone;
+- mostrar diagnósticos de forma copiável/acionável;
+- operações destrutivas precisam confirmação;
+- backup/restore deve apontar para [Storage Architecture](STORAGE.md) e [Operations Runbook](OPERATIONS.md).
+
+## Acessibilidade e UX checklist
+
+Antes de finalizar UI:
+
+- [ ] A página tem título/subtítulo claros via `PageShell`?
+- [ ] Botões icon-only têm `aria-label`?
+- [ ] Campos têm label ou contexto explícito?
+- [ ] Estados empty/error/loading são legíveis?
+- [ ] Toast não é a única fonte de informação crítica?
+- [ ] Modais focam um controle ao abrir e fecham com Escape?
+- [ ] Ações destrutivas são visualmente separadas?
+- [ ] Polling não destrói input em edição?
+- [ ] Dark theme continua legível?
+- [ ] Console do browser fica limpo?
+
+## E2E e validação de UI
+
+Validação mínima ao alterar UI/Templ/CSS:
+
+```sh
+make templ-generate
+go test ./internal/adapters/web -count=1
+```
+
+Validação recomendada:
+
+```sh
+make test-e2e
+```
+
+Validação completa:
+
+```sh
+make check
+```
+
+Se estiver em Alpine e o browser do Playwright falhar, use a orientação em [Development Guide](DEVELOPMENT.md).
+
+## Checklist para nova página
+
+1. Defina rota em `server.go`.
+2. Crie/atualize ViewModel no handler.
+3. Renderize com `PageShell`.
+4. Use componentes de `ui.templ`.
+5. Use ícone existente ou adicione SVG inline necessário.
+6. Adicione nav item se for página top-level.
+7. Crie partials apenas para regiões live.
+8. Adicione teste web ou E2E smoke proporcional.
+9. Atualize [Project Map](PROJECT_MAP.md).
+10. Atualize [API Reference](API_REFERENCE.md) se houver rota/API relevante.
+11. Atualize este documento se introduzir padrão novo.
+
+## Checklist para novo componente
+
+1. Verifique se `ui.templ` já resolve.
+2. Nomeie com prefixo/convenção `pc-*` quando CSS for componente.
+3. Use tokens existentes.
+4. Garanta variante de dark theme se necessário.
+5. Adicione estado disabled/loading/error quando aplicável.
+6. Inclua acessibilidade mínima (`aria-*`, labels, foco).
+7. Evite JavaScript se HTML/CSS resolver.
+8. Se usar JS, registre de forma idempotente e compatível com HTMX swaps.
+9. Documente aqui se for reutilizável.
+
+## Antipadrões
+
+Evite:
+
+- duplicar markup complexo em múltiplas páginas;
+- adicionar framework SPA ao core;
+- carregar assets externos/CDNs;
+- criar CSS page-specific para algo reutilizável;
+- polling de página inteira;
+- modais dentro de containers pollados;
+- esconder failures críticos em texto pequeno;
+- usar apenas cor para distinguir status;
+- exibir valores sensíveis de env vars por padrão;
+- editar manualmente arquivos `*_templ.go` gerados.
+
+## Manutenção deste documento
+
+Atualize este documento quando:
+
+- criar componente Templ reutilizável;
+- alterar shell, navegação, tema, command palette ou modais;
+- introduzir novo padrão HTMX/SSE;
+- mudar estrutura de dashboard, task detail, run detail ou settings;
+- adicionar regras de acessibilidade/UX;
+- alterar workflow Templ ou validação de UI.
