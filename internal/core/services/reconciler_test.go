@@ -114,4 +114,56 @@ func TestReconcilerDetectsStalledRuns(t *testing.T) {
 	if len(wakeups) != 1 || wakeups[0].Reason != domain.WakeupReasonRetry {
 		t.Fatalf("expected 1 retry wakeup, got %d", len(wakeups))
 	}
+	events, _ := st.Events().ListByTask(context.Background(), task.ID)
+	if !hasEventType(events, domain.EventRunTimeout) {
+		t.Fatalf("expected run timeout event, got %#v", events)
+	}
+}
+
+type recordingCanceler struct{ canceled []string }
+
+func (r *recordingCanceler) CancelRun(ctx context.Context, run domain.Run) error {
+	r.canceled = append(r.canceled, run.ID)
+	return nil
+}
+
+func TestReconcilerRecoversRunningRunWithMissingTask(t *testing.T) {
+	st := memory.NewStorage()
+	clock := fixedClock{t: time.Date(2026, 6, 25, 15, 0, 0, 0, time.UTC)}
+	idgen := &seqID{}
+	bus := noopBus{}
+	logger := testLogger{}
+	last := clock.t.Add(-5 * time.Minute)
+	run := domain.Run{
+		ID:           "run_orphan",
+		TaskID:       "missing_task",
+		AgentID:      "agt_1",
+		Status:       domain.RunStatusRunning,
+		LastOutputAt: &last,
+		StallTimeout: 3600,
+		StartedAt:    clock.t.Add(-10 * time.Minute),
+	}
+	if err := st.Runs().Create(context.Background(), run); err != nil {
+		t.Fatalf("create run: %v", err)
+	}
+	canceler := &recordingCanceler{}
+	reconciler := NewReconciler(st, clock, bus, idgen, logger)
+	reconciler.SetCanceler(canceler)
+
+	reconciler.Reconcile(context.Background())
+
+	gotRun, _ := st.Runs().Get(context.Background(), run.ID)
+	if gotRun.Status != domain.RunStatusTimeout || gotRun.FinishedAt == nil {
+		t.Fatalf("expected orphan run timeout, got status=%s finished=%v", gotRun.Status, gotRun.FinishedAt)
+	}
+	if gotRun.Error == "" {
+		t.Fatal("expected orphan run to record recovery error")
+	}
+	events, _ := st.Events().ListByTask(context.Background(), run.TaskID)
+	if !hasEventType(events, domain.EventRunRecovered) {
+		t.Fatalf("expected run recovered event, got %#v", events)
+	}
+	if len(canceler.canceled) != 1 || canceler.canceled[0] != run.ID {
+		t.Fatalf("expected canceler called for orphan run, got %#v", canceler.canceled)
+	}
 }

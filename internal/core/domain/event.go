@@ -18,6 +18,8 @@ const (
 	EventRunCompleted   EventType = "run.completed"
 	EventRunFailed      EventType = "run.failed"
 	EventRunCanceled    EventType = "run.canceled"
+	EventRunTimeout     EventType = "run.timeout"
+	EventRunRecovered   EventType = "run.recovered"
 	EventDriverMissing  EventType = "driver.missing"
 	EventTaskDelegated  EventType = "task.delegated"
 	EventMessageCreated EventType = "message.created"

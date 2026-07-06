@@ -148,13 +148,16 @@ Entregas concluídas:
 - `RuntimeManager.CancelRun` encaminha o cancelamento para o adapter ativo.
 - Adapters Crush, Claurst e PicoClaw iniciam subprocessos em grupo próprio no Unix e cancelam o grupo inteiro com SIGTERM seguido de SIGKILL.
 - Regressão automatizada cobre cancelamento de filhos que ignoram SIGTERM.
+- Reconciler detecta runs sem output após `StallTimeout`, marca como `timeout`, chama cancelamento do runtime e reabre/reagenda a task quando cabível.
+- Recovery de lock expirado também fecha o run associado como `timeout` e emite evento `run.recovered`.
+- Runs órfãos sem task associada são marcados como `timeout`, cancelados no runtime e registrados em evento de recovery.
 
 Próximas entregas:
 
-- Run liveness (`LastOutputAt`, `ProcessID`, `StallTimeout`).
 - Retry queue com backoff e retryable vs non-retryable.
-- Reconciliação de locks/runs silenciosos.
 - UI/API de recovery para runs órfãos, travados ou parcialmente cancelados.
+- Métricas agregadas de liveness/recovery no dashboard e diagnostics.
+- Windows Job Objects para cancelamento completo de árvore de processos no Windows.
 
 Critério de aceite:
 

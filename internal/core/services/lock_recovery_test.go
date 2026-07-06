@@ -120,3 +120,51 @@ func TestStaleLockRecoveryReleasesExpiredLocks(t *testing.T) {
 		t.Fatal("task not returned to todo/needs_run")
 	}
 }
+
+func TestStaleLockRecoveryTimesOutMatchingRunningRun(t *testing.T) {
+	st := memory.NewStorage()
+	clock := fixedClock{t: time.Date(2026, 6, 25, 12, 0, 0, 0, time.UTC)}
+	idgen := &seqID{}
+	bus := noopBus{}
+	svc := NewTaskService(st, clock, idgen, bus)
+
+	agent := domain.Agent{ID: "agt_1", Name: "a", Type: "internal", Enabled: true, Capability: domain.CapabilityWorker, CreatedAt: clock.t, UpdatedAt: clock.t}
+	_ = st.Agents().Create(context.Background(), agent)
+
+	task, _ := svc.Create(context.Background(), agent.ID, "t", "do")
+	locked, _ := svc.Checkout(context.Background(), task.ID, agent.ID, "run_1", nil)
+	expired := clock.t.Add(-time.Hour)
+	locked.ExecutionLockedAt = &expired
+	locked.LockExpiresAt = &expired
+	_ = st.Tasks().Update(context.Background(), locked)
+	_ = st.Runs().Create(context.Background(), domain.Run{ID: "run_1", TaskID: task.ID, AgentID: agent.ID, Status: domain.RunStatusRunning, StartedAt: expired})
+
+	recovery := NewLockRecoveryService(st, clock, bus, idgen)
+	count, err := recovery.SweepStaleLocks(context.Background())
+	if err != nil {
+		t.Fatalf("sweep error: %v", err)
+	}
+	if count != 1 {
+		t.Fatalf("recovered=%d want 1", count)
+	}
+	gotRun, _ := st.Runs().Get(context.Background(), "run_1")
+	if gotRun.Status != domain.RunStatusTimeout || gotRun.FinishedAt == nil {
+		t.Fatalf("expected stale locked run timeout with finish time, got status=%s finished=%v", gotRun.Status, gotRun.FinishedAt)
+	}
+	if gotRun.Error == "" {
+		t.Fatal("expected stale locked run to record recovery error")
+	}
+	events, _ := st.Events().ListByTask(context.Background(), task.ID)
+	if !hasEventType(events, domain.EventRunRecovered) {
+		t.Fatalf("expected run recovered event, got %#v", events)
+	}
+}
+
+func hasEventType(events []domain.Event, eventType domain.EventType) bool {
+	for _, event := range events {
+		if event.Type == eventType {
+			return true
+		}
+	}
+	return false
+}

@@ -38,6 +38,16 @@ func (s *LockRecoveryService) SweepStaleLocks(ctx context.Context) (int, error) 
 		if task.LockExpiresAt == nil || task.LockExpiresAt.After(now) {
 			continue
 		}
+		if task.CheckoutRunID != "" {
+			if run, err := s.storage.Runs().Get(ctx, task.CheckoutRunID); err == nil && run.Status == domain.RunStatusRunning {
+				run.Status = domain.RunStatusTimeout
+				run.Error = "stale task lock recovered"
+				finished := now
+				run.FinishedAt = &finished
+				_ = s.storage.Runs().Update(ctx, run)
+				_ = s.storage.Events().Create(ctx, domain.Event{ID: s.idGen.NewID("evt"), Type: domain.EventRunRecovered, TaskID: task.ID, AgentID: task.AgentID, RunID: run.ID, Message: run.Error, CreatedAt: now})
+			}
+		}
 		task.CheckedOutByAgentID = ""
 		task.CheckoutRunID = ""
 		task.ExecutionLockedAt = nil

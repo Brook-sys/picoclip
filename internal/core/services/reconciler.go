@@ -144,9 +144,11 @@ func (r *Reconciler) detectStalledRuns(ctx context.Context) int {
 		}
 
 		run.Status = domain.RunStatusTimeout
+		run.Error = "run stalled: no output before stall timeout"
 		finished := now
 		run.FinishedAt = &finished
 		_ = r.storage.Runs().Update(ctx, run)
+		_ = r.storage.Events().Create(ctx, domain.Event{ID: r.idGen.NewID("evt"), Type: domain.EventRunTimeout, TaskID: run.TaskID, AgentID: run.AgentID, RunID: run.ID, Message: run.Error, CreatedAt: now})
 		if r.canceler != nil {
 			_ = r.canceler.CancelRun(ctx, run)
 		}
@@ -204,6 +206,19 @@ func (r *Reconciler) recoverOrphanedRuns(ctx context.Context) int {
 	now := r.clock.Now()
 	count := 0
 	for _, run := range runs {
+		if _, err := r.storage.Tasks().Get(ctx, run.TaskID); err != nil {
+			run.Status = domain.RunStatusTimeout
+			run.Error = "orphaned run recovered: task not found"
+			finished := now
+			run.FinishedAt = &finished
+			_ = r.storage.Runs().Update(ctx, run)
+			_ = r.storage.Events().Create(ctx, domain.Event{ID: r.idGen.NewID("evt"), Type: domain.EventRunRecovered, TaskID: run.TaskID, AgentID: run.AgentID, RunID: run.ID, Message: run.Error, CreatedAt: now})
+			if r.canceler != nil {
+				_ = r.canceler.CancelRun(ctx, run)
+			}
+			count++
+			continue
+		}
 		if run.LastOutputAt != nil {
 			continue
 		}
@@ -211,9 +226,11 @@ func (r *Reconciler) recoverOrphanedRuns(ctx context.Context) int {
 			continue
 		}
 		run.Status = domain.RunStatusTimeout
+		run.Error = "orphaned run recovered: missing output heartbeat"
 		finished := now
 		run.FinishedAt = &finished
 		_ = r.storage.Runs().Update(ctx, run)
+		_ = r.storage.Events().Create(ctx, domain.Event{ID: r.idGen.NewID("evt"), Type: domain.EventRunRecovered, TaskID: run.TaskID, AgentID: run.AgentID, RunID: run.ID, Message: run.Error, CreatedAt: now})
 		if r.canceler != nil {
 			_ = r.canceler.CancelRun(ctx, run)
 		}
