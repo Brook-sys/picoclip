@@ -220,7 +220,7 @@ Principais páginas web:
 | Tasks | `/tasks`, `/tasks/{id}` |
 | Runs | `/runs`, `/runs/{id}` |
 | Skills | `/skills`, `/skills/{id}` |
-| Activity | `/activity`, `/sse/activity` |
+| Activity/live streams | `/activity`, `/sse/activity`, `/sse/tasks/{id}`, `/sse/runs/{id}/logs` |
 | Settings | `/settings`, `/settings/adapters`, webhook/settings/runtime actions |
 
 ## Fluxo de execução de task

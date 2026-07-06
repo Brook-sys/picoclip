@@ -49,9 +49,25 @@ templ TaskDetailPage(task taskResponse, rawTask domain.Task, agents []domain.Age
 					</div>
 				}
 
-				<div id="task-live" hx-get={ "/partials/tasks/" + task.ID } hx-trigger="every 3s" hx-swap="innerHTML">
+				<div id="task-live" hx-get={ "/partials/tasks/" + task.ID } hx-swap="innerHTML" data-task-id={ task.ID } data-task-live-url={ "/partials/tasks/" + task.ID }>
 					@TaskLive(task, messages, runs, events, children, agents, projects)
 				</div>
+				<script>
+					(function(){
+						var root = document.getElementById('task-live');
+						var taskID = root ? root.getAttribute('data-task-id') : '';
+						if (!taskID || !root || !window.EventSource || window.__picoclipTaskLiveSource === taskID) return;
+						if (window.__picoclipTaskLiveHandle) window.__picoclipTaskLiveHandle.close();
+						window.__picoclipTaskLiveSource = taskID;
+						var source = new EventSource('/sse/tasks/' + taskID);
+						window.__picoclipTaskLiveHandle = source;
+						function refresh(){
+							if (window.htmx) htmx.ajax('GET', root.getAttribute('data-task-live-url'), '#task-live');
+						}
+						source.onmessage = refresh;
+						source.addEventListener('ping', function(){});
+					})();
+				</script>
 
 				<div class="panel issue-composer-card">
 					@SectionHeader("Comment", "Add context, answer questions, or intervene in the task thread.") {}

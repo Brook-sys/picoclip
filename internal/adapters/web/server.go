@@ -97,6 +97,7 @@ func (s *Server) Mount(mux *http.ServeMux) {
 	mux.HandleFunc("GET /skills/{id}", s.handleWebSkillDetail)
 	mux.HandleFunc("GET /activity", s.handleWebActivity)
 	mux.HandleFunc("GET /sse/activity", s.handleSSEActivity)
+	mux.HandleFunc("GET /sse/tasks/{id}", s.handleSSETask)
 	mux.HandleFunc("GET /sse/runs/{id}/logs", s.handleSSERunLogs)
 	mux.HandleFunc("GET /settings", s.handleWebSettings)
 	mux.HandleFunc("GET /settings/adapters", s.handleWebSettings)

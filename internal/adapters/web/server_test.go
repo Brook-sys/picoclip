@@ -293,15 +293,16 @@ func TestWebCreateAgentRejectsUnavailableNoop(t *testing.T) {
 	}
 }
 
-func TestTaskDetailUsesPartialPollingOnly(t *testing.T) {
+func TestTaskDetailUsesSSEDrivenPartialRefresh(t *testing.T) {
 	ts := newTestServer(t)
 	defer ts.Close()
 
 	client := ts.Client()
 	agent := postJSON(t, client, ts.URL+"/api/agents", map[string]any{"name": "UI Agent", "type": "noop"})
 	task := postJSON(t, client, ts.URL+"/agent-api/tasks", map[string]any{"from_agent_id": agent["id"], "assignee_agent_id": agent["id"], "prompt": "UI detail test"})
+	taskID := task["id"].(string)
 
-	res, err := client.Get(ts.URL + "/tasks/" + task["id"].(string))
+	res, err := client.Get(ts.URL + "/tasks/" + taskID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -311,14 +312,17 @@ func TestTaskDetailUsesPartialPollingOnly(t *testing.T) {
 		t.Fatal(err)
 	}
 	html := buf.String()
-	if strings.Contains(html, `hx-get="/tasks/`) || strings.Contains(html, `hx-trigger="every 2s" hx-target="body"`) || strings.Contains(html, `<section class="detail-grid" hx-`) {
-		t.Fatalf("task detail should not poll and swap body")
+	if strings.Contains(html, `hx-trigger="every`) || strings.Contains(html, `hx-get="/tasks/`) || strings.Contains(html, `<section class="detail-grid" hx-`) {
+		t.Fatalf("task detail should not poll or refresh a full page region")
 	}
-	if !strings.Contains(html, `id="task-live"`) || !strings.Contains(html, `/partials/tasks/`+task["id"].(string)) {
-		t.Fatalf("task detail should use task-live partial polling")
+	if !strings.Contains(html, `id="task-live"`) || !strings.Contains(html, `/partials/tasks/`+taskID) {
+		t.Fatalf("task detail should keep a small task-live partial target")
+	}
+	if !strings.Contains(html, `data-task-id="`+taskID+`"`) || !strings.Contains(html, `new EventSource('/sse/tasks/' + taskID)`) {
+		t.Fatalf("task detail should subscribe to task-scoped SSE")
 	}
 
-	partialRes, err := client.Get(ts.URL + "/partials/tasks/" + task["id"].(string))
+	partialRes, err := client.Get(ts.URL + "/partials/tasks/" + taskID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -329,5 +333,21 @@ func TestTaskDetailUsesPartialPollingOnly(t *testing.T) {
 	}
 	if !strings.Contains(partial.String(), "Thread") || strings.Contains(partial.String(), "<html") {
 		t.Fatalf("partial should render live fragment only")
+	}
+
+	sseReq, err := http.NewRequestWithContext(t.Context(), http.MethodGet, ts.URL+"/sse/tasks/"+taskID, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sseRes, err := client.Do(sseReq)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer sseRes.Body.Close()
+	if sseRes.StatusCode != http.StatusOK {
+		t.Fatalf("task SSE status = %d, want 200", sseRes.StatusCode)
+	}
+	if got := sseRes.Header.Get("Content-Type"); !strings.Contains(got, "text/event-stream") {
+		t.Fatalf("task SSE content-type = %q, want text/event-stream", got)
 	}
 }

@@ -182,8 +182,9 @@ Estas rotas são a interface humana principal. Elas podem retornar HTML completo
 
 | Método | Rota | Finalidade |
 | --- | --- | --- |
-| `GET` | `/sse/activity` | Stream de eventos da Activity. |
-| `GET` | `/sse/runs/{id}/logs` | Stream de logs de run. |
+| `GET` | `/sse/activity` | Stream global de eventos para a Activity. |
+| `GET` | `/sse/tasks/{id}` | Stream filtrado por task para atualização live do detalhe da task. |
+| `GET` | `/sse/runs/{id}/logs` | Stream de logs/eventos de run. |
 | `GET` | `/partials/tasks` | Fragmento de lista de tasks. |
 | `GET` | `/partials/tasks/{id}` | Fragmento de detalhe/live task. |
 | `GET` | `/partials/runs/{id}` | Fragmento de detalhe/live run. |

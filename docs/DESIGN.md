@@ -269,15 +269,22 @@ Aceitável para ações simples:
 hx-target="body" hx-swap="outerHTML"
 ```
 
-Preferido para regiões live:
+Preferido para regiões live orientadas a eventos:
 
 ```html
-hx-get="/partials/tasks/{id}"
-hx-trigger="every 3s"
-hx-swap="innerHTML"
+<div id="task-live"
+  hx-get="/partials/tasks/{id}"
+  hx-swap="innerHTML"
+  data-task-id="{id}"
+  data-task-live-url="/partials/tasks/{id}">
+</div>
+<script>
+  const source = new EventSource('/sse/tasks/' + taskID)
+  source.onmessage = () => htmx.ajax('GET', '/partials/tasks/' + taskID, '#task-live')
+</script>
 ```
 
-Nunca faça polling frequente de `<body>` inteiro.
+Polling pequeno ainda é aceitável como fallback ou para regiões sem eventos persistidos, mas a preferência para áreas colaborativas/live é SSE filtrado + partial pequeno. Nunca faça polling frequente de `<body>` inteiro.
 
 ### Partials
 
@@ -298,12 +305,14 @@ Ao criar partial:
 
 ## SSE e live observability
 
-Activity usa SSE em `/sse/activity`.
+Activity usa SSE em `/sse/activity`. Detalhe de task usa SSE filtrado em `/sse/tasks/{id}` para acionar refresh do fragmento `/partials/tasks/{id}` somente quando um evento da própria task chega. Detalhe de run usa `/sse/runs/{id}/logs` para anexar output e atualizar status final.
 
 Padrão esperado:
 
 - página inicial server-rendered;
 - `EventSource` como progressive enhancement;
+- stream SSE filtra no servidor quando a página tem escopo claro (`task_id`, `run_id`);
+- evento SSE não precisa carregar HTML: ele pode apenas acionar refresh de um partial pequeno;
 - fallback continua útil sem SSE;
 - eventos importantes aparecem em Activity e/ou run/task detail.
 

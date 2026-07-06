@@ -14,6 +14,11 @@ func (s *Server) handleSSEActivity(w http.ResponseWriter, r *http.Request) {
 	streamEvents(w, r, s.bus, func(ev domain.Event) bool { return true })
 }
 
+func (s *Server) handleSSETask(w http.ResponseWriter, r *http.Request) {
+	taskID := r.PathValue("id")
+	streamEvents(w, r, s.bus, func(ev domain.Event) bool { return ev.TaskID == taskID })
+}
+
 func (s *Server) handleSSERunLogs(w http.ResponseWriter, r *http.Request) {
 	runID := r.PathValue("id")
 	streamEvents(w, r, s.bus, func(ev domain.Event) bool {
