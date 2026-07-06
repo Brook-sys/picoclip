@@ -2,6 +2,7 @@ package services
 
 import (
 	"context"
+	"time"
 
 	"picoclip/internal/core/domain"
 	"picoclip/internal/core/ports"
@@ -21,6 +22,24 @@ func NewLockRecoveryService(storage ports.Storage, clock ports.Clock, bus ports.
 		bus:     bus,
 		idGen:   idGen,
 	}
+}
+
+func scheduleRecoveredContinuousTask(task *domain.Task, now time.Time) {
+	task.Status = domain.TaskStatusWaitingNextCycle
+	task.NeedsRun = false
+	task.FinishedAt = &now
+	if task.LoopPausedAt != nil {
+		task.LoopNextRunAt = nil
+		return
+	}
+	delay := task.LoopDelaySeconds
+	if delay < 1 {
+		delay = 60
+		task.LoopDelaySeconds = delay
+	}
+	nextRunAt := now.Add(time.Duration(delay) * time.Second)
+	task.LoopRunCount++
+	task.LoopNextRunAt = &nextRunAt
 }
 
 func (s *LockRecoveryService) SweepStaleLocks(ctx context.Context) (int, error) {
@@ -52,9 +71,15 @@ func (s *LockRecoveryService) SweepStaleLocks(ctx context.Context) (int, error) 
 		task.CheckoutRunID = ""
 		task.ExecutionLockedAt = nil
 		task.LockExpiresAt = nil
+		createRecoveryWakeup := true
 		if task.Status == domain.TaskStatusInProgress {
-			task.Status = domain.TaskStatusTodo
-			task.NeedsRun = true
+			if task.Mode == domain.TaskModeContinuous {
+				scheduleRecoveredContinuousTask(&task, now)
+				createRecoveryWakeup = false
+			} else {
+				task.Status = domain.TaskStatusTodo
+				task.NeedsRun = true
+			}
 		}
 		task.UpdatedAt = now
 		if err := s.storage.Tasks().Update(ctx, task); err != nil {
@@ -68,7 +93,9 @@ func (s *LockRecoveryService) SweepStaleLocks(ctx context.Context) (int, error) 
 			Message:   "stale lock recovered",
 			CreatedAt: now,
 		})
-		_, _ = NewWakeupService(s.storage, s.clock, s.idGen).Create(ctx, CreateWakeupInput{AgentID: task.AgentID, TaskID: task.ID, Reason: domain.WakeupReasonRecovery, Priority: task.Priority})
+		if createRecoveryWakeup {
+			_, _ = NewWakeupService(s.storage, s.clock, s.idGen).Create(ctx, CreateWakeupInput{AgentID: task.AgentID, TaskID: task.ID, Reason: domain.WakeupReasonRecovery, Priority: task.Priority})
+		}
 		count++
 	}
 	return count, nil

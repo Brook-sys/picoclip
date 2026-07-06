@@ -101,6 +101,8 @@ A página Activity transforma esses eventos em mensagens legíveis. Por exemplo,
 
 Tasks contínuas não são retentadas da mesma forma que tasks one-shot. Quando uma task contínua termina ou é recuperada, PicoClip agenda o próximo ciclo usando o delay do loop, a menos que a task tenha sido cancelada, concluída ou pausada.
 
+Se o lock de uma task contínua expira enquanto um run ainda está ativo, recovery fecha o run como timeout, limpa o checkout e move a task para `waiting_next_cycle` com um novo `LoopNextRunAt`. Ele **não** cria um recovery wakeup imediato e **não** define `NeedsRun=true`. A task só fica executável quando o próximo ciclo do loop vence e o reconciler a ativa.
+
 Isso mantém trabalho recorrente previsível e impede que recovery transforme um loop contínuo em um retry loop apertado.
 
 ## Limitações atuais

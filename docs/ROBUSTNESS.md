@@ -101,6 +101,8 @@ The Activity page turns these into human-readable messages. For example, a retry
 
 Continuous tasks are not retried the same way one-shot tasks are. When a continuous task finishes or is recovered, PicoClip schedules the next cycle according to the task loop delay, unless the task was canceled, completed, or paused.
 
+If a continuous task lock expires while a run is still active, recovery closes the run as timed out, clears the checkout, and moves the task to `waiting_next_cycle` with a new `LoopNextRunAt`. It does **not** create an immediate recovery wakeup and does **not** set `NeedsRun=true`. The task only becomes runnable when the next loop cycle is due and the reconciler activates it.
+
 This keeps recurring work predictable and prevents recovery from turning a continuous loop into a tight retry loop.
 
 ## Current limitations

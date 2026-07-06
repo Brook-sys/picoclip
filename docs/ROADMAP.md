@@ -153,6 +153,7 @@ Entregas concluídas:
 - Runs órfãos sem task associada são marcados como `timeout`, cancelados no runtime e registrados em evento de recovery.
 - Retry wakeups usam backoff exponencial com cap de 5 minutos e não deixam a task executável antes do `DueAt` ser processado.
 - Retry de timeout persiste metadata de aprendizado (`previous_run_id`, `attempt`, `backoff_seconds`, `retryable`, `reason`) e evento `retry.scheduled` visível na Activity UI.
+- Recovery de lock expirado em task contínua agenda o próximo ciclo com `LoopNextRunAt`, sem wakeup imediato e sem burlar o delay do loop.
 
 Próximas entregas:
 

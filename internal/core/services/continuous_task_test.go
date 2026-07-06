@@ -2,6 +2,7 @@ package services
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -93,6 +94,139 @@ func TestReconcilerActivatesDueContinuousTask(t *testing.T) {
 	}
 	if got.LoopNextRunAt != nil {
 		t.Fatalf("expected next run cleared, got %v", got.LoopNextRunAt)
+	}
+}
+
+func TestStaleLockRecoverySchedulesNextContinuousCycleWithoutImmediateDispatch(t *testing.T) {
+	st := memory.NewStorage()
+	clock := fixedClock{t: time.Date(2026, 7, 4, 11, 30, 0, 0, time.UTC)}
+	idgen := &seqID{}
+	agent := domain.Agent{ID: "agent_recover_cont", Name: "agent", Type: "noop", Enabled: true, CreatedAt: clock.t, UpdatedAt: clock.t}
+	if err := st.Agents().Create(context.Background(), agent); err != nil {
+		t.Fatal(err)
+	}
+	expired := clock.t.Add(-time.Hour)
+	task := domain.Task{
+		ID:                  "task_recover_cont",
+		AgentID:             agent.ID,
+		Title:               "continuous",
+		Prompt:              "watch",
+		Status:              domain.TaskStatusInProgress,
+		Mode:                domain.TaskModeContinuous,
+		LoopDelaySeconds:    90,
+		LoopRunCount:        2,
+		NeedsRun:            false,
+		CheckoutRunID:       "run_recover_cont",
+		CheckedOutByAgentID: agent.ID,
+		ExecutionLockedAt:   &expired,
+		LockExpiresAt:       &expired,
+		CreatedAt:           clock.t,
+		UpdatedAt:           clock.t,
+	}
+	if err := st.Tasks().Create(context.Background(), task); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.Runs().Create(context.Background(), domain.Run{ID: "run_recover_cont", TaskID: task.ID, AgentID: agent.ID, Status: domain.RunStatusRunning, StartedAt: expired}); err != nil {
+		t.Fatal(err)
+	}
+
+	recovered, err := NewLockRecoveryService(st, clock, noopBus{}, idgen).SweepStaleLocks(context.Background())
+	if err != nil {
+		t.Fatalf("sweep: %v", err)
+	}
+	if recovered != 1 {
+		t.Fatalf("recovered=%d want 1", recovered)
+	}
+
+	got, err := st.Tasks().Get(context.Background(), task.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.CheckoutRunID != "" || got.CheckedOutByAgentID != "" || got.ExecutionLockedAt != nil || got.LockExpiresAt != nil {
+		t.Fatalf("expected checkout cleared, got %#v", got)
+	}
+	if got.Status != domain.TaskStatusWaitingNextCycle || got.NeedsRun {
+		t.Fatalf("expected waiting next cycle without immediate run, got status=%s needs=%v", got.Status, got.NeedsRun)
+	}
+	wantNext := clock.t.Add(90 * time.Second)
+	if got.LoopNextRunAt == nil || !got.LoopNextRunAt.Equal(wantNext) {
+		t.Fatalf("next run at=%v want %v", got.LoopNextRunAt, wantNext)
+	}
+	if got.LoopRunCount != 3 {
+		t.Fatalf("loop count=%d want 3", got.LoopRunCount)
+	}
+
+	claimed, _, err := st.Tasks().ClaimNextRunnable(context.Background(), clock.t, 30*time.Minute)
+	if !errors.Is(err, domain.ErrNoPendingTasks) {
+		t.Fatalf("expected no immediate dispatch after recovery, claimed=%#v err=%v", claimed, err)
+	}
+
+	wakeups, _ := st.Wakeups().ListPending(context.Background(), clock.t.Add(time.Hour), 10)
+	if len(wakeups) != 0 {
+		t.Fatalf("expected continuous recovery to rely on loop schedule, got wakeups=%#v", wakeups)
+	}
+
+	dueClock := fixedClock{t: wantNext}
+	NewReconciler(st, dueClock, noopBus{}, idgen, testLogger{}).Reconcile(context.Background())
+	claimed, _, err = st.Tasks().ClaimNextRunnable(context.Background(), wantNext, 30*time.Minute)
+	if err != nil {
+		t.Fatalf("expected claimable after next cycle due: %v", err)
+	}
+	if claimed.ID != task.ID {
+		t.Fatalf("claimed task=%s want %s", claimed.ID, task.ID)
+	}
+}
+
+func TestStaleLockRecoveryKeepsPausedContinuousTaskPaused(t *testing.T) {
+	st := memory.NewStorage()
+	clock := fixedClock{t: time.Date(2026, 7, 4, 11, 45, 0, 0, time.UTC)}
+	idgen := &seqID{}
+	pausedAt := clock.t.Add(-10 * time.Minute)
+	expired := clock.t.Add(-time.Hour)
+	task := domain.Task{
+		ID:                  "task_paused_recover",
+		AgentID:             "agent_paused",
+		Title:               "continuous paused",
+		Prompt:              "watch",
+		Status:              domain.TaskStatusInProgress,
+		Mode:                domain.TaskModeContinuous,
+		LoopDelaySeconds:    90,
+		LoopRunCount:        4,
+		LoopPausedAt:        &pausedAt,
+		CheckoutRunID:       "run_paused_recover",
+		CheckedOutByAgentID: "agent_paused",
+		ExecutionLockedAt:   &expired,
+		LockExpiresAt:       &expired,
+		CreatedAt:           clock.t,
+		UpdatedAt:           clock.t,
+	}
+	if err := st.Tasks().Create(context.Background(), task); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.Runs().Create(context.Background(), domain.Run{ID: "run_paused_recover", TaskID: task.ID, AgentID: task.AgentID, Status: domain.RunStatusRunning, StartedAt: expired}); err != nil {
+		t.Fatal(err)
+	}
+
+	_, err := NewLockRecoveryService(st, clock, noopBus{}, idgen).SweepStaleLocks(context.Background())
+	if err != nil {
+		t.Fatalf("sweep: %v", err)
+	}
+	got, err := st.Tasks().Get(context.Background(), task.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Status != domain.TaskStatusWaitingNextCycle || got.NeedsRun || got.LoopNextRunAt != nil {
+		t.Fatalf("expected paused continuous task to stay waiting without next run, got %#v", got)
+	}
+	if got.LoopPausedAt == nil || !got.LoopPausedAt.Equal(pausedAt) {
+		t.Fatalf("pause timestamp changed: %v want %v", got.LoopPausedAt, pausedAt)
+	}
+	if got.LoopRunCount != 4 {
+		t.Fatalf("loop count=%d want unchanged 4", got.LoopRunCount)
+	}
+	wakeups, _ := st.Wakeups().ListPending(context.Background(), clock.t.Add(time.Hour), 10)
+	if len(wakeups) != 0 {
+		t.Fatalf("expected paused continuous recovery to avoid wakeups, got %#v", wakeups)
 	}
 }
 
