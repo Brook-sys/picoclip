@@ -2,6 +2,7 @@ package services
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -242,21 +243,34 @@ func (s *TaskService) Cancel(ctx context.Context, id, reason string) (domain.Tas
 	now := s.clock.Now()
 	activeRunID := task.CheckoutRunID
 
-	task.Status = domain.TaskStatusCancelled
-	task.NeedsRun = false
-	task.CheckoutRunID = ""
-	task.CheckedOutByAgentID = ""
-	task.ExecutionLockedAt = nil
-	task.LockExpiresAt = nil
+	task, err = s.lifecycle.Apply(task, TaskTransition{From: task.Status, To: domain.TaskStatusCancelled, Comment: reason, Now: now})
+	if err != nil {
+		return domain.Task{}, err
+	}
 	task.CancelReason = reason
-	task.FinishedAt = &now
-	task.CancelledAt = &now
-	task.UpdatedAt = now
+
+	var activeRun domain.Run
+	hasActiveRun := false
+	if activeRunID != "" {
+		if run, runErr := s.storage.Runs().Get(ctx, activeRunID); runErr == nil {
+			activeRun = run
+			hasActiveRun = true
+		}
+	}
+
 	err = s.storage.RunInTx(ctx, func(txCtx context.Context) error {
 		if err := s.storage.Tasks().Update(txCtx, task); err != nil {
 			return err
 		}
-		event := domain.Event{ID: s.idGen.NewID("evt"), Type: domain.EventTaskCanceled, TaskID: task.ID, AgentID: task.AgentID, Message: reason, CreatedAt: now}
+		if hasActiveRun {
+			activeRun.Status = domain.RunStatusCanceled
+			activeRun.Error = reason
+			activeRun.FinishedAt = &now
+			if err := s.storage.Runs().Update(txCtx, activeRun); err != nil {
+				return err
+			}
+		}
+		event := domain.Event{ID: s.idGen.NewID("evt"), Type: domain.EventTaskCanceled, TaskID: task.ID, AgentID: task.AgentID, RunID: activeRunID, Message: reason, CreatedAt: now}
 		if err := s.storage.Events().Create(txCtx, event); err != nil {
 			return err
 		}
@@ -266,14 +280,14 @@ func (s *TaskService) Cancel(ctx context.Context, id, reason string) (domain.Tas
 		return domain.Task{}, err
 	}
 
-	if activeRunID != "" {
-		if run, runErr := s.storage.Runs().Get(ctx, activeRunID); runErr == nil {
-			if s.canceler != nil {
-				_ = s.canceler.CancelRun(ctx, run)
-			} else if run.ProcessID > 0 {
-				if p, err := os.FindProcess(run.ProcessID); err == nil {
-					_ = p.Kill()
-				}
+	if hasActiveRun {
+		if s.canceler != nil {
+			if cancelErr := s.canceler.CancelRun(ctx, activeRun); cancelErr != nil && !errors.Is(cancelErr, domain.ErrDriverUnavailable) {
+				return task, cancelErr
+			}
+		} else if activeRun.ProcessID > 0 {
+			if p, err := os.FindProcess(activeRun.ProcessID); err == nil {
+				_ = p.Kill()
 			}
 		}
 	}

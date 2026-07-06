@@ -88,7 +88,35 @@ By default PicoClip listens on `0.0.0.0:8080`. You can change it with:
 BIND=127.0.0.1 PORT=9090 ./picoclip-v0.0.1-linux-amd64
 ```
 
-### Option 2: Run from source
+### Option 2: Run with Docker / Podman
+
+Default Alpine-based image:
+
+```sh
+docker run --rm -p 8080:8080 \
+  -v picoclip-data:/app/data \
+  -v picoclip-workspaces:/app/workspaces \
+  ghcr.io/brook-sys/picoclip:latest
+```
+
+If you need the Claurst runtime, use the Debian/glibc image variant because the official Claurst Linux binary does not run reliably on Alpine/musl:
+
+```sh
+docker run --rm -p 8080:8080 \
+  -v picoclip-data:/app/data \
+  -v picoclip-workspaces:/app/workspaces \
+  ghcr.io/brook-sys/picoclip:latest-debian
+```
+
+Then open:
+
+```text
+http://127.0.0.1:8080
+```
+
+You can also use `podman run` with the same arguments.
+
+### Option 3: Run from source
 
 Requirements:
 

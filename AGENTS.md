@@ -268,13 +268,40 @@ make templ-generate
 go run cmd/picoclip/main.go
 ```
 
-Padrão: `0.0.0.0:8080`.
+Padrão oficial do projeto: `0.0.0.0:8080`.
 
 Configuração:
 
 ```bash
 BIND=127.0.0.1 PORT=9090 go run cmd/picoclip/main.go
 ```
+
+### Utilitário local do agente
+
+Existe um script local não versionado em `scripts/dev-local.sh`, ignorado pelo Git via `.gitignore`. Usar quando disponível para tarefas repetitivas deste ambiente.
+
+Padrão do script local: `PORT=8088`, `BASE_URL=http://127.0.0.1:8088`, binário em `tmp/picoclip-dev` e logs em `tmp/picoclip-dev.log`.
+
+Comandos úteis:
+
+```bash
+scripts/dev-local.sh start
+scripts/dev-local.sh stop
+scripts/dev-local.sh restart
+scripts/dev-local.sh status
+scripts/dev-local.sh logs
+scripts/dev-local.sh check
+scripts/dev-local.sh full-check
+scripts/dev-local.sh e2e
+```
+
+Regras:
+
+- não commitar `scripts/dev-local.sh`;
+- preferir `scripts/dev-local.sh start` para testes manuais locais na porta `8088`;
+- antes de E2E local, confirmar `scripts/dev-local.sh status`;
+- se o script não existir, seguir os comandos padrão do Makefile;
+- sempre que surgir um ponto recorrente de atrito no fluxo, tarefa repetitiva, validação manual frequente ou oportunidade clara de automação, comunicar ao usuário antes de implementar para planejarmos se deve virar comando no script shell local.
 
 ### Live reload
 

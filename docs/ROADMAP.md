@@ -1,330 +1,415 @@
-# PicoClip — Roadmap Técnico e Produto
+# PicoClip — Roadmap Canônico (Paperclip Alignment)
 
-## Objetivo
+Status: 2026-06-25
 
-Transformar PicoClip em uma alternativa leve ao Paperclip, com foco em orquestração local de agentes, projetos, skills, permissões, tarefas, delegação e operação via UI/API.
+Este roadmap é a referência absoluta para evolução do PicoClip. Ele substitui versões anteriores e deve ser seguido em ordem.
 
-## Princípios
+O objetivo é transformar PicoClip em um sistema local-first que oferece as capacidades centrais do Paperclip (orquestração de agentes, tarefas/índices, heartbeat, checkout/locking, comentários/inbox, delegação, hierarquia, permissões, custos/tokens, recuperação, UI e APIs) com menor consumo de RAM, menor overhead de tokens e maior modularidade.
 
-1. Core pequeno e desacoplado.
-2. Storage, drivers, memória, segredos e integrações como adaptadores.
-3. UI profissional, mas leve: server-rendered + HTMX.
-4. Permissões e capacidades precisam mudar comportamento real, não apenas aparecer na tela.
-5. Skills devem ser pacotes reais de conhecimento/ações, não apenas texto solto.
-6. Projetos devem isolar contexto, arquivos, agentes, tarefas e skills.
-7. Agentes devem conseguir entender e operar o próprio PicoClip via APIs documentadas.
+Princípios que não podem ser violados:
 
-## Fase 0 — Estado atual
+- Core pequeno, sem frameworks pesados.
+- Storage, runtimes, memória e segredos como adaptadores.
+- UI server-rendered + HTMX.
+- Permissões e capacidades devem mudar comportamento real.
+- Skills são pacotes de contexto/ação.
+- Projetos isolam contexto, arquivos e execução.
+- Agentes devem operar o sistema via APIs documentadas.
+- Menos tokens e menos RAM são prioridade.
 
-Status: em andamento, parcialmente implementado.
+## Visão de Estado Final
+
+PicoClip deve oferecer:
+
+- tarefas como issues com lifecycle completo;
+- agentes com heartbeat, inbox, checkout, contexto e execução;
+- sub-tarefas, delegação e hierarquia;
+- comentários, mensagens e atenção/inbox;
+- permissões reais e enforcement;
+- custos/tokens como ledger + orçamentos;
+- workspaces isolados por execução;
+- runtimes como adaptadores eventados;
+- UI e APIs que permitem operação completa por humanos e agentes;
+- recuperação, retry e resiliência.
+
+## Fases e Entregas
+
+### Fase 0 — Fundação Estável (Concluída)
 
 Entregue:
 
-- Core/adapters.
-- Memory storage.
-- Engine básico.
-- Agentes.
-- Tarefas.
-- Runs.
-- Mensagens.
-- Delegação.
-- Projetos com pasta.
-- Skills built-in/custom.
-- Capacidades predefinidas.
-- API para agentes.
-- UI separada por páginas.
+- Domínio: Task, Agent, Run, Message, Workspace, Skill, Event, RuntimeState.
+- Serviços: TaskService, AgentService, Runner, Dispatcher, Scheduler, RuntimeManager, SkillService, WorkspaceService.
+- Runtimes: noop, crush, picoclaw, claurst.
+- UI: páginas separadas + detail redesign + inline edit + follow-ups.
+- APIs: admin + agent-api.
+- Persistência: SQLite completo.
+- Tokens: contadores em Run/Task/Agent.
+- Eventos/SSE.
+- Skills built-in.
 
-Ainda frágil:
+Estado: estável, mas sem lifecycle formal, heartbeat, inbox, ledger de custos, workspaces isolados, enforcement de permissões e recuperação forte.
 
-- persistência;
-- permissões aplicadas;
-- cancelamento forte;
-- logs em tempo real;
-- detalhes de entidades;
-- skill packages completos.
+### Fase 1 — Ciclo de Vida e Execução Robusta (Prioridade Máxima)
 
-## Fase 1 — Produto utilizável localmente
+Objetivo: tornar o ciclo de trabalho confiável e próximo do Paperclip.
 
-Prioridade: alta.
+#### 1.1 Matriz de Transição de Tarefas
 
-### 1.1 Persistência SQLite
+Entregas:
 
-Entregar:
-
-- adapter `internal/adapters/storage/sqlite`;
-- schema/migrations;
-- configuração por env;
-- persistência de todas entidades;
-- testes básicos.
+- `TaskLifecycle` com tabela de transições permitidas.
+- Regras: comentário obrigatório em `blocked`/`done`/`cancelled`.
+- Efeitos colaterais documentados e testados.
+- `in_review` e `backlog` úteis.
 
 Critério de aceite:
 
-- criar projeto/agente/tarefa/skill;
-- reiniciar servidor;
-- dados continuam existindo.
+- todo transition tem teste.
+- UI e Agent API respeitam matriz.
 
-### 1.2 Permissões reais
+#### 1.2 Checkout Atômico e Locks
 
-Entregar:
+Entregas:
 
-- identidade de agente para `/agent-api`;
-- middleware de permissão;
-- checagem nos endpoints de ação;
-- eventos de auditoria.
-
-Critério de aceite:
-
-- Observer não consegue criar/delegar/cancelar;
-- Coordinator consegue delegar;
-- Operator consegue cancelar;
-- Administrator consegue gerir agentes/skills.
-
-### 1.3 Detalhes de entidade
-
-Entregar páginas:
-
-- `/projects/{id}`;
-- `/agents/{id}`;
-- `/tasks/{id}`;
-- `/skills/{id}`.
+- `CheckoutRunID` obrigatório em checkout por run.
+- `ExecutionLockedAt`, `LockExpiresAt`.
+- Stale lock sweeper.
+- 409 Conflict explícito no Agent API.
+- Release endpoint.
 
 Critério de aceite:
 
-- tarefa mostra mensagens, runs, eventos, subtarefas e output;
-- projeto mostra agentes, tarefas, skills e pasta;
-- agente mostra capability, permissões, skills e tarefas;
-- skill mostra instruções e arquivos.
+- tarefa não tem mais de um checkout ativo.
+- run terminal não deixa lock pendente.
+- stale locks são limpos periodicamente.
 
-### 1.4 Cancelamento real
+#### 1.3 Heartbeat/Wakeup Engine
 
-Entregar:
+Entregas:
 
-- controle de execução ativa;
-- cancel func por task/run;
-- driver recebe context cancelável;
-- cancelar interrompe subprocesso.
-
-Critério de aceite:
-
-- tarefa running muda para canceled rapidamente;
-- processo externo é encerrado;
-- run fica canceled.
-
-## Fase 2 — Workspace de agentes
-
-Prioridade: alta/média.
-
-### 2.1 Projeto como contexto real
-
-Entregar:
-
-- driver executando com cwd no projeto;
-- endpoint para listar arquivos do projeto;
-- endpoint para ler arquivos permitidos;
-- contexto do projeto no prompt;
-- arquivos `.picoclip/context.md` ou similar.
+- `WakeupRequest` (AgentID, Reason, TaskID, Priority, DueAt).
+- Wake reasons: assignment, comment, manual, retry, schedule, recovery.
+- Scheduler reconcilia primeiro, depois dispatcha wakeups.
+- Runner inicia heartbeat com inbox-lite e heartbeat-context.
 
 Critério de aceite:
 
-- agente consegue descobrir arquivos do projeto via API;
-- agente recebe contexto do projeto automaticamente.
+- heartbeat pode ler inbox e decidir checkout.
+- wakeups são priorizados e persistidos.
 
-### 2.2 Skills como pacotes
+#### 1.4 Inbox e Heartbeat Context Compacto
 
-Entregar:
+Entregas:
 
-- skill manifest;
-- múltiplos arquivos;
-- edição de skill;
-- import/export de diretório;
-- atribuição de skills a agentes;
-- validação de paths.
-
-Formato sugerido:
-
-```text
-skills/
-  my-skill/
-    skill.json
-    SKILL.md
-    references/
-    scripts/
-    examples/
-```
+- `GET /agent-api/agents/me/inbox-lite`
+- `GET /agent-api/tasks/{id}/heartbeat-context`
+- Razão de wakeup no contexto.
+- Contexto inclui: título, descrição, último comentário do usuário, APIs disponíveis, skills relevantes.
 
 Critério de aceite:
 
-- criar skill com múltiplos arquivos;
-- atribuir a agente;
-- agente recebe todos os arquivos relevantes no prompt/contexto.
+- prompt do primeiro heartbeat é compacto e útil.
+- agente consegue descobrir o que fazer sem prompt gigante.
 
-### 2.3 Interoperabilidade melhor
+#### 1.5 Permissões com Enforcement Real
 
-Entregar:
+Entregas:
 
-- comandos estruturados;
-- protocolo de agent actions;
-- parent task sabe subtarefas;
-- resumo de subtarefas volta ao parent;
-- conversa entre agentes visível.
+- `Authorizer` central.
+- Checagem em endpoints de ação (create/update/delegate/cancel, skills, runtimes, settings).
+- Eventos de auditoria.
 
 Critério de aceite:
 
-- agente coordinator delega subtarefa;
-- subtarefa aparece no parent;
-- conclusão da subtarefa pode ser incorporada ao parent.
+- observer não consegue criar/delegar/cancelar;
+- coordinator consegue delegar;
+- operator consegue cancelar;
+- administrador consegue gerir agentes/skills/runtimes.
 
-## Fase 3 — Operação e observabilidade
+#### 1.6 Ledger de Uso e Custos
 
-Prioridade: média.
+Entregas:
 
-### 3.1 Logs e eventos em tempo real
-
-Entregar:
-
-- event store consistente;
-- bus fan-out;
-- SSE;
-- timeline por tarefa/projeto/agente;
-- logs incrementais.
+- `UsageEvent` (RunID, TaskID, AgentID, Provider, Model, Input/Output/Cached tokens, CostMicros).
+- Agregação em Agent/Task/Project.
+- Orçamentos simples (warn/disable).
 
 Critério de aceite:
 
-- UI atualiza sem polling destrutivo;
-- output aparece progressivamente.
+- tokens reais ou estimados são persistidos por run;
+- UI mostra uso por agente/tarefa/projeto.
 
-### 3.2 Execução robusta
+#### 1.7 Cancelamento e Recuperação Fortes
 
-Entregar:
+Entregas:
 
-- retry;
-- requeue;
-- max attempts configurável;
-- timeout correto;
-- status detalhados;
-- stderr/stdout separados.
+- `Cancel` mata processo externo.
+- Run liveness (`LastOutputAt`, `ProcessID`, `StallTimeout`).
+- Retry queue com backoff e retryable vs non-retryable.
+- Reconciliação de locks/runs silenciosos.
 
-### 3.3 Drivers
+Critério de aceite:
 
-Entregar:
+- cancelamento de run mata subprocesso;
+- run travado é detectado e recuperado.
 
-- Picoclaw driver;
-- Crush driver robusto;
-- driver config por agente;
-- seleção de cwd/env;
-- logs streaming.
+### Fase 2 — Heartbeat Completo e Inbox Operacional
 
-## Fase 4 — Integrações
+Objetivo: agentes operam como no Paperclip.
 
-Prioridade: média/baixa.
+#### 2.1 Wakeup por Eventos
 
-Possíveis integrações:
+Entregas:
 
-- Sops como secret provider;
-- Engram como memory provider;
-- Beads como task graph/issue graph;
-- Gentle-AI como referência de comportamento/UX;
-- outros CLIs locais.
+- wakeup em assignment, comment, manual, retry, schedule, recovery.
+- Scheduler processa wakeups em vez de só `NeedsRun`.
 
-## Fase 5 — Qualidade e distribuição
+#### 2.2 Inbox e UI de Atenção
 
-Entregar:
+Entregas:
 
-- testes unitários;
-- testes HTTP;
-- testes de storage;
-- testes de runner;
-- testes de permissões;
-- release build;
-- documentação de instalação;
-- exemplos de uso.
+- Inbox page (assigned, blocked, in_review, failed, attention).
+- Agent detail mostra inbox e load atual.
+- Dashboard mostra filas de atenção.
 
-## Backlog detalhado
+#### 2.3 Delegation e Subtarefas
 
-### UI
+Entregas:
 
-- Melhorar visual com design system consistente.
-- Adicionar breadcrumbs.
-- Adicionar busca/filtros.
-- Adicionar feedback de ação.
-- Adicionar confirmação para delete/cancel.
-- Adicionar edição inline ou telas de edição.
-- Evitar polling substituir formulários abertos.
+- `BlockParentUntilDone`.
+- Delegation plan + batch create.
+- Resumo de children no parent.
+- Manager chain permission.
 
-### API
+#### 2.4 Comentários e Thread
 
-- Criar OpenAPI.
-- Documentar schemas.
-- Padronizar erros JSON.
-- Separar API pública/admin de agent-api.
-- Criar autenticação local simples.
-- Expor settings headless para prompts, env vars e adapters.
+Entregas:
 
-### Prompts e adapters
+- `Message` com `CreatedByRunID`, `Metadata`, `Kind`.
+- Comment-driven wakeup.
+- Thread visível e resumido no prompt.
 
-- Separar prompts de sistema em arquivos dedicados.
-- Implementar cascata de prompts: global, projeto, adapter, permissões, agente, skills e task.
-- Permitir edição de prompt global pela UI/API.
-- Permitir prompt custom opcional na criação/edição de agente.
-- Implementar variáveis de ambiente globais, por projeto, por adapter e por agente.
-- Criar settings globais por adapter, começando por Crush: binário, args padrão, timeout, cwd strategy e env.
+### Fase 3 — Workspaces, Runtimes e Skills Avançados
 
-### Segurança
+Objetivo: execução segura, repetível e extensível.
 
-- Enforce de permissões.
-- Path traversal protection em skills/projetos.
-- Não logar segredos.
-- Limitar leitura de arquivos.
-- Auditar ações destrutivas.
+#### 3.1 Workspace Isolation
 
-### Storage
+Entregas:
 
-- SQLite.
-- Migrações.
-- Backup/export.
-- Import.
+- Diretório de execução por task/run.
+- Validação de path containment.
+- Workspace hooks (after_create, before_run, after_run).
+- `cmd.Dir` = workspace path.
 
-### Agentes
+#### 3.2 Runtime Adapter Eventado
 
-- Modelo permission-first no lugar de presets rígidos.
-- Permissões explícitas por agente: leitura, escrita, criar tasks, delegar, cancelar, criar agentes, gerenciar skills, settings e adapters.
-- Permission skills embutidas e editáveis para ensinar o agente a usar cada permissão.
-- Reset de permission skills embutidas para o valor padrão.
-- Agent profile mais rico.
-- Agent memory.
-- Agent environment variables.
-- Prompt custom opcional por agente.
-- Configuração por adapter/agente.
+Entregas:
 
-### Tarefas
+- `RuntimeSession` e `RuntimeEvent`.
+- `ExecuteStream` opcional.
+- Cancel real.
+- Liveness metadata.
+- Parse de usage real (quando runtime expõe).
 
-- Prioridade real.
-- Fila por projeto/agente.
-- Cancelamento forte.
-- Retry.
-- Subtasks agregadas.
-- Dependencies.
+#### 3.3 Protocolo de Comunicação com Agente
 
-### Skills
+Entregas:
 
-- Seguir o padrão Agent Skills (`SKILL.md` com YAML frontmatter, `scripts/`, `references/`, `assets/`).
-- Múltiplos arquivos.
-- Upload/import.
-- Manifest derivado de `SKILL.md`.
-- Versionamento.
-- Validação de nome, descrição, frontmatter e paths.
-- Teste de skill.
-- Catálogos/lojas de skills como ClawHub, skill.sh e outros registries compatíveis.
-- Instalação de skill em um clique pela UI.
-- Atualização/removal de skills instaladas por loja.
-- Política de uso por agente, tipo de agente ou permissão.
+- `.picoclip/status` (blocked, needs-human-review, done).
+- MCP sidecar opcional.
+- Env vars: `PICOCLIP_AGENT_ID`, `PICOCLIP_RUN_ID`, `PICOCLIP_TASK_ID`, `PICOCLIP_API_BASE`.
 
-## Ordem recomendada imediata
+#### 3.4 Skills como Pacotes
 
-1. Atualizar `AGENTS.md` com arquitetura real.
-2. Garantir que servidor atual foi reiniciado com a UI separada.
-3. Implementar SQLite.
-4. Implementar enforcement de permissões.
-5. Criar páginas de detalhe.
-6. Fortalecer cancelamento.
-7. Evoluir skill packages.
+Entregas:
+
+- Skill package com `SKILL.md`, múltiplos arquivos, manifest.
+- Import/export de diretório.
+- Assignment por tags/permissões.
+- Budget de tokens por skill.
+
+### Fase 4 — UI e Operação Avançada
+
+Objetivo: humanos conseguem operar com clareza.
+
+#### 4.1 Páginas de Operação
+
+Entregas:
+
+- Inbox.
+- Org chart.
+- Usage/Cost dashboard.
+- Recovery dashboard (stale locks, failed runs, runtime health, retry queue).
+- Task detail com blockers, children, transcript e logs.
+
+#### 4.2 Logs e Eventos em Tempo Real
+
+Entregas:
+
+- Event store consistente.
+- SSE fan-out.
+- Timeline por entidade.
+- Logs incrementais.
+
+#### 4.3 Self-Review e Verificação
+
+Entregas:
+
+- Comandos de verificação (lint, test, build).
+- Self-review loop limitado.
+- Diff + resultado no run.
+
+### Fase 5 — Integrações e Portabilidade
+
+Objetivo: conectar sem perder local-first.
+
+#### 5.1 Skills e Backup
+
+Entregas:
+
+- Skill package import/export.
+- Backup/restore robusto.
+
+#### 5.2 Tracker Adapters (Opcional)
+
+Entregas:
+
+- Sync GitHub Issues / Jira / Linear (import/export, status, comments).
+- Mantém Task como fonte de verdade.
+
+#### 5.3 Service e Distribuição
+
+Entregas:
+
+- Systemd/launchctl service.
+- Release artifacts.
+- Compatibilidade diagnostics.
+
+## Priorização e Sequência
+
+Fase 1 é absoluta e deve ser concluída antes de Fase 2.
+
+Ordem recomendada dentro da Fase 1:
+
+1. Matriz de transição.
+2. Checkout/locks + stale recovery.
+3. Heartbeat/wakeup engine.
+4. Inbox-lite + heartbeat-context.
+5. Permissões enforcement.
+6. UsageEvent ledger.
+7. Cancelamento e liveness.
+
+Depois:
+
+- Fase 2 (heartbeat completo).
+- Fase 3 (workspaces/runtimes/skills).
+- Fase 4 (UI avançada).
+- Fase 5 (integrações).
+
+## Restrições que Devem Ser Mantidas
+
+- Sem SPA pesada.
+- Sem banco externo obrigatório.
+- Sem Redis obrigatório.
+- Sem dependências globais pesadas.
+- Runtimes e storage como adaptadores.
+- Prompts compactos por padrão.
+- Sem conceitos de tracker específico no core.
+
+## Critérios de Sucesso por Fase
+
+Fase 1:
+
+- Agente consegue fazer heartbeat, ver inbox, fazer checkout, trabalhar, comentar e atualizar status.
+- Locks não ficam pendurados.
+- Permissões são respeitadas.
+- Uso de tokens é registrado.
+
+Fase 2:
+
+- Agente opera como heartbeat agent do Paperclip.
+- Inbox e atenção são visíveis para humanos e agentes.
+- Delegação e comentários funcionam de forma consistente.
+
+Fase 3:
+
+- Execução é isolada por workspace.
+- Runtimes são canceláveis e observáveis.
+- Skills são pacotes reais.
+
+Fase 4:
+
+- Humano consegue operar o sistema sem precisar inspecionar banco.
+- Recuperação e atenção são tratadas como produto.
+
+Fase 5:
+
+- Skills e backups são portáveis.
+- Tracker sync existe sem ser obrigatório.
+
+## Fase 3 — Recursos inspirados em Paperclip (Controle e Operação)
+
+Objetivo: trazer capacidades que Paperclip tem e que aumentam o valor real do controle plane sem violar a filosofia lean do PicoClip.
+
+### 3.1 Budgets + Hard-stop
+
+- Ledger de uso (`UsageEvent`) já existe.
+- Adicionar `Budget` por workspace + agent com `limit_tokens`, `limit_runs`, `hard_stop`.
+- Runner e Dispatcher respeitam orçamento e pausam automaticamente.
+- UI mostra consumo vs limite + alerta de pausa.
+
+Critério de aceite:
+- tarefa é bloqueada quando orçamento estoura;
+- wakeups de retry respeitam pausa por orçamento.
+
+### 3.2 Approval Gates
+
+- Adicionar `approver_agent_id` e `approval_status` em Task.
+- Transições de status exigem aprovação explícita quando configurado.
+- UI e Agent API expõem ações de approve/reject.
+- Auditoria via Event.
+
+Critério de aceite:
+- task só avança para `done` ou `in_review` após aprovação quando gate existe.
+
+### 3.3 Artifacts / Work Products
+
+- Nova entidade `Artifact` (id, task_id, run_id, type, name, content_ref, metadata).
+- Tipos: `text`, `markdown`, `diff`, `file`, `json`.
+- Runner pode registrar artifacts ao final da execução.
+- UI mostra lista de artifacts por task com preview simples.
+
+Critério de aceite:
+- output de run pode virar artifact persistente;
+- artifacts são listáveis e recuperáveis via API.
+
+### 3.4 Scheduled Routines
+
+- Adicionar `Routine` (id, workspace_id, agent_id, prompt, schedule_cron, enabled).
+- Scheduler avalia rotinas e cria wakeups ou tasks recorrentes.
+- Suporte básico a cron simples (minuto, hora, dia).
+
+Critério de aceite:
+- rotina diária gera task automaticamente;
+- logs de execução da rotina são visíveis.
+
+### 3.5 Memória / Knowledge simples
+
+- Entidade `Fact` (id, workspace_id, key, value, tags, updated_at).
+- Skills podem referenciar facts.
+- Agent API expõe `GET/POST /agent-api/facts`.
+- UI básica de facts por workspace.
+
+Critério de aceite:
+- agente pode ler e escrever facts durante execução;
+- facts sobrevivem a restarts.
+
+## Manutenção do Roadmap
+
+Este documento é a fonte de verdade. Mudanças devem ser feitas aqui primeiro e refletidas em `CURRENT_STATE.md` e `AGENTS.md` quando necessário.
+
+Qualquer desvio deve ser justificado e registrado como decisão de arquitetura.
+
+Fim do roadmap canônico.

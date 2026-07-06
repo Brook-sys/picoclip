@@ -154,8 +154,8 @@ func TestContinuousTaskProtocolContextIncludesLoopGuidance(t *testing.T) {
 		{ID: "msg_question", TaskID: task.ID, Role: domain.MessageRoleAgent, Body: "Which branch should I monitor?", CreatedAt: clock.t},
 		{ID: "msg_user", TaskID: task.ID, Role: domain.MessageRoleUser, Body: "Use main.", CreatedAt: clock.t.Add(time.Second)},
 	}
-	runner := NewRunner(st, clock, idgen, noopBus{}, nil, NoopMemoryProvider{}, testLogger{}, Config{})
-	contextText := runner.taskProtocolContext(context.Background(), task, domain.Run{ID: "run_prompt"}, messages)
+	_ = idgen
+	contextText := NewPromptBuilder(st).taskProtocolContext(context.Background(), task, domain.Run{ID: "run_prompt"}, messages)
 	for _, want := range []string{"Continuous Task Instructions", "Current cycle: 3", "non-blocking", "Child Tasks To Supervise", "do child", "latest run: succeeded", "investigated branch", "latest message: agent: summary done", "Open Questions Raised For User", "Which branch should I monitor?", "Latest User Comment", "Use main."} {
 		if !strings.Contains(contextText, want) {
 			t.Fatalf("expected context to contain %q:\n%s", want, contextText)

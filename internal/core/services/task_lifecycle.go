@@ -68,6 +68,17 @@ func (l TaskLifecycle) Apply(task domain.Task, transition TaskTransition) (domai
 		task.FinishedAt = nil
 		task.CompletedAt = nil
 		task.CancelledAt = nil
+	case domain.TaskStatusWaitingNextCycle:
+		task.NeedsRun = false
+		if task.FinishedAt == nil {
+			task.FinishedAt = &transition.Now
+		}
+		task.CompletedAt = nil
+		task.CancelledAt = nil
+		task.CheckoutRunID = ""
+		task.CheckedOutByAgentID = ""
+		task.ExecutionLockedAt = nil
+		task.LockExpiresAt = nil
 	case domain.TaskStatusInReview:
 		task.NeedsRun = false
 		task.FinishedAt = nil
@@ -132,6 +143,7 @@ var taskTransitionMatrix = map[domain.TaskStatus][]domain.TaskStatus{
 	domain.TaskStatusTodo: {
 		domain.TaskStatusBacklog,
 		domain.TaskStatusInProgress,
+		domain.TaskStatusWaitingNextCycle,
 		domain.TaskStatusBlocked,
 		domain.TaskStatusCancelled,
 	},
@@ -156,6 +168,10 @@ var taskTransitionMatrix = map[domain.TaskStatus][]domain.TaskStatus{
 	},
 	domain.TaskStatusDone: {
 		domain.TaskStatusTodo,
+	},
+	domain.TaskStatusWaitingNextCycle: {
+		domain.TaskStatusTodo,
+		domain.TaskStatusCancelled,
 	},
 	domain.TaskStatusCancelled: {
 		domain.TaskStatusTodo,

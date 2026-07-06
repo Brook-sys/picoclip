@@ -23,9 +23,12 @@ func TestTaskLifecycleCanTransition(t *testing.T) {
 		{"blocked to todo", domain.TaskStatusBlocked, domain.TaskStatusTodo, true},
 		{"done to todo", domain.TaskStatusDone, domain.TaskStatusTodo, true},
 		{"cancelled to todo", domain.TaskStatusCancelled, domain.TaskStatusTodo, true},
+		{"waiting next cycle to todo", domain.TaskStatusWaitingNextCycle, domain.TaskStatusTodo, true},
+		{"waiting next cycle to cancelled", domain.TaskStatusWaitingNextCycle, domain.TaskStatusCancelled, true},
 		{"backlog to done", domain.TaskStatusBacklog, domain.TaskStatusDone, false},
 		{"todo to done", domain.TaskStatusTodo, domain.TaskStatusDone, false},
 		{"done to in progress", domain.TaskStatusDone, domain.TaskStatusInProgress, false},
+		{"waiting next cycle to done", domain.TaskStatusWaitingNextCycle, domain.TaskStatusDone, false},
 	}
 
 	for _, tt := range cases {
@@ -109,6 +112,38 @@ func TestTaskLifecycleApplyTodoWakesTask(t *testing.T) {
 	}
 	if got.CompletedAt != nil || got.FinishedAt != nil {
 		t.Fatal("completion timestamps were not cleared")
+	}
+}
+
+func TestTaskLifecycleApplyWaitingNextCycleDoesNotWakeTask(t *testing.T) {
+	lifecycle := NewTaskLifecycle()
+	now := time.Date(2026, 7, 6, 10, 0, 0, 0, time.UTC)
+	nextRunAt := now.Add(time.Minute)
+	task := domain.Task{
+		ID:            "tsk_continuous",
+		Status:        domain.TaskStatusTodo,
+		Mode:          domain.TaskModeContinuous,
+		NeedsRun:      true,
+		LoopNextRunAt: &nextRunAt,
+		CreatedAt:     now,
+		UpdatedAt:     now,
+	}
+
+	got, err := lifecycle.Apply(task, TaskTransition{From: task.Status, To: domain.TaskStatusWaitingNextCycle, Now: now})
+	if err != nil {
+		t.Fatalf("Apply returned error: %v", err)
+	}
+	if got.Status != domain.TaskStatusWaitingNextCycle {
+		t.Fatalf("Status = %s, want waiting_next_cycle", got.Status)
+	}
+	if got.NeedsRun {
+		t.Fatal("NeedsRun = true, want false while waiting for next cycle")
+	}
+	if got.FinishedAt == nil {
+		t.Fatal("FinishedAt was not set for completed cycle")
+	}
+	if got.LoopNextRunAt == nil || !got.LoopNextRunAt.Equal(nextRunAt) {
+		t.Fatalf("LoopNextRunAt changed unexpectedly: %v", got.LoopNextRunAt)
 	}
 }
 

@@ -25,6 +25,7 @@ test-results/
 
 # PicoClip specific
 /.crush/
+/scripts/dev-local.sh
 /data/
 /workspaces/*
 !/workspaces/.gitkeep
