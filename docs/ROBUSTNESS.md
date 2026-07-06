@@ -2,15 +2,16 @@
 
 _Read this in [Portuguese / Português](ROBUSTNESS.pt-BR.md)._
 
-PicoClip is intentionally small, but it should still behave like an operational system: failures must be visible, retry decisions must be explicit, and recovery should avoid making a bad situation worse.
+PicoClip is intentionally small, but it should still behave like an operational system: failures must be visible, retry decisions must be explicit, and recovery must avoid making a bad situation worse.
 
-This document explains the current robustness model and the direction for future hardening.
+This document describes the current reliability model for scheduler, dispatcher, runner, reconciler, locks, retries, wakeups and cancellation. For the wider architecture map, see [Project Map](PROJECT_MAP.md). For the current product state, see [Current State](CURRENT_STATE.md).
 
 ## Design goals
 
-PicoClip robustness work follows these principles:
+Robustness work follows these principles:
 
 - **Fail visibly**: important failures should create persistent events, not only log lines.
+- **Claim conservatively**: tasks should only be claimed when PicoClip can actually start work.
 - **Recover conservatively**: recovery should unlock work safely without creating duplicate active runs.
 - **Avoid retry storms**: retry should use backoff and must not bypass its own schedule.
 - **Learn from failures**: retry and recovery decisions should carry structured metadata explaining what happened and why the system reacted.
@@ -18,24 +19,46 @@ PicoClip robustness work follows these principles:
 
 ## Execution lifecycle overview
 
-The simplified execution flow is:
+The current simplified execution flow is:
 
-1. A task is created and marked runnable.
-2. The dispatcher claims one runnable task atomically.
-3. The runner creates a run and locks the task to that run.
-4. A runtime adapter executes the work.
-5. The run ends as completed, failed, canceled, or timed out.
-6. The reconciler periodically repairs stale state and processes scheduled wakeups.
+1. A task is created and marked runnable with `NeedsRun=true`.
+2. The scheduler runs the reconciler before dispatching new work.
+3. The reconciler activates due continuous tasks, processes wakeups, detects stalls and recovers orphaned state.
+4. The dispatcher waits for a concurrency slot.
+5. Only after a slot is available, the dispatcher claims one runnable task atomically.
+6. `ClaimNextRunnable` creates a run and writes task checkout/lock metadata.
+7. The runner reloads task and agent context, checks budgets and runtime availability, builds the prompt and executes the runtime.
+8. Runtime output updates run output and heartbeat metadata.
+9. The runner finalizes the run/task, blocks it, schedules retry, or schedules the next continuous cycle.
+10. Later reconciler passes repair stale locks, stalled runs, orphaned runs and due wakeups.
 
-The important safety rule is that a task should not have more than one active checkout/run at the same time.
+The main safety rule is: a task should not have more than one active checkout/run at the same time.
+
+## Dispatcher concurrency safety
+
+The dispatcher uses a bounded semaphore to respect `maxConcurrentRuns`.
+
+Important current behavior:
+
+- the dispatcher acquires a concurrency slot **before** calling `ClaimNextRunnable`;
+- if the context is canceled before a slot is available, no task is claimed;
+- if claim returns `ErrNoPendingTasks` or another error, the slot is released immediately;
+- once a goroutine starts the runner, the slot is released only after `runner.Run` returns.
+
+This prevents a task from being marked `in_progress`/checked out and a run from being created when no runner capacity exists. A regression test protects this behavior: `TestDispatcherDoesNotClaimTaskWhenConcurrencySlotUnavailable`.
 
 ## Locks and stale lock recovery
 
-When a task is checked out for execution, PicoClip stores lock metadata on the task, including the active run ID and lock expiration data.
+When a task is checked out for execution, PicoClip stores lock metadata on the task:
+
+- active run ID;
+- checked-out agent;
+- lock start timestamp;
+- lock expiration timestamp.
 
 The lock recovery service sweeps stale locks and clears expired checkout state. If the expired lock belongs to a run that is still marked running, the run is closed as timed out and a recovery event is persisted.
 
-This prevents tasks from being permanently stuck after a crash, process kill, or lost worker.
+This prevents tasks from staying permanently stuck after a crash, process kill, lost worker, or interrupted scheduler cycle.
 
 ## Stalled run detection
 
@@ -49,7 +72,7 @@ Current behavior:
 - unlock the task;
 - either schedule retry with backoff, block the task when max attempts are exhausted, or schedule the next continuous-task cycle.
 
-Timeouts are counted as attention-worthy activity in the UI because they usually require inspection.
+Timeouts are attention-worthy activity in the UI because they usually require inspection.
 
 ## Retry scheduling and backoff
 
@@ -105,15 +128,17 @@ If a continuous task lock expires while a run is still active, recovery closes t
 
 This keeps recurring work predictable and prevents recovery from turning a continuous loop into a tight retry loop.
 
-## Current limitations
+## Cancellation model
 
-The system is stronger than before, but still experimental. Known gaps:
+Cancellation is routed through services and runtime adapters:
 
-- Retry classification is still basic. Timeout retries are treated as retryable, but deterministic errors are not yet fully separated into retryable vs non-retryable categories.
-- The UI does not yet have a dedicated recovery dashboard for stale locks, retry queue, runtime health, or orphaned runs.
-- Runtime liveness is still mostly inferred from output/heartbeat state rather than a complete streaming runtime event model.
-- Windows process-tree cancellation still needs Job Object support for parity with Unix process-group cancellation.
-- Metrics are visible through events/logs, but aggregate reliability metrics are still limited.
+- task cancellation goes through `TaskLifecycle` when applicable;
+- active checkout/lock state is cleared;
+- the active run is closed as `canceled`;
+- `RuntimeManager.CancelRun` forwards cancellation to the active adapter;
+- Unix runtime adapters start subprocesses in their own process group and cancel the group with SIGTERM followed by SIGKILL when needed.
+
+Known gap: Windows process-tree cancellation still needs Job Objects for parity with Unix process groups.
 
 ## Operational checklist
 
@@ -124,19 +149,37 @@ When investigating a stuck or failed task:
 3. Check whether a retry wakeup is pending and whether its `DueAt` is in the future.
 4. Confirm whether `MaxAttempts` has been reached.
 5. Check runtime configuration and driver availability if the error suggests missing runtime support.
-6. Run diagnostics through the diagnostics API/page to inspect storage, runtime path, workspace path, and configured runtime health.
+6. Use the diagnostics page or `/api/diagnostics` to inspect storage, runtime path, workspace path and configured runtime health.
+7. If a task looks runnable but is not being picked up, check dispatcher capacity and whether a previous run still owns checkout/lock metadata.
 
 ## Developer checklist for robustness changes
 
-When changing recovery, retry, cancellation, scheduling, or dispatcher behavior:
+When changing recovery, retry, cancellation, scheduling, dispatcher, runner or runtime behavior:
 
-1. Write or update a regression test first.
-2. Confirm the test fails for the expected reason.
-3. Implement the smallest behavior change.
-4. Run the focused package tests.
-5. Run `make check` before merging.
-6. Confirm new failure paths create clear events or diagnostics.
-7. Avoid adding retry behavior without a cap, backoff, and an event explaining the decision.
+1. Read this document and [Development Guide](DEVELOPMENT.md).
+2. Write or update a regression test first.
+3. Confirm the test fails for the expected reason.
+4. Implement the smallest behavior change.
+5. Run focused package tests, for example:
+
+   ```sh
+   go test ./internal/core/services -run 'TestReconciler|TestStalledRun|TestDispatcher|TestLockRecovery' -count=1
+   ```
+
+6. Run `make check` before considering the change complete.
+7. Confirm new failure paths create clear events or diagnostics.
+8. Avoid adding retry behavior without a cap, backoff, and an event explaining the decision.
+9. Update this document whenever the scheduler/dispatcher/runner/reconciler contract changes.
+
+## Current limitations
+
+The system is stronger than before, but still experimental. Known gaps:
+
+- Retry classification is still basic. Timeout retries are treated as retryable, but deterministic errors are not yet fully separated into retryable vs non-retryable categories.
+- There is no dedicated recovery dashboard for stale locks, retry queue, runtime health, or orphaned runs.
+- Runtime liveness is still mostly inferred from output/heartbeat state rather than a complete structured runtime event model.
+- Windows process-tree cancellation still needs Job Object support for parity with Unix process-group cancellation.
+- Metrics are visible through events/logs, but aggregate reliability metrics are still limited.
 
 ## Next hardening steps
 
@@ -145,5 +188,6 @@ Recommended next work:
 1. Add explicit retry classification: `retryable`, `non_retryable`, and `unknown`.
 2. Persist `retry.skipped` or `task.blocked` events when PicoClip intentionally refuses to retry.
 3. Expose the retry queue and recovery state in the UI/API.
-4. Add aggregate reliability counters: timeouts, recoveries, scheduled retries, skipped retries, and exhausted attempts.
+4. Add aggregate reliability counters: timeouts, recoveries, scheduled retries, skipped retries, exhausted attempts and currently locked tasks.
 5. Expand runtime events so liveness is based on structured signals, not only output timing.
+6. Add Windows Job Objects support for runtime process-tree cancellation.

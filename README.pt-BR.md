@@ -211,11 +211,15 @@ Existe um roadmap ativo, e mais recursos serão adicionados gradualmente conform
 
 Veja:
 
+- [Mapa do Projeto](docs/PROJECT_MAP.md)
+- [Política de Documentação](docs/DOCUMENTATION_POLICY.md)
+- [Referência de API](docs/API_REFERENCE.md)
 - [Roadmap](docs/ROADMAP.md)
 - [Estado Atual](docs/CURRENT_STATE.md)
 - [Arquitetura de Storage](docs/STORAGE.md)
 - [Robustez, Recovery e Aprendizado com Falhas](docs/ROBUSTNESS.pt-BR.md)
 - [Guia de Desenvolvimento](docs/DEVELOPMENT.md)
+- [Design System](docs/DESIGN.md)
 
 ## Colaboração
 

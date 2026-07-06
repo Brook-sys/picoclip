@@ -2,15 +2,16 @@
 
 _Leia em [Inglês / English](ROBUSTNESS.md)._
 
-O PicoClip é intencionalmente pequeno, mas deve se comportar como um sistema operacionalmente confiável: falhas precisam ser visíveis, decisões de retry precisam ser explícitas e recovery deve evitar piorar uma situação ruim.
+O PicoClip é intencionalmente pequeno, mas deve se comportar como um sistema operacionalmente confiável: falhas precisam ser visíveis, decisões de retry precisam ser explícitas e recovery precisa evitar piorar uma situação ruim.
 
-Este documento explica o modelo atual de robustez e a direção de hardening do projeto.
+Este documento descreve o modelo atual de confiabilidade para scheduler, dispatcher, runner, reconciler, locks, retries, wakeups e cancelamento. Para o mapa geral da arquitetura, veja [Project Map](PROJECT_MAP.md). Para o estado atual do produto, veja [Current State](CURRENT_STATE.md).
 
 ## Objetivos de design
 
-O trabalho de robustez do PicoClip segue estes princípios:
+O trabalho de robustez segue estes princípios:
 
 - **Falhar de forma visível**: falhas importantes devem criar eventos persistidos, não apenas linhas de log.
+- **Reivindicar de forma conservadora**: tasks só devem ser reivindicadas quando o PicoClip realmente puder iniciar trabalho.
 - **Recuperar de forma conservadora**: recovery deve destravar trabalho com segurança, sem criar runs ativos duplicados.
 - **Evitar retry storms**: retry deve usar backoff e não pode burlar o próprio agendamento.
 - **Aprender com falhas**: decisões de retry/recovery devem carregar metadata estruturada explicando o que aconteceu e por que o sistema reagiu.
@@ -18,24 +19,46 @@ O trabalho de robustez do PicoClip segue estes princípios:
 
 ## Visão geral do ciclo de execução
 
-Fluxo simplificado:
+Fluxo simplificado atual:
 
-1. Uma task é criada e marcada como executável.
-2. O dispatcher reivindica uma task executável de forma atômica.
-3. O runner cria um run e bloqueia a task para esse run.
-4. Um runtime adapter executa o trabalho.
-5. O run termina como completed, failed, canceled ou timed out.
-6. O reconciler repara estado antigo e processa wakeups agendados.
+1. Uma task é criada e marcada como executável com `NeedsRun=true`.
+2. O scheduler roda o reconciler antes de despachar trabalho novo.
+3. O reconciler ativa tasks contínuas due, processa wakeups, detecta stalls e recupera estado órfão.
+4. O dispatcher aguarda um slot de concorrência.
+5. Só depois que um slot está disponível, o dispatcher reivindica uma task executável de forma atômica.
+6. `ClaimNextRunnable` cria um run e grava metadata de checkout/lock na task.
+7. O runner recarrega contexto de task e agent, verifica budgets e runtime, monta o prompt e executa o runtime.
+8. Output do runtime atualiza output do run e metadata de heartbeat.
+9. O runner finaliza run/task, bloqueia a task, agenda retry ou agenda o próximo ciclo contínuo.
+10. Passagens posteriores do reconciler reparam locks antigos, runs travados, runs órfãos e wakeups vencidos.
 
-A regra de segurança principal é que uma task não deve ter mais de um checkout/run ativo ao mesmo tempo.
+A regra de segurança principal é: uma task não deve ter mais de um checkout/run ativo ao mesmo tempo.
+
+## Segurança de concorrência do dispatcher
+
+O dispatcher usa um semáforo limitado para respeitar `maxConcurrentRuns`.
+
+Comportamento atual importante:
+
+- o dispatcher adquire um slot de concorrência **antes** de chamar `ClaimNextRunnable`;
+- se o contexto é cancelado antes de existir slot, nenhuma task é reivindicada;
+- se o claim retorna `ErrNoPendingTasks` ou outro erro, o slot é liberado imediatamente;
+- quando uma goroutine inicia o runner, o slot só é liberado depois que `runner.Run` retorna.
+
+Isso impede que uma task seja marcada como `in_progress`/checked out e que um run seja criado quando não existe capacidade real de runner. O teste de regressão que protege esse comportamento é `TestDispatcherDoesNotClaimTaskWhenConcurrencySlotUnavailable`.
 
 ## Locks e recuperação de locks antigos
 
-Quando uma task é retirada para execução, o PicoClip salva metadata de lock na task, incluindo ID do run ativo e dados de expiração do lock.
+Quando uma task é retirada para execução, o PicoClip salva metadata de lock na task:
+
+- ID do run ativo;
+- agent em checkout;
+- timestamp de início do lock;
+- timestamp de expiração do lock.
 
 O serviço de lock recovery varre locks expirados e limpa o estado de checkout antigo. Se o lock expirado pertencer a um run que ainda está marcado como running, o run é encerrado como timeout e um evento de recovery é persistido.
 
-Isso evita que tasks fiquem permanentemente presas após crash, kill de processo ou worker perdido.
+Isso evita que tasks fiquem permanentemente presas após crash, kill de processo, worker perdido ou ciclo de scheduler interrompido.
 
 ## Detecção de run travado
 
@@ -105,15 +128,17 @@ Se o lock de uma task contínua expira enquanto um run ainda está ativo, recove
 
 Isso mantém trabalho recorrente previsível e impede que recovery transforme um loop contínuo em um retry loop apertado.
 
-## Limitações atuais
+## Modelo de cancelamento
 
-O sistema está mais robusto do que antes, mas ainda é experimental. Lacunas conhecidas:
+Cancelamento passa por services e runtime adapters:
 
-- A classificação de retry ainda é básica. Timeouts são tratados como retryable, mas erros determinísticos ainda precisam ser separados entre retryable e non-retryable.
-- A UI ainda não possui dashboard dedicado de recovery para locks antigos, retry queue, runtime health ou runs órfãos.
-- Liveness de runtime ainda é inferido principalmente por output/heartbeat, não por um modelo completo de eventos estruturados de runtime.
-- Cancelamento de árvore de processos no Windows ainda precisa de Job Objects para paridade com Unix process groups.
-- Métricas aparecem em eventos/logs, mas métricas agregadas de confiabilidade ainda são limitadas.
+- cancelamento de task passa pelo `TaskLifecycle` quando aplicável;
+- estado ativo de checkout/lock é limpo;
+- o run ativo é fechado como `canceled`;
+- `RuntimeManager.CancelRun` encaminha o cancelamento para o adapter ativo;
+- adapters Unix iniciam subprocessos em grupo próprio e cancelam o grupo com SIGTERM seguido de SIGKILL quando necessário.
+
+Lacuna conhecida: cancelamento de árvore de processos no Windows ainda precisa de Job Objects para paridade com process groups no Unix.
 
 ## Checklist operacional
 
@@ -123,20 +148,38 @@ Ao investigar uma task presa ou falhando:
 2. Abra Activity e procure `run.timeout`, `run.recovered`, `retry.scheduled`, `driver.missing` ou `budget.blocked`.
 3. Verifique se há retry wakeup pendente e se o `DueAt` está no futuro.
 4. Confirme se `MaxAttempts` foi alcançado.
-5. Verifique runtime configuration e disponibilidade do driver se o erro indicar runtime ausente.
-6. Use diagnostics para inspecionar storage, runtime path, workspace path e saúde dos runtimes configurados.
+5. Verifique configuração de runtime e disponibilidade do driver se o erro indicar runtime ausente.
+6. Use a página de diagnostics ou `/api/diagnostics` para inspecionar storage, runtime path, workspace path e saúde dos runtimes configurados.
+7. Se uma task parece executável mas não é pega, confira a capacidade do dispatcher e se um run anterior ainda possui metadata de checkout/lock.
 
 ## Checklist para mudanças de robustez
 
-Ao alterar recovery, retry, cancellation, scheduling ou dispatcher:
+Ao alterar recovery, retry, cancellation, scheduling, dispatcher, runner ou runtime:
 
-1. Escreva ou atualize um teste de regressão primeiro.
-2. Confirme que o teste falha pelo motivo esperado.
-3. Implemente a menor mudança de comportamento possível.
-4. Rode os testes focados do pacote.
-5. Rode `make check` antes de mergear.
-6. Confirme que novos caminhos de falha criam eventos ou diagnostics claros.
-7. Evite qualquer retry sem cap, backoff e evento explicando a decisão.
+1. Leia este documento e o [Development Guide](DEVELOPMENT.md).
+2. Escreva ou atualize um teste de regressão primeiro.
+3. Confirme que o teste falha pelo motivo esperado.
+4. Implemente a menor mudança de comportamento possível.
+5. Rode testes focados do pacote, por exemplo:
+
+   ```sh
+   go test ./internal/core/services -run 'TestReconciler|TestStalledRun|TestDispatcher|TestLockRecovery' -count=1
+   ```
+
+6. Rode `make check` antes de considerar a mudança concluída.
+7. Confirme que novos caminhos de falha criam eventos ou diagnostics claros.
+8. Evite qualquer retry sem cap, backoff e evento explicando a decisão.
+9. Atualize este documento sempre que o contrato de scheduler/dispatcher/runner/reconciler mudar.
+
+## Limitações atuais
+
+O sistema está mais robusto do que antes, mas ainda é experimental. Lacunas conhecidas:
+
+- A classificação de retry ainda é básica. Timeouts são tratados como retryable, mas erros determinísticos ainda precisam ser separados entre retryable e non-retryable.
+- Ainda não há dashboard dedicado de recovery para locks antigos, retry queue, runtime health ou runs órfãos.
+- Liveness de runtime ainda é inferido principalmente por output/heartbeat, não por um modelo completo de eventos estruturados de runtime.
+- Cancelamento de árvore de processos no Windows ainda precisa de Job Objects para paridade com Unix process groups.
+- Métricas aparecem em eventos/logs, mas métricas agregadas de confiabilidade ainda são limitadas.
 
 ## Próximos passos de hardening
 
@@ -145,5 +188,6 @@ Trabalhos recomendados:
 1. Adicionar classificação explícita: `retryable`, `non_retryable` e `unknown`.
 2. Persistir eventos `retry.skipped` ou `task.blocked` quando PicoClip decide não tentar de novo.
 3. Expor retry queue e estado de recovery na UI/API.
-4. Adicionar contadores agregados de confiabilidade: timeouts, recoveries, retries agendados, retries pulados e tentativas esgotadas.
+4. Adicionar contadores agregados de confiabilidade: timeouts, recoveries, retries agendados, retries pulados, tentativas esgotadas e tasks atualmente lockadas.
 5. Expandir eventos de runtime para que liveness use sinais estruturados, não apenas timing de output.
+6. Adicionar suporte a Windows Job Objects para cancelamento completo de árvore de processos.

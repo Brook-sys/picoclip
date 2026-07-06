@@ -1,6 +1,6 @@
 # PicoClip — Roadmap Canônico (Paperclip Alignment)
 
-Status: 2026-06-25
+Status: 2026-07-06
 
 Este roadmap é a referência absoluta para evolução do PicoClip. Ele substitui versões anteriores e deve ser seguido em ordem.
 
@@ -154,6 +154,7 @@ Entregas concluídas:
 - Retry wakeups usam backoff exponencial com cap de 5 minutos e não deixam a task executável antes do `DueAt` ser processado.
 - Retry de timeout persiste metadata de aprendizado (`previous_run_id`, `attempt`, `backoff_seconds`, `retryable`, `reason`) e evento `retry.scheduled` visível na Activity UI.
 - Recovery de lock expirado em task contínua agenda o próximo ciclo com `LoopNextRunAt`, sem wakeup imediato e sem burlar o delay do loop.
+- Dispatcher aguarda um slot de concorrência antes de chamar `ClaimNextRunnable`, evitando que uma task seja lockada ou que um run seja criado quando não há capacidade real para iniciar o runner.
 
 Próximas entregas:
 

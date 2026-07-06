@@ -211,11 +211,15 @@ There is an active roadmap, and more features will be added gradually as the pro
 
 See:
 
+- [Project Map](docs/PROJECT_MAP.md)
+- [Documentation Policy](docs/DOCUMENTATION_POLICY.md)
+- [API Reference](docs/API_REFERENCE.md)
 - [Roadmap](docs/ROADMAP.md)
 - [Current State](docs/CURRENT_STATE.md)
 - [Storage Architecture](docs/STORAGE.md)
 - [Robustness, Recovery, and Failure Learning](docs/ROBUSTNESS.md)
 - [Development Guide](docs/DEVELOPMENT.md)
+- [Design System](docs/DESIGN.md)
 
 ## Contributing
 
