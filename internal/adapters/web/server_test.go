@@ -320,6 +320,28 @@ func TestAgentInboxLiteAndHeartbeatContext(t *testing.T) {
 	if _, ok := hb["skills"].([]any); !ok {
 		t.Fatalf("skills missing from heartbeat context: %+v", hb)
 	}
+	executionState, ok := hb["execution_state"].(map[string]any)
+	if !ok {
+		t.Fatalf("execution_state missing from heartbeat context: %+v", hb)
+	}
+	if executionState["needs_run"] != true {
+		t.Fatalf("execution_state needs_run = %v, want true", executionState["needs_run"])
+	}
+	counts, ok := executionState["counts"].(map[string]any)
+	if !ok || counts["pending_wakeups"] == nil || counts["recent_events"] == nil {
+		t.Fatalf("execution_state counts should expose compact wakeup/event counts: %+v", executionState)
+	}
+	pendingWakeups, ok := executionState["pending_wakeups"].([]any)
+	if !ok || len(pendingWakeups) == 0 {
+		t.Fatalf("execution_state should expose pending wakeups compactly: %+v", executionState)
+	}
+	recentEvents, ok := executionState["recent_events"].([]any)
+	if !ok || len(recentEvents) == 0 {
+		t.Fatalf("execution_state should expose recent events compactly: %+v", executionState)
+	}
+	if _, duplicatesPrompt := executionState["prompt"]; duplicatesPrompt {
+		t.Fatalf("execution_state should stay compact and not duplicate prompt: %+v", executionState)
+	}
 }
 
 func readHTML(t *testing.T, client *http.Client, url string) string {

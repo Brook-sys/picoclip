@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"strings"
+	"time"
 
 	"picoclip/internal/core/domain"
 	"picoclip/internal/core/ports"
@@ -346,10 +347,115 @@ func (s *Server) handleAgentHeartbeatContext(w http.ResponseWriter, r *http.Requ
 		"status":            task.Status,
 		"checkout_run_id":   task.CheckoutRunID,
 		"wake_reason":       s.latestWakeReason(r, task.ID),
+		"execution_state":   s.compactExecutionState(r, task),
 		"skills":            s.compactSkills(r, task),
 		"apis":              []string{"/agent-api/tasks", "/agent-api/projects", "/agent-api/skills"},
 	}
 	s.jsonResponse(w, ctx)
+}
+
+func (s *Server) compactExecutionState(r *http.Request, task domain.Task) map[string]any {
+	runs, _ := s.tasks.GetRuns(r.Context(), task.ID)
+	wakeups, _ := s.storage.Wakeups().ListByTask(r.Context(), task.ID)
+	events, _ := s.storage.Events().ListByTask(r.Context(), task.ID)
+
+	pendingWakeups := make([]map[string]any, 0, 3)
+	for _, wakeup := range wakeups {
+		if wakeup.Status != domain.WakeupStatusPending {
+			continue
+		}
+		pendingWakeups = append(pendingWakeups, map[string]any{
+			"id":      wakeup.ID,
+			"reason":  wakeup.Reason,
+			"due_at":  compactTime(wakeup.DueAt),
+			"payload": wakeup.Payload,
+		})
+		if len(pendingWakeups) >= 3 {
+			break
+		}
+	}
+
+	recentEvents := make([]map[string]any, 0, 5)
+	start := len(events) - 5
+	if start < 0 {
+		start = 0
+	}
+	for _, event := range events[start:] {
+		recentEvents = append(recentEvents, map[string]any{
+			"id":         event.ID,
+			"type":       event.Type,
+			"run_id":     event.RunID,
+			"message":    compactText(event.Message, 180),
+			"created_at": compactTime(event.CreatedAt),
+		})
+	}
+
+	state := map[string]any{
+		"needs_run":       task.NeedsRun,
+		"checked_out_by":  task.CheckedOutByAgentID,
+		"checkout_run_id": task.CheckoutRunID,
+		"lock_expires_at": compactOptionalTime(task.LockExpiresAt),
+		"pending_wakeups": pendingWakeups,
+		"recent_events":   recentEvents,
+		"counts": map[string]int{
+			"runs":            len(runs),
+			"wakeups":         len(wakeups),
+			"pending_wakeups": countPendingWakeups(wakeups),
+			"recent_events":   len(events),
+			"shown_wakeups":   len(pendingWakeups),
+			"shown_events":    len(recentEvents),
+		},
+	}
+	if len(runs) > 0 {
+		latest := runs[len(runs)-1]
+		state["latest_run"] = map[string]any{
+			"id":             latest.ID,
+			"status":         latest.Status,
+			"attempt":        latest.Attempt,
+			"driver_type":    latest.DriverType,
+			"last_output_at": compactOptionalTime(latest.LastOutputAt),
+			"started_at":     compactTime(latest.StartedAt),
+			"finished_at":    compactOptionalTime(latest.FinishedAt),
+			"tokens": map[string]int{
+				"input":  latest.InputTokens,
+				"output": latest.OutputTokens,
+				"total":  latest.TotalTokens,
+			},
+		}
+	}
+	return state
+}
+
+func countPendingWakeups(wakeups []domain.WakeupRequest) int {
+	count := 0
+	for _, wakeup := range wakeups {
+		if wakeup.Status == domain.WakeupStatusPending {
+			count++
+		}
+	}
+	return count
+}
+
+func compactText(text string, max int) string {
+	text = strings.TrimSpace(text)
+	if max > 0 && len(text) > max {
+		return text[:max] + "..."
+	}
+	return text
+}
+
+func compactTime(value time.Time) string {
+	if value.IsZero() {
+		return ""
+	}
+	return value.Format("2006-01-02T15:04:05Z07:00")
+}
+
+func compactOptionalTime(value *time.Time) string {
+	if value == nil {
+		return ""
+	}
+	return compactTime(*value)
 }
 
 func (s *Server) latestWakeReason(r *http.Request, taskID string) string {

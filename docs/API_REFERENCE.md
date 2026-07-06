@@ -145,7 +145,7 @@ Superfície para agentes lerem contexto, atualizarem tasks, comentarem, delegare
 | `GET` | `/agent-api/issues` | Alias de tasks. |
 | `GET` | `/agent-api/tasks/{id}` | Detalhe da task. |
 | `GET` | `/agent-api/issues/{id}` | Alias de detalhe. |
-| `GET` | `/agent-api/tasks/{id}/heartbeat-context` | Contexto compacto para trabalhar em uma task. |
+| `GET` | `/agent-api/tasks/{id}/heartbeat-context` | Contexto compacto para trabalhar em uma task, incluindo `execution_state` resumido de runs, locks, wakeups e eventos recentes. |
 | `GET` | `/agent-api/issues/{id}/heartbeat-context` | Alias de heartbeat context. |
 | `GET` | `/agent-api/tasks/{id}/comments` | Lista comentários/mensagens da task. |
 | `GET` | `/agent-api/issues/{id}/comments` | Alias de comments. |
@@ -166,6 +166,17 @@ Superfície para agentes lerem contexto, atualizarem tasks, comentarem, delegare
 | `POST` | `/agent-api/issues/{id}/wake` | Alias de wake. |
 | `POST` | `/agent-api/tasks/{id}/delegate` | Delega/cria subtarefa. |
 | `POST` | `/agent-api/tasks/{id}/cancel` | Cancela task. |
+
+### Contexto compacto para agentes
+
+`GET /agent-api/tasks/{id}/heartbeat-context` é a rota recomendada para agentes recuperarem percepção operacional antes de agir sem puxar o detalhe completo da task. Ela evita duplicar payloads grandes e retorna apenas campos resumidos:
+
+- identidade e prompt da task;
+- `last_user_comment` e `wake_reason`;
+- skills compactas disponíveis ao agente;
+- `execution_state`, com `needs_run`, checkout/lock atual, última run resumida, até 3 wakeups pendentes, até 5 eventos recentes e contadores totais.
+
+Use `/agent-api/tasks/{id}` somente quando o agente realmente precisar de mensagens/runs/eventos completos.
 
 ## Páginas web e ações HTMX/server-rendered
 

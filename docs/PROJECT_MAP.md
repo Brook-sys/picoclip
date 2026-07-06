@@ -200,6 +200,7 @@ Responsabilidades:
 
 - registrar rotas em `server.go`;
 - expor APIs admin, Agent API e API v1 envelopada;
+- oferecer endpoints compactos para agentes, como `heartbeat-context`, para reduzir tokens ao consultar estado de execução;
 - renderizar UI server-side com Templ;
 - servir assets;
 - expor SSE e partials HTMX;
