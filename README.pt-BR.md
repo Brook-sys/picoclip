@@ -41,9 +41,37 @@ Os principais objetivos são:
 
 PicoClip está em desenvolvimento ativo.
 
-Ele já inclui uma UI web funcional, gerenciamento de ciclo de vida de tasks, agentes, skills, projetos/workspaces, uma API administrativa local e uma Agent API para fluxos conduzidos por agentes.
+Ele já inclui uma UI web funcional, persistência SQLite, gerenciamento de ciclo de vida de tasks, agentes, skills, projetos/workspaces, adapters de runtime, APIs administrativas locais, uma Agent API para fluxos conduzidos por agentes, diagnostics, eventos Activity/SSE, suporte a cancelamento, recuperação de locks, detecção de runs travados e retry agendado com backoff.
 
-Mesmo assim, ainda é cedo. Alguns comportamentos continuam sendo refinados, e partes do sistema podem mudar bastante com o tempo.
+Mesmo assim, ainda é cedo. Alguns comportamentos continuam sendo refinados, e partes do sistema podem mudar bastante com o tempo. As áreas de robustez mais importantes agora são classificação de retry, visibilidade de recovery, enforcement de permissões, streaming de eventos de runtime e dashboards operacionais.
+
+## Como o PicoClip funciona
+
+PicoClip é construído em torno de um ciclo pequeno de orquestração:
+
+1. humanos ou agentes criam tasks;
+2. tasks são atribuídas a agentes e ficam executáveis;
+3. o dispatcher reivindica tasks executáveis com metadata de checkout/lock;
+4. o runner executa a task através de um runtime adapter;
+5. runs produzem eventos, mensagens, output, erros e metadata de uso;
+6. o reconciler repara locks antigos, processa wakeups, detecta runs travados e agenda retry quando apropriado.
+
+O sistema é intencionalmente local-first: o storage padrão é um banco SQLite local, workspaces ficam no filesystem local e adapters de runtime são comandos locais.
+
+## Modelo de robustez
+
+PicoClip tenta falhar de forma visível e recuperar de forma conservadora. Recursos atuais de confiabilidade incluem:
+
+- persistência SQLite por padrão;
+- checkout atômico de task e locks de execução;
+- recuperação de locks antigos;
+- cancelamento de runtime via adapters;
+- detecção de run travado baseada em heartbeat/output;
+- wakeups de retry com backoff exponencial;
+- eventos Activity `retry.scheduled`, `run.timeout` e `run.recovered`;
+- diagnostics para storage, runtime paths, workspace paths e runtimes configurados.
+
+Veja [Robustez, Recovery e Aprendizado com Falhas](docs/ROBUSTNESS.pt-BR.md) para o modelo operacional detalhado.
 
 ## Como iniciar rapidamente
 
@@ -142,6 +170,22 @@ Dados de demonstração opcionais:
 make seed
 ```
 
+Configuração útil em runtime:
+
+| Variável | Padrão | Finalidade |
+| --- | --- | --- |
+| `BIND` | `0.0.0.0` | Endereço de bind HTTP. Use `127.0.0.1` para acesso somente local. |
+| `PORT` | `8080` no binário, `8088` no Makefile | Porta HTTP. |
+| `PICOCLIP_STORAGE` | `sqlite` | `sqlite` ou `memory`. Use `memory` somente para sessões/testes temporários. |
+| `PICOCLIP_DB_PATH` | `data/picoclip.db` | Caminho do banco SQLite. |
+| `PICOCLIP_WORKSPACES` | `workspaces` | Diretório base dos projetos/workspaces. |
+| `PICOCLIP_RUNTIMES` | `data/runtimes` | Diretório base do estado dos runtimes. |
+| `PICOCLIP_LOG_LEVEL` | `info` | Nível de log. |
+| `PICOCLIP_DEBUG` | `false` | Ativa comportamento de debug quando `true` ou `1`. |
+| `CRUSH_PATH` | `crush` | Executável do runtime Crush. |
+| `PICOCLAW_PATH` | `picoclaw` | Executável do runtime PicoClaw. |
+| `CLAURST_PATH` | `claurst` | Executável do runtime Claurst. |
+
 Modo de desenvolvimento com live reload:
 
 ```sh
@@ -170,6 +214,7 @@ Veja:
 - [Roadmap](docs/ROADMAP.md)
 - [Estado Atual](docs/CURRENT_STATE.md)
 - [Arquitetura de Storage](docs/STORAGE.md)
+- [Robustez, Recovery e Aprendizado com Falhas](docs/ROBUSTNESS.pt-BR.md)
 - [Guia de Desenvolvimento](docs/DEVELOPMENT.md)
 
 ## Colaboração

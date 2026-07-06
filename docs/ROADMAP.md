@@ -151,10 +151,12 @@ Entregas concluídas:
 - Reconciler detecta runs sem output após `StallTimeout`, marca como `timeout`, chama cancelamento do runtime e reabre/reagenda a task quando cabível.
 - Recovery de lock expirado também fecha o run associado como `timeout` e emite evento `run.recovered`.
 - Runs órfãos sem task associada são marcados como `timeout`, cancelados no runtime e registrados em evento de recovery.
+- Retry wakeups usam backoff exponencial com cap de 5 minutos e não deixam a task executável antes do `DueAt` ser processado.
+- Retry de timeout persiste metadata de aprendizado (`previous_run_id`, `attempt`, `backoff_seconds`, `retryable`, `reason`) e evento `retry.scheduled` visível na Activity UI.
 
 Próximas entregas:
 
-- Retry queue com backoff e retryable vs non-retryable.
+- Classificação retryable vs non-retryable para falhas determinísticas e transitórias.
 - UI/API de recovery para runs órfãos, travados ou parcialmente cancelados.
 - Métricas agregadas de liveness/recovery no dashboard e diagnostics.
 - Windows Job Objects para cancelamento completo de árvore de processos no Windows.

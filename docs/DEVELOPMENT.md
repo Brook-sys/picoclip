@@ -7,11 +7,15 @@ This guide describes the repeatable local development, debug, and test workflow 
 - `cmd/picoclip/main.go` — application entrypoint.
 - `internal/adapters/web/server.go` — route registration.
 - `internal/adapters/web/html_handlers.go` — server-rendered HTML handlers and HTMX partial handlers.
-- `internal/adapters/web/views.go` — HTML rendering helpers. The project currently uses manual Go rendering, not `.templ` files.
+- `internal/adapters/web/*.templ` — strongly typed server-rendered UI templates.
+- `internal/adapters/web/*_templ.go` — generated templ output; regenerate locally with `make templ-generate`.
 - `internal/adapters/web/assets/` — CSS and static assets.
 - `internal/core/` — domain, ports, and application services.
 - `internal/adapters/storage/memory/` — in-memory repositories.
+- `internal/adapters/storage/sqlite/` — SQLite repositories and migrations.
+- `internal/adapters/runtimes/` — runtime adapters such as Crush, PicoClaw, and Claurst.
 - `e2e/` — Playwright browser tests.
+- `docs/ROBUSTNESS.md` — recovery, retry, and failure-learning model.
 
 ## Runtime configuration
 
@@ -19,7 +23,14 @@ Defaults:
 
 ```sh
 BIND=0.0.0.0
-PORT=8088
+PORT=8080      # binary default
+PORT=8088      # Makefile default for local development commands
+PICOCLIP_STORAGE=sqlite
+PICOCLIP_DB_PATH=data/picoclip.db
+PICOCLIP_WORKSPACES=workspaces
+PICOCLIP_RUNTIMES=data/runtimes
+PICOCLIP_LOG_LEVEL=info
+PICOCLIP_DEBUG=false
 ```
 
 Run manually:
@@ -27,6 +38,17 @@ Run manually:
 ```sh
 BIND=0.0.0.0 PORT=8088 go run cmd/picoclip/main.go
 ```
+
+Runtime executables can be overridden with:
+
+```sh
+CRUSH_PATH=/path/to/crush \
+PICOCLAW_PATH=/path/to/picoclaw \
+CLAURST_PATH=/path/to/claurst \
+go run cmd/picoclip/main.go
+```
+
+Use `PICOCLIP_STORAGE=memory` only for temporary sessions and tests; SQLite is the normal local-first mode.
 
 ## Install development tools
 
@@ -110,12 +132,14 @@ make check
 5. `go build -o picoclip cmd/picoclip/main.go`
 6. Playwright E2E tests
 
-## Go route and handler tests
+## Go route, handler, and service tests
 
-Go tests live next to the package they test. Current web tests are in:
+Go tests live next to the package they test. Current important test locations include:
 
 ```text
 internal/adapters/web/server_test.go
+internal/core/services/*_test.go
+internal/adapters/storage/*/*_test.go
 ```
 
 Run:
@@ -128,6 +152,14 @@ These tests cover:
 
 - Agent task lifecycle API: create, checkout, block, comment/reopen.
 - Task detail HTMX contract: no polling that swaps the entire body; live updates use `/partials/tasks/{id}`.
+- Reconciler behavior: stale lock recovery, stalled run timeout, delayed retry wakeups, retry metadata, and orphaned run recovery.
+- Storage behavior parity between memory and SQLite adapters.
+
+For recovery/retry changes, run a focused test first, for example:
+
+```sh
+go test ./internal/core/services -run 'TestReconciler|TestStalledRun' -count=1
+```
 
 ## Browser E2E tests with Playwright
 
@@ -206,6 +238,16 @@ When changing UI or handlers:
 5. Check Network tab or Playwright request failures.
 6. Run `make test-e2e`.
 7. Run `make check` before considering the change complete.
+
+When changing retry, recovery, cancellation, scheduler, dispatcher, or runtime behavior:
+
+1. Read `docs/ROBUSTNESS.md`.
+2. Add or update a regression test before changing production code.
+3. Verify the test fails for the expected reason.
+4. Make the smallest implementation change.
+5. Run the focused Go package tests.
+6. Confirm the behavior creates clear Activity events or diagnostics when appropriate.
+7. Run `make check`.
 
 ## Useful commands
 
