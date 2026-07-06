@@ -127,6 +127,64 @@ func (r *recordingCanceler) CancelRun(ctx context.Context, run domain.Run) error
 	return nil
 }
 
+func TestReconcilerSchedulesRetryWakeupWithExponentialBackoffMetadata(t *testing.T) {
+	st := memory.NewStorage()
+	clock := fixedClock{t: time.Date(2026, 6, 25, 14, 30, 0, 0, time.UTC)}
+	idgen := &seqID{}
+	bus := noopBus{}
+	logger := testLogger{}
+
+	agent := domain.Agent{ID: "agt_1", Name: "a", Type: "internal", Enabled: true, Capability: domain.CapabilityWorker, CreatedAt: clock.t, UpdatedAt: clock.t}
+	if err := st.Agents().Create(context.Background(), agent); err != nil {
+		t.Fatalf("create agent: %v", err)
+	}
+
+	svc := NewTaskService(st, clock, idgen, bus)
+	task, err := svc.Create(context.Background(), agent.ID, "t", "do")
+	if err != nil {
+		t.Fatalf("create task: %v", err)
+	}
+	locked, err := svc.Checkout(context.Background(), task.ID, agent.ID, "run_1", nil)
+	if err != nil {
+		t.Fatalf("checkout: %v", err)
+	}
+	locked.Attempts = 4
+	locked.MaxAttempts = 10
+	if err := st.Tasks().Update(context.Background(), locked); err != nil {
+		t.Fatalf("update task attempts: %v", err)
+	}
+
+	last := clock.t.Add(-3 * time.Minute)
+	run := domain.Run{
+		ID:           "run_1",
+		TaskID:       task.ID,
+		AgentID:      agent.ID,
+		Status:       domain.RunStatusRunning,
+		Attempt:      4,
+		StallTimeout: 60,
+		LastOutputAt: &last,
+		StartedAt:    clock.t.Add(-5 * time.Minute),
+	}
+	if err := st.Runs().Create(context.Background(), run); err != nil {
+		t.Fatalf("create run: %v", err)
+	}
+
+	reconciler := NewReconciler(st, clock, bus, idgen, logger)
+	reconciler.Reconcile(context.Background())
+
+	wakeups, _ := st.Wakeups().ListPending(context.Background(), clock.t.Add(time.Hour), 10)
+	if len(wakeups) != 1 {
+		t.Fatalf("expected 1 retry wakeup, got %d", len(wakeups))
+	}
+	wantDue := clock.t.Add(4 * time.Minute)
+	if !wakeups[0].DueAt.Equal(wantDue) {
+		t.Fatalf("retry due_at=%s want %s", wakeups[0].DueAt, wantDue)
+	}
+	if wakeups[0].Payload["previous_run_id"] != run.ID || wakeups[0].Payload["attempt"] != "4" || wakeups[0].Payload["backoff_seconds"] != "240" || wakeups[0].Payload["retryable"] != "true" {
+		t.Fatalf("unexpected retry payload: %#v", wakeups[0].Payload)
+	}
+}
+
 func TestReconcilerRecoversRunningRunWithMissingTask(t *testing.T) {
 	st := memory.NewStorage()
 	clock := fixedClock{t: time.Date(2026, 6, 25, 15, 0, 0, 0, time.UTC)}

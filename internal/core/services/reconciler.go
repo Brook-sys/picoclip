@@ -2,6 +2,7 @@ package services
 
 import (
 	"context"
+	"strconv"
 	"time"
 
 	"picoclip/internal/core/domain"
@@ -176,19 +177,23 @@ func (r *Reconciler) detectStalledRuns(ctx context.Context) int {
 		}
 
 		if requeued {
-			due := now.Add(time.Duration(run.Attempt+1) * 30 * time.Second)
-			if due.Sub(now) > 5*time.Minute {
-				due = now.Add(5 * time.Minute)
-			}
+			delay := retryBackoff(run.Attempt)
 			wakeup := domain.WakeupRequest{
-				ID:        r.idGen.NewID("wakeup"),
-				TaskID:    run.TaskID,
-				AgentID:   run.AgentID,
-				Reason:    domain.WakeupReasonRetry,
-				Status:    domain.WakeupStatusPending,
-				Priority:  5,
-				DueAt:     due,
+				ID:       r.idGen.NewID("wakeup"),
+				TaskID:   run.TaskID,
+				AgentID:  run.AgentID,
+				Reason:   domain.WakeupReasonRetry,
+				Status:   domain.WakeupStatusPending,
+				Priority: 5,
+				DueAt:    now.Add(delay),
+				Payload: map[string]string{
+					"previous_run_id": run.ID,
+					"attempt":         strconv.Itoa(run.Attempt),
+					"backoff_seconds": strconv.Itoa(int(delay.Seconds())),
+					"retryable":       "true",
+				},
 				CreatedAt: now,
+				UpdatedAt: now,
 			}
 			_ = r.storage.Wakeups().Create(ctx, wakeup)
 		}
@@ -196,6 +201,17 @@ func (r *Reconciler) detectStalledRuns(ctx context.Context) int {
 	}
 
 	return count
+}
+
+func retryBackoff(attempt int) time.Duration {
+	if attempt < 1 {
+		attempt = 1
+	}
+	delay := time.Duration(1<<(attempt-1)) * 30 * time.Second
+	if delay > 5*time.Minute {
+		return 5 * time.Minute
+	}
+	return delay
 }
 
 func (r *Reconciler) recoverOrphanedRuns(ctx context.Context) int {
