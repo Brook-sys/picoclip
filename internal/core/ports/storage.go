@@ -85,6 +85,8 @@ type TaskRepository interface {
 	Get(ctx context.Context, id string) (domain.Task, error)
 	List(ctx context.Context, filter TaskFilter) ([]domain.Task, error)
 	Update(ctx context.Context, task domain.Task) error
+	Delete(ctx context.Context, id string) error
+	DeleteFinished(ctx context.Context) (int, error)
 	ClaimNextPending(ctx context.Context) (domain.Task, error)
 	ClaimNextRunnable(ctx context.Context, now time.Time, lockTTL time.Duration) (domain.Task, domain.Run, error)
 }
@@ -95,6 +97,8 @@ type RunRepository interface {
 	ListByTask(ctx context.Context, taskID string) ([]domain.Run, error)
 	ListRunning(ctx context.Context) ([]domain.Run, error)
 	Update(ctx context.Context, run domain.Run) error
+	Delete(ctx context.Context, id string) error
+	DeleteFinished(ctx context.Context) (int, error)
 }
 
 type WakeupRepository interface {
@@ -113,6 +117,9 @@ type EventRepository interface {
 	MarkOutboxFailed(ctx context.Context, id string, message string, nextAttemptAt time.Time) error
 	ListByTask(ctx context.Context, taskID string) ([]domain.Event, error)
 	ListRecent(ctx context.Context, limit int) ([]domain.Event, error)
+	Delete(ctx context.Context, id string) error
+	DeleteFinished(ctx context.Context) (int, error)
+	DeleteAll(ctx context.Context) (int, error)
 }
 
 type MessageRepository interface {

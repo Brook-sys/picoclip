@@ -140,6 +140,59 @@ func (r *TaskRepository) Update(ctx context.Context, task domain.Task) error {
 	return nil
 }
 
+func (r *TaskRepository) Delete(ctx context.Context, id string) error {
+	q := getQueryer(ctx, r.db)
+	for _, query := range []string{
+		`DELETE FROM usage_events WHERE task_id = ?`,
+		`DELETE FROM wakeups WHERE task_id = ?`,
+		`DELETE FROM messages WHERE task_id = ?`,
+		`DELETE FROM events WHERE task_id = ?`,
+		`DELETE FROM runs WHERE task_id = ?`,
+	} {
+		if _, err := q.ExecContext(ctx, query, id); err != nil {
+			return err
+		}
+	}
+	res, err := q.ExecContext(ctx, `DELETE FROM tasks WHERE id = ?`, id)
+	if err != nil {
+		return err
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return domain.ErrNotFound
+	}
+	return nil
+}
+
+func (r *TaskRepository) DeleteFinished(ctx context.Context) (int, error) {
+	q := getQueryer(ctx, r.db)
+	rows, err := q.QueryContext(ctx, `SELECT id FROM tasks WHERE status IN ('done', 'cancelled')`)
+	if err != nil {
+		return 0, err
+	}
+	defer rows.Close()
+	ids := make([]string, 0)
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return 0, err
+		}
+		ids = append(ids, id)
+	}
+	if err := rows.Err(); err != nil {
+		return 0, err
+	}
+	for _, id := range ids {
+		if err := r.Delete(ctx, id); err != nil && !errors.Is(err, domain.ErrNotFound) {
+			return 0, err
+		}
+	}
+	return len(ids), nil
+}
+
 func (r *TaskRepository) ClaimNextPending(ctx context.Context) (domain.Task, error) {
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -147,6 +200,7 @@ func (r *TaskRepository) ClaimNextPending(ctx context.Context) (domain.Task, err
 	}
 	defer tx.Rollback()
 
+	now := time.Now()
 	query := `
 		SELECT id, parent_id, workspace_id, agent_id, title, prompt, status, priority,
 			mode, loop_delay_seconds, loop_run_count, loop_next_run_at, loop_paused_at, loop_audit_prompt,
@@ -155,12 +209,13 @@ func (r *TaskRepository) ClaimNextPending(ctx context.Context) (domain.Task, err
 		FROM tasks
 		WHERE needs_run = 1
 			AND status NOT IN ('done', 'cancelled')
+			AND (mode != 'continuous' OR (loop_paused_at IS NULL AND (status != 'waiting_next_cycle' OR loop_next_run_at <= ?)))
 			AND checkout_run_id = ''
 			AND checked_out_by_agent_id = ''
 			AND (max_attempts <= 0 OR attempts < max_attempts)
 		ORDER BY priority DESC, created_at ASC LIMIT 1
 	`
-	row := tx.QueryRowContext(ctx, query)
+	row := tx.QueryRowContext(ctx, query, now)
 	task, err := scanTask(row)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) || errors.Is(err, domain.ErrNotFound) {
@@ -174,11 +229,12 @@ func (r *TaskRepository) ClaimNextPending(ctx context.Context) (domain.Task, err
 		WHERE id = ?
 			AND needs_run = 1
 			AND status NOT IN ('done', 'cancelled')
+			AND (mode != 'continuous' OR (loop_paused_at IS NULL AND (status != 'waiting_next_cycle' OR loop_next_run_at <= ?)))
 			AND checkout_run_id = ''
 			AND checked_out_by_agent_id = ''
 			AND (max_attempts <= 0 OR attempts < max_attempts)
 	`
-	res, err := tx.ExecContext(ctx, updateQuery, task.ID)
+	res, err := tx.ExecContext(ctx, updateQuery, task.ID, now)
 	if err != nil {
 		return domain.Task{}, err
 	}
@@ -213,12 +269,13 @@ func (r *TaskRepository) ClaimNextRunnable(ctx context.Context, now time.Time, l
 		FROM tasks
 		WHERE needs_run = 1
 			AND status NOT IN ('done', 'cancelled')
+			AND (mode != 'continuous' OR (loop_paused_at IS NULL AND (status != 'waiting_next_cycle' OR loop_next_run_at <= ?)))
 			AND checkout_run_id = ''
 			AND checked_out_by_agent_id = ''
 			AND (max_attempts <= 0 OR attempts < max_attempts)
 		ORDER BY priority DESC, created_at ASC LIMIT 1
 	`
-	row := tx.QueryRowContext(ctx, query)
+	row := tx.QueryRowContext(ctx, query, now)
 	task, err := scanTask(row)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) || errors.Is(err, domain.ErrNotFound) {
@@ -244,11 +301,12 @@ func (r *TaskRepository) ClaimNextRunnable(ctx context.Context, now time.Time, l
 		WHERE id = ?
 			AND needs_run = 1
 			AND status NOT IN ('done', 'cancelled')
+			AND (mode != 'continuous' OR (loop_paused_at IS NULL AND (status != 'waiting_next_cycle' OR loop_next_run_at <= ?)))
 			AND checkout_run_id = ''
 			AND checked_out_by_agent_id = ''
 			AND (max_attempts <= 0 OR attempts < max_attempts)
 	`
-	res, err := tx.ExecContext(ctx, update, runID, now, now, lockExpires, now, task.ID)
+	res, err := tx.ExecContext(ctx, update, runID, now, now, lockExpires, now, task.ID, now)
 	if err != nil {
 		return domain.Task{}, domain.Run{}, err
 	}

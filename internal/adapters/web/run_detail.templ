@@ -3,16 +3,17 @@ package web
 import "fmt"
 import "picoclip/internal/core/domain"
 
-templ RunDetailPage(run domain.Run, task taskResponse, agent domain.Agent) {
+templ RunDetailPage(run domain.Run, task taskResponse, agent domain.Agent, toolCalls []ToolCallView) {
+
 	@PageShell("runs", "Run " + run.ID, "Execution output, runtime metadata and raw agent context.", runDetailAction(task.ID)) {
 		<section class="detail-grid">
 			if run.Status == domain.RunStatusRunning {
 				<div class="main-column" id="run-live" hx-get={ "/partials/runs/" + run.ID } hx-trigger="every 5s" hx-swap="innerHTML">
-					@RunLive(run, task, agent)
+					@RunLive(run, task, agent, toolCalls)
 				</div>
 			} else {
-				<div class="main-column" id="run-live" hx-get={ "/partials/runs/" + run.ID } hx-swap="innerHTML">
-					@RunLive(run, task, agent)
+				<div class="main-column" id="run-live">
+					@RunLive(run, task, agent, toolCalls)
 				</div>
 			}
 			<aside class="side-column">
@@ -24,7 +25,7 @@ templ RunDetailPage(run domain.Run, task taskResponse, agent domain.Agent) {
 	}
 }
 
-templ RunLive(run domain.Run, task taskResponse, agent domain.Agent) {
+templ RunLive(run domain.Run, task taskResponse, agent domain.Agent, toolCalls []ToolCallView) {
 	<div class={ "panel", "run-live-card", runActivityClass(run.Status) }>
 		<div class="run-live-header">
 			<div>
@@ -40,24 +41,76 @@ templ RunLive(run domain.Run, task taskResponse, agent domain.Agent) {
 			<div><small>Attempt</small><strong>{ runAttemptText(run) }</strong></div>
 			<div><small>Tokens</small><strong>{ tokenUsageText(run.InputTokens, run.OutputTokens, run.TotalTokens) }</strong></div>
 		</div>
+		if runIssueLabel(run) != "" {
+			<div class="run-diagnostic-banner">
+				<span class={ "badge", runIssueClass(run) }>{ runIssueLabel(run) }</span>
+				<strong>{ runIssueAdvice(run) }</strong>
+			</div>
+		}
 	</div>
 
 	<div class="panel run-console-card" data-run-id={ run.ID }>
-		@SectionHeader("Console Output", "Captured output from the agent runtime.") {}
+		<div class="run-console-header">
+			<div>
+				<span class="run-live-eyebrow">Runtime console</span>
+				<h2>Execution stream</h2>
+				<p>Structured stdout/stderr captured from the agent runtime.</p>
+			</div>
+			<div class="run-console-actions">
+				<span class="run-console-stat">stdout { logByteText(run.Output) }</span>
+				<span class={ "run-console-stat", templ.KV("is-error", run.Error != "") }>stderr { logByteText(run.Error) }</span>
+				<button class="activity-action" type="button" data-copy-target="run-stdout">Copy stdout</button>
+				<button class="activity-action" type="button" data-copy-target="run-stderr">Copy stderr</button>
+			</div>
+		</div>
+		<div class="run-console-tabs" role="tablist" aria-label="Run console streams">
+			<button class="run-console-tab active" type="button" data-console-tab="stdout">stdout</button>
+			<button class={ "run-console-tab", templ.KV("has-error", run.Error != "") } type="button" data-console-tab="stderr">stderr</button>
+			<button class="run-console-tab" type="button" data-console-tab="split">split</button>
+		</div>
 		<div id="run-output-empty">
 			if run.Output == "" && run.Error == "" {
-				@EmptyState("No console output", "This run has not produced output yet.", "bar-chart") {}
+				@EmptyState("No console output", "This run has not produced output yet. Live stdout and stderr will appear here as the runtime emits data.", "bar-chart") {}
 			}
 		</div>
-		<div class="run-log-section">
-			<div class="run-log-label">stdout</div>
-			<pre id="run-stdout" class="log-viewer run-log-viewer">{ run.Output }</pre>
-		</div>
-		<div class="run-log-section">
-			<div class="run-log-label">stderr</div>
-			<pre id="run-stderr" class="log-viewer run-log-viewer error-log">{ run.Error }</pre>
+		<div class="run-console-grid" data-console-view="stdout">
+			<div class="run-log-section" data-console-panel="stdout">
+				<div class="run-log-title"><span class="run-log-dot stdout"></span><strong>stdout</strong><small>normal runtime output</small></div>
+				<pre id="run-stdout" class="run-terminal-output">{ run.Output }</pre>
+			</div>
+			<div class="run-log-section" data-console-panel="stderr" hidden>
+				<div class="run-log-title"><span class="run-log-dot stderr"></span><strong>stderr</strong><small>warnings and errors</small></div>
+				<pre id="run-stderr" class="run-terminal-output error-log">{ run.Error }</pre>
+			</div>
 		</div>
 	</div>
+	<script>
+		(function(){
+			var card = document.querySelector('.run-console-card[data-run-id]');
+			if (!card || card.dataset.consoleReady === 'true') return;
+			card.dataset.consoleReady = 'true';
+			var storageKey = 'picoclip.runConsoleView.' + card.dataset.runId;
+			function setView(view){
+				var grid = card.querySelector('.run-console-grid');
+				if (!grid) return;
+				grid.dataset.consoleView = view;
+				card.querySelectorAll('[data-console-tab]').forEach(function(tab){ tab.classList.toggle('active', tab.dataset.consoleTab === view); });
+				card.querySelectorAll('[data-console-panel]').forEach(function(panel){ panel.hidden = view !== 'split' && panel.dataset.consolePanel !== view; });
+				try { localStorage.setItem(storageKey, view); } catch(e) {}
+			}
+			try { setView(localStorage.getItem(storageKey) || 'stdout'); } catch(e) { setView('stdout'); }
+			card.addEventListener('click', function(evt){
+				var tab = evt.target.closest('[data-console-tab]');
+				if (tab) setView(tab.dataset.consoleTab);
+				var copy = evt.target.closest('[data-copy-target]');
+				if (copy) {
+					var target = document.getElementById(copy.dataset.copyTarget);
+					var value = target ? target.textContent : '';
+					if (navigator.clipboard) navigator.clipboard.writeText(value || '').then(function(){ if(window.picoclipToast) window.picoclipToast('Copied console output.', 'success'); });
+				}
+			});
+		})();
+	</script>
 	if run.Status == domain.RunStatusRunning {
 		<script>
 			(function(){
@@ -93,6 +146,28 @@ templ RunLive(run domain.Run, task taskResponse, agent domain.Agent) {
 		</script>
 	}
 
+	<div class="panel run-tool-calls-card">
+		@SectionHeader("Tool calls", "Commands and file operations intercepted by PicoClip Crush hooks for this run.") {}
+		if len(toolCalls) == 0 {
+			@EmptyState("No tool calls captured", "The runtime did not call tools yet, hooks did not run, or provider failed before tool use.", "activity") {}
+		} else {
+			<div class="tool-call-list">
+				for _, call := range toolCalls {
+					<div class="tool-call-row">
+						<div class="tool-call-main">
+							<span class="run-type">{ call.Tool }</span>
+							<strong>{ call.Command }</strong>
+							if call.File != "" {
+								<small>{ call.File }</small>
+							}
+						</div>
+						<small>{ call.Time }</small>
+					</div>
+				}
+			</div>
+		}
+	</div>
+
 	if run.Input != "" {
 		<div class="panel run-context-card">
 			@SectionHeader("System Context", "Raw prompt and context sent to the runtime.") {}
@@ -102,6 +177,16 @@ templ RunLive(run domain.Run, task taskResponse, agent domain.Agent) {
 			</details>
 		</div>
 	}
+}
+
+func logByteText(value string) string {
+	if len(value) == 0 {
+		return "0 B"
+	}
+	if len(value) < 1024 {
+		return fmt.Sprintf("%d B", len(value))
+	}
+	return fmt.Sprintf("%.1f KB", float64(len(value))/1024)
 }
 
 func runLiveTitle(status domain.RunStatus) string {

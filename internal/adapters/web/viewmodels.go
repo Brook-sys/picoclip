@@ -175,13 +175,96 @@ func openQuestionsForTask(task domain.Task, messages []domain.Message) []Questio
 		if message.Role != domain.MessageRoleAgent && message.Role != domain.MessageRoleSystem {
 			continue
 		}
-		body := strings.TrimSpace(message.Body)
-		if body == "" || !strings.Contains(body, "?") {
+		body := explicitUserQuestion(strings.TrimSpace(message.Body))
+		if body == "" {
 			continue
 		}
 		questions = append(questions, QuestionForUser{TaskID: task.ID, TaskTitle: task.Title, AgentID: task.AgentID, Body: body, CreatedAt: message.CreatedAt})
 	}
 	return questions
+}
+
+func explicitUserQuestion(body string) string {
+	body = strings.TrimSpace(body)
+	if body == "" {
+		return ""
+	}
+	markers := []string{"Pergunta para você:", "Pergunta ao usuário:", "User question:", "Question for user:"}
+	for _, marker := range markers {
+		idx := strings.Index(strings.ToLower(body), strings.ToLower(marker))
+		if idx < 0 {
+			continue
+		}
+		question := strings.TrimSpace(body[idx+len(marker):])
+		if question == "" || !strings.Contains(question, "?") {
+			return ""
+		}
+		return question
+	}
+	return ""
+}
+
+func runIssueLabel(run domain.Run) string {
+	message := strings.ToLower(run.Error)
+	if message == "" {
+		if run.Status == domain.RunStatusTimeout {
+			return "Timeout"
+		}
+		return ""
+	}
+	if strings.Contains(message, "429") || strings.Contains(message, "too many requests") || strings.Contains(message, "rate limit") || strings.Contains(message, "rate_limit") {
+		return "Provider rate limit"
+	}
+	if strings.Contains(message, "internal_server_error") || strings.Contains(message, "internal server error") || strings.Contains(message, "code\":500") || strings.Contains(message, "status\":500") {
+		return "Provider unstable"
+	}
+	if strings.Contains(message, "auth_unavailable") || strings.Contains(message, "no auth available") || strings.Contains(message, "unauthorized") || strings.Contains(message, "invalid api key") {
+		return "Provider auth"
+	}
+	if strings.Contains(message, "quota") || strings.Contains(message, "insufficient_quota") {
+		return "Provider quota"
+	}
+	if strings.Contains(message, "fork/exec") || strings.Contains(message, "no such file or directory") || strings.Contains(message, "runtime unavailable") || strings.Contains(message, "start failed") {
+		return "Runtime configuration"
+	}
+	if strings.Contains(message, "signal: killed") {
+		return "Process killed"
+	}
+	return "Runtime error"
+}
+
+func runIssueAdvice(run domain.Run) string {
+	switch runIssueLabel(run) {
+	case "Provider rate limit":
+		return "Aguarde o cooldown ou troque provider/model antes de retomar a task."
+	case "Provider unstable":
+		return "Provider retornou 5xx em sequência; a task foi pausada para evitar cascata. Tente outro modelo/provider ou retome depois."
+	case "Provider auth":
+		return "Revise API key, base URL e provider/model em Settings antes de retomar."
+	case "Provider quota":
+		return "Revise quota/créditos do provider ou altere o modelo."
+	case "Runtime configuration":
+		return "Revise instalação/path do runtime e salve a configuração novamente."
+	case "Process killed", "Timeout":
+		return "Aumente timeout, reduza escopo da task ou verifique consumo de recursos."
+	case "Runtime error":
+		return "Abra stderr e tool calls para investigar o ponto de falha."
+	default:
+		return ""
+	}
+}
+
+func runIssueClass(run domain.Run) string {
+	switch runIssueLabel(run) {
+	case "Provider unstable", "Provider auth", "Provider quota", "Runtime configuration":
+		return "badge-bad"
+	case "Provider rate limit", "Process killed", "Timeout":
+		return "badge-warn"
+	case "Runtime error":
+		return "badge-info"
+	default:
+		return ""
+	}
 }
 
 func timeSince(t time.Time) string {

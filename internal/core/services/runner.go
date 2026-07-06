@@ -169,10 +169,16 @@ func (r *Runner) Run(ctx context.Context, task domain.Task) {
 	}
 
 	conversation = append(conversation, r.taskProtocolContext(ctx, task, run, messages))
-	for _, skill := range skills {
-		conversation = append(conversation, r.skillContext(skill))
+	if catalog := r.skillCatalogContext(skills); catalog != "" {
+		conversation = append(conversation, catalog)
 	}
-	conversation = append(conversation, "User task: "+task.Prompt)
+	manualSkills := r.manualSkillIDs(agent)
+	for _, skill := range skills {
+		if _, ok := manualSkills[skill.ID]; ok {
+			conversation = append(conversation, r.skillContext(skill))
+		}
+	}
+	conversation = append(conversation, "User task: "+promptSnippet(task.Prompt, 2500))
 	task.Prompt = strings.Join(conversation, "\n\n")
 	run.Input = task.Prompt
 	run.InputTokens = estimateTokens(run.Input)
@@ -190,18 +196,29 @@ func (r *Runner) Run(ctx context.Context, task domain.Task) {
 		memoryContext = ""
 	}
 
+	workspacePath := ""
+	if task.WorkspaceID != "" {
+		if workspace, workspaceErr := r.storage.Workspaces().Get(runCtx, task.WorkspaceID); workspaceErr == nil {
+			workspacePath = workspace.RootPath
+		}
+	}
+
 	var result ports.RuntimeExecutionResult
 	if agent.Type == "noop" {
 		result = ports.RuntimeExecutionResult{Output: "noop driver executed"}
 	} else {
+		lastRunStreamPersist := time.Time{}
+		pendingRunStreamBytes := 0
 		result, err = r.runtimes.Execute(runCtx, domain.RuntimeID(agent.Type), ports.RuntimeExecutionInput{
-			Agent:     agent,
-			Task:      task,
-			Run:       run,
-			Memory:    memoryContext,
-			Config:    agent.Config,
-			Env:       agent.Env,
-			ExtraArgs: agent.ExtraArgs,
+			Agent:          agent,
+			Task:           task,
+			Run:            run,
+			Memory:         memoryContext,
+			Config:         agent.Config,
+			Env:            agent.Env,
+			ExtraArgs:      agent.ExtraArgs,
+			WorkspacePath:  workspacePath,
+			RuntimeBaseURL: r.config.RuntimeBaseURL,
 			OnStart: func(pid int) {
 				run.ProcessID = pid
 				_ = r.storage.Runs().Update(ctx, run)
@@ -211,7 +228,12 @@ func (r *Runner) Run(ctx context.Context, task domain.Task) {
 				run.Output = appendRunStream(run.Output, stdout)
 				run.Error = appendRunStream(run.Error, stderr)
 				run.LastOutputAt = &now
-				_ = r.storage.Runs().Update(ctx, run)
+				pendingRunStreamBytes += len(stdout) + len(stderr)
+				if lastRunStreamPersist.IsZero() || now.Sub(lastRunStreamPersist) >= 500*time.Millisecond || pendingRunStreamBytes >= 16*1024 {
+					_ = r.storage.Runs().Update(ctx, run)
+					lastRunStreamPersist = now
+					pendingRunStreamBytes = 0
+				}
 				_ = r.bus.Publish(ctx, domain.Event{
 					ID:        r.idGen.NewID("evt"),
 					Type:      domain.EventRunOutput,
@@ -249,7 +271,15 @@ func (r *Runner) Run(ctx context.Context, task domain.Task) {
 		_ = r.storage.Runs().Update(ctx, run)
 		r.emitEvent(ctx, domain.Event{ID: r.idGen.NewID("evt"), Type: domain.EventRunFailed, TaskID: task.ID, AgentID: agent.ID, RunID: run.ID, Message: err.Error(), CreatedAt: finishedAt})
 		if task.Mode == domain.TaskModeContinuous {
-			r.completeContinuousCycle(ctx, task, run, finishedAt)
+			if isRateLimitError(err.Error()) {
+				r.scheduleContinuousRateLimitBackoff(ctx, task, run, finishedAt, err.Error())
+			} else if isTransientProviderError(err.Error()) {
+				r.scheduleContinuousTransientProviderBackoff(ctx, task, run, finishedAt, err.Error())
+			} else if shouldPauseContinuousAfterRuntimeError(err.Error()) {
+				r.pauseContinuousAfterRuntimeError(ctx, task, run, finishedAt, err.Error())
+			} else {
+				r.completeContinuousCycle(ctx, task, run, finishedAt)
+			}
 		} else {
 			r.failTask(ctx, task, fmt.Sprintf("%v", err))
 		}
@@ -332,6 +362,191 @@ func (r *Runner) completeContinuousCycle(ctx context.Context, task domain.Task, 
 	task.LoopNextRunAt = &nextRunAt
 
 	_ = r.storage.Tasks().Update(ctx, task)
+}
+
+func isRateLimitError(message string) bool {
+	message = strings.ToLower(message)
+	markers := []string{
+		"status\":429",
+		"status 429",
+		"429",
+		"too many requests",
+		"rate limit",
+		"rate_limit",
+	}
+	for _, marker := range markers {
+		if strings.Contains(message, marker) {
+			return true
+		}
+	}
+	return false
+}
+
+func rateLimitBackoffDuration(consecutiveFailures int) time.Duration {
+	if consecutiveFailures < 1 {
+		consecutiveFailures = 1
+	}
+	seconds := 6
+	for i := 1; i < consecutiveFailures; i++ {
+		seconds *= 3
+		if seconds >= 7200 {
+			return 2 * time.Hour
+		}
+	}
+	return time.Duration(seconds) * time.Second
+}
+
+func isTransientProviderError(message string) bool {
+	message = strings.ToLower(message)
+	markers := []string{
+		"internal_server_error",
+		"internal server error",
+		"status\":500",
+		"status 500",
+		"code\":500",
+		"code 500",
+		"bad gateway",
+		"status\":502",
+		"status 502",
+		"service unavailable",
+		"status\":503",
+		"status 503",
+		"gateway timeout",
+		"status\":504",
+		"status 504",
+	}
+	for _, marker := range markers {
+		if strings.Contains(message, marker) {
+			return true
+		}
+	}
+	return false
+}
+
+func transientProviderBackoffDuration(consecutiveFailures int) time.Duration {
+	if consecutiveFailures < 1 {
+		consecutiveFailures = 1
+	}
+	minutes := 2
+	for i := 1; i < consecutiveFailures; i++ {
+		minutes *= 2
+		if minutes >= 60 {
+			return time.Hour
+		}
+	}
+	return time.Duration(minutes) * time.Minute
+}
+
+func (r *Runner) consecutiveRateLimitFailures(ctx context.Context, taskID string) int {
+	return r.consecutiveFailures(ctx, taskID, isRateLimitError)
+}
+
+func (r *Runner) consecutiveTransientProviderFailures(ctx context.Context, taskID string) int {
+	return r.consecutiveFailures(ctx, taskID, isTransientProviderError)
+}
+
+func (r *Runner) consecutiveFailures(ctx context.Context, taskID string, match func(string) bool) int {
+	runs, err := r.storage.Runs().ListByTask(ctx, taskID)
+	if err != nil {
+		return 1
+	}
+	count := 0
+	for i := len(runs) - 1; i >= 0; i-- {
+		run := runs[i]
+		if run.Status == domain.RunStatusRunning {
+			continue
+		}
+		if match(run.Error) {
+			count++
+			continue
+		}
+		break
+	}
+	if count < 1 {
+		return 1
+	}
+	return count
+}
+
+func (r *Runner) scheduleContinuousRateLimitBackoff(ctx context.Context, task domain.Task, run domain.Run, finishedAt time.Time, message string) {
+	r.scheduleContinuousBackoff(ctx, task, run, finishedAt, rateLimitBackoffDuration(r.consecutiveRateLimitFailures(ctx, task.ID)), "rate limit/429", message)
+}
+
+func (r *Runner) scheduleContinuousTransientProviderBackoff(ctx context.Context, task domain.Task, run domain.Run, finishedAt time.Time, message string) {
+	failures := r.consecutiveTransientProviderFailures(ctx, task.ID)
+	if failures >= 5 {
+		r.pauseContinuousAfterRuntimeError(ctx, task, run, finishedAt, message)
+		return
+	}
+	r.scheduleContinuousBackoff(ctx, task, run, finishedAt, transientProviderBackoffDuration(failures), "transient provider error", message)
+}
+
+func (r *Runner) scheduleContinuousBackoff(ctx context.Context, task domain.Task, run domain.Run, finishedAt time.Time, backoff time.Duration, reason, message string) {
+	latest, err := r.storage.Tasks().Get(ctx, task.ID)
+	if err == nil {
+		task = latest
+	}
+	if task.CheckoutRunID == run.ID || run.ID == "" {
+		task.CheckoutRunID = ""
+		task.CheckedOutByAgentID = ""
+		task.ExecutionLockedAt = nil
+		task.LockExpiresAt = nil
+	}
+	nextRunAt := finishedAt.Add(backoff)
+	task.Status = domain.TaskStatusWaitingNextCycle
+	task.NeedsRun = false
+	task.LoopNextRunAt = &nextRunAt
+	task.FinishedAt = &finishedAt
+	task.UpdatedAt = finishedAt
+	_ = r.storage.Tasks().Update(ctx, task)
+	body := fmt.Sprintf("Continuous task delayed after %s. Next attempt in %s. Error: %s", reason, backoff.String(), message)
+	_ = r.storage.Messages().Create(ctx, domain.Message{ID: r.idGen.NewID("msg"), TaskID: task.ID, Role: domain.MessageRoleSystem, Body: body, CreatedAt: finishedAt})
+	r.emitEvent(ctx, domain.Event{ID: r.idGen.NewID("evt"), Type: domain.EventTaskReleased, TaskID: task.ID, AgentID: task.AgentID, RunID: run.ID, Message: body, CreatedAt: finishedAt})
+}
+
+func shouldPauseContinuousAfterRuntimeError(message string) bool {
+	message = strings.ToLower(message)
+	markers := []string{
+		"auth_unavailable",
+		"no auth available",
+		"unauthorized",
+		"invalid api key",
+		"quota",
+		"insufficient_quota",
+		"no such file or directory",
+		"runtime unavailable",
+		"start failed",
+		"fork/exec",
+	}
+	for _, marker := range markers {
+		if strings.Contains(message, marker) {
+			return true
+		}
+	}
+	return false
+}
+
+func (r *Runner) pauseContinuousAfterRuntimeError(ctx context.Context, task domain.Task, run domain.Run, finishedAt time.Time, message string) {
+	latest, err := r.storage.Tasks().Get(ctx, task.ID)
+	if err == nil {
+		task = latest
+	}
+	if task.CheckoutRunID == run.ID || run.ID == "" {
+		task.CheckoutRunID = ""
+		task.CheckedOutByAgentID = ""
+		task.ExecutionLockedAt = nil
+		task.LockExpiresAt = nil
+	}
+	task.Status = domain.TaskStatusWaitingNextCycle
+	task.NeedsRun = false
+	task.LoopNextRunAt = nil
+	task.LoopPausedAt = &finishedAt
+	task.FinishedAt = &finishedAt
+	task.UpdatedAt = finishedAt
+	_ = r.storage.Tasks().Update(ctx, task)
+	body := "Continuous task paused after runtime/provider error: " + message
+	_ = r.storage.Messages().Create(ctx, domain.Message{ID: r.idGen.NewID("msg"), TaskID: task.ID, Role: domain.MessageRoleSystem, Body: body, CreatedAt: finishedAt})
+	r.emitEvent(ctx, domain.Event{ID: r.idGen.NewID("evt"), Type: domain.EventTaskReleased, TaskID: task.ID, AgentID: task.AgentID, RunID: run.ID, Message: body, CreatedAt: finishedAt})
 }
 
 func (r *Runner) failTask(ctx context.Context, task domain.Task, message string) {
@@ -430,13 +645,41 @@ func skillAllowedForAgent(skill domain.Skill, agent domain.Agent) bool {
 }
 
 func (r *Runner) permissionContext(agent domain.Agent) string {
-	return fmt.Sprintf("Agent permissions:\n%s", joinPermissions(agent.Permissions))
+	return fmt.Sprintf("Agent permissions: %s", joinPermissions(agent.Permissions))
+}
+
+func (r *Runner) manualSkillIDs(agent domain.Agent) map[string]struct{} {
+	ids := make(map[string]struct{}, len(agent.SkillIDs))
+	for _, id := range agent.SkillIDs {
+		ids[id] = struct{}{}
+	}
+	return ids
+}
+
+func (r *Runner) skillCatalogContext(skills []domain.Skill) string {
+	if len(skills) == 0 {
+		return ""
+	}
+	var sb strings.Builder
+	sb.WriteString("Available skills are not injected by default to save context. If you need full instructions, call GET /agent-api/skills and use the relevant skill only. Catalog:\n")
+	limit := len(skills)
+	if limit > 12 {
+		limit = 12
+	}
+	for i := 0; i < limit; i++ {
+		skill := skills[i]
+		sb.WriteString(fmt.Sprintf("- %s (%s): %s\n", skill.Name, skill.ID, promptSnippet(skill.Description, 140)))
+	}
+	if len(skills) > limit {
+		sb.WriteString(fmt.Sprintf("- ...and %d more available via GET /agent-api/skills\n", len(skills)-limit))
+	}
+	return strings.TrimSpace(sb.String())
 }
 
 func (r *Runner) skillContext(skill domain.Skill) string {
-	parts := []string{fmt.Sprintf("Skill package: %s\n%s\nInstructions:\n%s", skill.Name, skill.Description, skill.Instructions)}
+	parts := []string{fmt.Sprintf("Skill package: %s\n%s\nInstructions:\n%s", skill.Name, promptSnippet(skill.Description, 240), promptSnippet(strings.TrimSpace(skill.Instructions), 1200))}
 	for _, file := range skill.Files {
-		parts = append(parts, fmt.Sprintf("Skill file %s:\n%s", file.Path, file.Content))
+		parts = append(parts, fmt.Sprintf("Skill file %s:\n%s", file.Path, promptSnippet(file.Content, 1200)))
 	}
 	return strings.Join(parts, "\n\n")
 }
@@ -452,15 +695,10 @@ func joinPermissions(permissions []domain.AgentPermission) string {
 func DefaultTaskProtocolPrompt() string {
 	return strings.Join([]string{
 		"PicoClip Task Protocol:",
-		"Your goal is to satisfy the task title, description, and the latest user comment.",
-		"1. You are running one task heartbeat.",
-		"2. Before work: checkout the task using POST /agent-api/tasks/{id}/checkout if not already in_progress.",
-		"3. During work: do useful work and leave a progress comment via POST /agent-api/tasks/{id}/comments.",
-		"4. If satisfied/completed: PATCH /agent-api/tasks/{id} with status=done and a clear final comment.",
-		"5. If blocked: PATCH /agent-api/tasks/{id} with status=blocked, explaining the blocker and owner/next action.",
-		"6. If work should be split: POST /agent-api/tasks/{id}/delegate with child task title and acceptance criteria.",
-		"7. For continuous tasks, do not mark done just because one heartbeat completed; report progress and let PicoClip schedule the next cycle.",
-		"8. Do not stay silent. Every run must leave a final comment or status update.",
+		"Work on the task title, prompt, and latest user comment.",
+		"Use /agent-api to checkout, comment, update status, delegate, or cancel when needed.",
+		"Every run must leave a concise progress/final comment.",
+		"For continuous tasks: make incremental progress, do not mark done unless the loop should permanently stop, and avoid duplicate delegations.",
 	}, "\n")
 }
 
@@ -550,14 +788,30 @@ func latestCommentByRole(messages []domain.Message, role domain.MessageRole) str
 	return ""
 }
 
+func explicitAgentQuestion(body string) string {
+	body = strings.TrimSpace(body)
+	markers := []string{"Pergunta para você:", "Pergunta ao usuário:", "User question:", "Question for user:"}
+	for _, marker := range markers {
+		idx := strings.Index(strings.ToLower(body), strings.ToLower(marker))
+		if idx < 0 {
+			continue
+		}
+		question := strings.TrimSpace(body[idx+len(marker):])
+		if question == "" || !strings.Contains(question, "?") {
+			return ""
+		}
+		return question
+	}
+	return ""
+}
+
 func userQuestions(messages []domain.Message) []domain.Message {
 	questions := make([]domain.Message, 0)
 	for _, message := range messages {
 		if message.Role != domain.MessageRoleAgent && message.Role != domain.MessageRoleSystem {
 			continue
 		}
-		body := strings.TrimSpace(message.Body)
-		if body == "" || !strings.Contains(body, "?") {
+		if explicitAgentQuestion(message.Body) == "" {
 			continue
 		}
 		questions = append(questions, message)
@@ -625,18 +879,18 @@ func (r *Runner) taskProtocolContext(ctx context.Context, task domain.Task, run 
 	sb.WriteString(fmt.Sprintf("- Title: %s\n", task.Title))
 	sb.WriteString(fmt.Sprintf("- Status: %s\n", string(task.Status)))
 	sb.WriteString(fmt.Sprintf("- Run ID: %s\n", run.ID))
+	if strings.TrimSpace(r.config.RuntimeBaseURL) != "" {
+		sb.WriteString(fmt.Sprintf("- PicoClip API Base URL: %s\n", strings.TrimRight(r.config.RuntimeBaseURL, "/")))
+	}
 	if task.ParentID != "" {
 		sb.WriteString(fmt.Sprintf("- Parent Task ID: %s\n", task.ParentID))
 	}
 	if task.Mode == domain.TaskModeContinuous {
-		sb.WriteString("\nContinuous Task Instructions:\n")
-		sb.WriteString(fmt.Sprintf("- Current cycle: %d\n", task.LoopRunCount+1))
-		sb.WriteString(fmt.Sprintf("- Delay after this cycle: %d seconds\n", task.LoopDelaySeconds))
-		sb.WriteString("- This heartbeat should make incremental progress, inspect recent context, and report what changed.\n")
-		sb.WriteString("- Do not block waiting for a human answer. If you need information, ask clearly in a comment and continue with safe assumptions or next best work.\n")
-		sb.WriteString("- User answers/comments are consumed on the next scheduled cycle; do not request immediate reruns unless explicitly necessary.\n")
-		sb.WriteString("- If you delegate subtasks, supervise them in later cycles by checking child task status before creating duplicates.\n")
-		sb.WriteString("- Do not mark the parent task done unless the continuous loop objective should permanently stop.\n")
+		sb.WriteString("\nContinuous Task Rules:\n")
+		sb.WriteString(fmt.Sprintf("- Cycle %d; next delay %ds.\n", task.LoopRunCount+1, task.LoopDelaySeconds))
+		sb.WriteString("- Make incremental progress, report what changed, and do not mark done unless stopping permanently.\n")
+		sb.WriteString("- If asking the user, use Portuguese marker 'Pergunta para você:' with 2-4 options and a safe default; otherwise keep working with safe assumptions.\n")
+		sb.WriteString("- Check existing child tasks before delegating duplicates.\n")
 	}
 
 	children, _ := r.storage.Tasks().List(ctx, ports.TaskFilter{ParentID: task.ID})
@@ -660,26 +914,26 @@ func (r *Runner) taskProtocolContext(ctx context.Context, task domain.Task, run 
 			start = 0
 		}
 		for _, question := range questions[start:] {
-			sb.WriteString(fmt.Sprintf("[%s] %s\n", question.CreatedAt.Format("15:04"), question.Body))
+			sb.WriteString(fmt.Sprintf("[%s] %s\n", question.CreatedAt.Format("15:04"), explicitAgentQuestion(question.Body)))
 		}
 	}
 
 	latestUserComment := latestCommentByRole(messages, domain.MessageRoleUser)
 	if latestUserComment != "" {
 		sb.WriteString("\nLatest User Comment:\n")
-		sb.WriteString(latestUserComment + "\n")
+		sb.WriteString(promptSnippet(latestUserComment, 1200) + "\n")
 	}
 
-	sb.WriteString("\nRecent Comments:\n")
+	sb.WriteString("\nRecent Comments Summary:\n")
 	if len(messages) == 0 {
 		sb.WriteString("(no comments)\n")
 	} else {
-		start := len(messages) - 8
+		start := len(messages) - 5
 		if start < 0 {
 			start = 0
 		}
 		for _, m := range messages[start:] {
-			sb.WriteString(fmt.Sprintf("[%s] %s: %s\n", m.CreatedAt.Format("15:04"), m.Role, m.Body))
+			sb.WriteString(fmt.Sprintf("[%s] %s: %s\n", m.CreatedAt.Format("15:04"), m.Role, promptSnippet(m.Body, 420)))
 		}
 	}
 

@@ -62,6 +62,60 @@ func (r taskRepository) Update(ctx context.Context, task domain.Task) error {
 	return nil
 }
 
+func (r taskRepository) Delete(ctx context.Context, id string) error {
+	r.storage.mu.Lock()
+	defer r.storage.mu.Unlock()
+	if _, ok := r.storage.tasks[id]; !ok {
+		return domain.ErrNotFound
+	}
+	deleteTaskData(r.storage, id)
+	return nil
+}
+
+func (r taskRepository) DeleteFinished(ctx context.Context) (int, error) {
+	r.storage.mu.Lock()
+	defer r.storage.mu.Unlock()
+	ids := make([]string, 0)
+	for _, task := range r.storage.tasks {
+		if task.Status == domain.TaskStatusDone || task.Status == domain.TaskStatusCancelled {
+			ids = append(ids, task.ID)
+		}
+	}
+	for _, id := range ids {
+		deleteTaskData(r.storage, id)
+	}
+	return len(ids), nil
+}
+
+func deleteTaskData(storage *Storage, id string) {
+	delete(storage.tasks, id)
+	for runID, run := range storage.runs {
+		if run.TaskID == id {
+			delete(storage.runs, runID)
+		}
+	}
+	for messageID, message := range storage.messages {
+		if message.TaskID == id {
+			delete(storage.messages, messageID)
+		}
+	}
+	for eventID, event := range storage.events {
+		if event.TaskID == id {
+			delete(storage.events, eventID)
+		}
+	}
+	for wakeupID, wakeup := range storage.wakeups {
+		if wakeup.TaskID == id {
+			delete(storage.wakeups, wakeupID)
+		}
+	}
+	for usageID, usage := range storage.usage {
+		if usage.TaskID == id {
+			delete(storage.usage, usageID)
+		}
+	}
+}
+
 func taskStatusIn(status domain.TaskStatus, statuses []domain.TaskStatus) bool {
 	for _, candidate := range statuses {
 		if candidate == status {
@@ -75,8 +129,9 @@ func (r taskRepository) ClaimNextPending(ctx context.Context) (domain.Task, erro
 	r.storage.mu.Lock()
 	defer r.storage.mu.Unlock()
 	var selected *domain.Task
+	now := time.Now()
 	for _, task := range r.storage.tasks {
-		if !taskRunnable(task) {
+		if !taskRunnable(task, now) {
 			continue
 		}
 		if selected == nil || task.Priority > selected.Priority || task.Priority == selected.Priority && task.CreatedAt.Before(selected.CreatedAt) {
@@ -98,7 +153,7 @@ func (r taskRepository) ClaimNextRunnable(ctx context.Context, now time.Time, lo
 	defer r.storage.mu.Unlock()
 	var selected *domain.Task
 	for _, task := range r.storage.tasks {
-		if !taskRunnable(task) {
+		if !taskRunnable(task, now) {
 			continue
 		}
 		if selected == nil || task.Priority > selected.Priority || task.Priority == selected.Priority && task.CreatedAt.Before(selected.CreatedAt) {
@@ -138,9 +193,17 @@ func (r taskRepository) ClaimNextRunnable(ctx context.Context, now time.Time, lo
 	return task, run, nil
 }
 
-func taskRunnable(task domain.Task) bool {
+func taskRunnable(task domain.Task, now time.Time) bool {
 	if !task.NeedsRun || task.Status == domain.TaskStatusDone || task.Status == domain.TaskStatusCancelled {
 		return false
+	}
+	if task.Mode == domain.TaskModeContinuous {
+		if task.LoopPausedAt != nil {
+			return false
+		}
+		if task.Status == domain.TaskStatusWaitingNextCycle && (task.LoopNextRunAt == nil || task.LoopNextRunAt.After(now)) {
+			return false
+		}
 	}
 	if task.CheckoutRunID != "" || task.CheckedOutByAgentID != "" {
 		return false

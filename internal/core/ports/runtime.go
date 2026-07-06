@@ -7,15 +7,17 @@ import (
 )
 
 type RuntimeExecutionInput struct {
-	Agent     domain.Agent
-	Task      domain.Task
-	Run       domain.Run
-	Memory    string
-	Config    map[string]string
-	Env       map[string]string
-	ExtraArgs []string
-	OnStart   func(pid int)
-	OnOutput  func(stdout, stderr []byte)
+	Agent          domain.Agent
+	Task           domain.Task
+	Run            domain.Run
+	Memory         string
+	Config         map[string]string
+	Env            map[string]string
+	ExtraArgs      []string
+	WorkspacePath  string
+	RuntimeBaseURL string
+	OnStart        func(pid int)
+	OnOutput       func(stdout, stderr []byte)
 }
 
 type RuntimeExecutionResult struct {

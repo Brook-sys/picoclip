@@ -136,6 +136,52 @@ func (r *EventRepository) ListRecent(ctx context.Context, limit int) ([]domain.E
 	return events, nil
 }
 
+func (r *EventRepository) Delete(ctx context.Context, id string) error {
+	q := getQueryer(ctx, r.db)
+	res, err := q.ExecContext(ctx, `DELETE FROM events WHERE id = ?`, id)
+	if err != nil {
+		return err
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return domain.ErrNotFound
+	}
+	return nil
+}
+
+func (r *EventRepository) DeleteAll(ctx context.Context) (int, error) {
+	q := getQueryer(ctx, r.db)
+	res, err := q.ExecContext(ctx, `DELETE FROM events`)
+	if err != nil {
+		return 0, err
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return 0, err
+	}
+	return int(rows), nil
+}
+
+func (r *EventRepository) DeleteFinished(ctx context.Context) (int, error) {
+	q := getQueryer(ctx, r.db)
+	res, err := q.ExecContext(ctx, `
+		DELETE FROM events
+		WHERE NOT EXISTS (SELECT 1 FROM runs WHERE runs.id = events.run_id AND runs.status = 'running')
+		AND NOT EXISTS (SELECT 1 FROM tasks WHERE tasks.id = events.task_id AND tasks.status = 'in_progress')
+	`)
+	if err != nil {
+		return 0, err
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return 0, err
+	}
+	return int(rows), nil
+}
+
 func scanEvent(row scanner) (domain.Event, error) {
 	var e domain.Event
 	var typeStr, dataJSON string

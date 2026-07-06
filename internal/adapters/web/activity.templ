@@ -29,7 +29,15 @@ templ ActivityPage(events []domain.Event, tasks map[string]taskResponse, agents 
 					<h2>Activity timeline</h2>
 					<p>Prioritized by recency with context links for tasks, agents and runs.</p>
 				</div>
-				<span class="activity-live-pill">Live</span>
+				<div class="cleanup-actions">
+					<span class="activity-live-pill">Live</span>
+					<form method="post" action="/activity/cleanup-finished" hx-post="/activity/cleanup-finished" hx-target="body" hx-swap="outerHTML" hx-confirm="Delete activity that is not tied to running work?">
+						<button class="activity-action button-danger" type="submit">Delete finished</button>
+					</form>
+					<form method="post" action="/activity/cleanup-all" hx-post="/activity/cleanup-all" hx-target="body" hx-swap="outerHTML" hx-confirm="Delete all activity events? Tasks and runs are kept.">
+						<button class="activity-action button-danger" type="submit">Delete all activity</button>
+					</form>
+				</div>
 			</div>
 			<div id="activity-live">
 				@EventTimelineFull(events, tasks, agents)
@@ -267,11 +275,14 @@ templ EventTimelineFull(events []domain.Event, tasks map[string]taskResponse, ag
 							<div><span>Run</span><strong>{ activityShortID(event.RunID) }</strong></div>
 						}
 					</div>
-					if activityActionURL(event) != "" {
-						<div class="activity-footer-row">
+					<div class="activity-footer-row">
+						if activityActionURL(event) != "" {
 							<a class="activity-action" href={ templ.URL(activityActionURL(event)) }>{ activityActionLabel(event) }</a>
-						</div>
-					}
+						}
+						<form method="post" action={ templ.URL("/activity/" + event.ID + "/delete") } hx-post={ "/activity/" + event.ID + "/delete" } hx-target="body" hx-swap="outerHTML" hx-confirm="Delete this activity event?">
+							<button class="activity-action button-danger" type="submit">Delete event</button>
+						</form>
+					</div>
 				</div>
 			</div>
 		}

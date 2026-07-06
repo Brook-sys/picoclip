@@ -1,11 +1,14 @@
 package main
 
 import (
+	"compress/gzip"
 	"context"
 	"database/sql"
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
+	"time"
 
 	"picoclip/internal/adapters/events"
 	"picoclip/internal/adapters/logger"
@@ -16,6 +19,29 @@ import (
 	"picoclip/internal/core/ports"
 	"picoclip/internal/core/services"
 )
+
+type gzipResponseWriter struct {
+	http.ResponseWriter
+	writer *gzip.Writer
+}
+
+func (w gzipResponseWriter) Write(data []byte) (int, error) {
+	return w.writer.Write(data)
+}
+
+func gzipMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasPrefix(r.URL.Path, "/sse/") || !strings.Contains(r.Header.Get("Accept-Encoding"), "gzip") {
+			next.ServeHTTP(w, r)
+			return
+		}
+		w.Header().Set("Content-Encoding", "gzip")
+		w.Header().Add("Vary", "Accept-Encoding")
+		gz := gzip.NewWriter(w)
+		defer gz.Close()
+		next.ServeHTTP(gzipResponseWriter{ResponseWriter: w, writer: gz}, r)
+	})
+}
 
 func main() {
 	ctx := context.Background()
@@ -92,6 +118,25 @@ func main() {
 	runtimeManager.Register(runtimes.NewClaurstAdapter(claurstPath))
 
 	config := services.DefaultConfig()
+	if raw := os.Getenv("PICOCLIP_TASK_TIMEOUT"); raw != "" {
+		if parsed, err := time.ParseDuration(raw); err == nil && parsed > 0 {
+			config.TaskTimeout = parsed
+		} else {
+			appLogger.Warn("config.invalid_task_timeout", "value", raw)
+		}
+	}
+	bindForRuntime := os.Getenv("BIND")
+	if bindForRuntime == "" || bindForRuntime == "0.0.0.0" || bindForRuntime == "::" {
+		bindForRuntime = "127.0.0.1"
+	}
+	portForRuntime := os.Getenv("PORT")
+	if portForRuntime == "" {
+		portForRuntime = "8080"
+	}
+	config.RuntimeBaseURL = "http://" + bindForRuntime + ":" + portForRuntime
+	if raw := os.Getenv("PICOCLIP_RUNTIME_BASE_URL"); raw != "" {
+		config.RuntimeBaseURL = raw
+	}
 	engine := services.NewEngine(storage, bus, runtimeManager, services.NoopMemoryProvider{}, appLogger, config)
 	engine.Start(ctx)
 	defer engine.Stop()
@@ -131,7 +176,7 @@ func main() {
 
 	listenAddr := bind + ":" + addr
 	appLogger.Info("server.start", "addr", listenAddr, "debug", debugMode, "log_level", logLevel, "runtime_path", runtimeBase, "workspace_path", workspaceBase)
-	if err := http.ListenAndServe(listenAddr, mux); err != nil {
+	if err := http.ListenAndServe(listenAddr, gzipMiddleware(mux)); err != nil {
 		appLogger.Error("server.failed", "err", err)
 		os.Exit(1)
 	}

@@ -8,7 +8,15 @@ import (
 
 templ TasksPage(tasks []taskResponse, allTasks []taskResponse, agents []domain.Agent, projects []domain.Workspace, activeTab string) {
 	@PageShell("tasks", "Tasks", "Issue-style queue for work, delegation, review and agent execution.", tasksAction()) {
-		<section class="tasks-overview-grid">
+		<div id="tasks-live" hx-get={ templ.URL("/partials/tasks-page?status=" + activeTab) } hx-trigger="picoclip-live from:body throttle:1500ms, every 30s" hx-swap="innerHTML">
+			@TasksLive(tasks, allTasks, agents, projects, activeTab)
+		</div>
+		@TaskModal("task-create-modal", "", projects, agents)
+	}
+}
+
+templ TasksLive(tasks []taskResponse, allTasks []taskResponse, agents []domain.Agent, projects []domain.Workspace, activeTab string) {
+	<section class="tasks-overview-grid">
 			<a class="panel tasks-overview-card" href="/tasks">
 				<span>Total</span>
 				<strong>{ fmt.Sprintf("%d", len(allTasks)) }</strong>
@@ -50,21 +58,22 @@ templ TasksPage(tasks []taskResponse, allTasks []taskResponse, agents []domain.A
 				@TabLink("Done", "/tasks?status=done", activeTab == "done")
 			}
 		</div>
-		<section class="panel tasks-panel">
+	<section class="panel tasks-panel">
 			<div class="tasks-panel-header">
 				<div>
 					<span class="eyebrow">Work queue</span>
 					<h2>Task board</h2>
 					<p>Live queue refreshes automatically while agents work.</p>
 				</div>
-				<span class="runs-filter-pill">{ taskFilterLabel(activeTab) }</span>
+				<div class="cleanup-actions">
+					<span class="runs-filter-pill">{ taskFilterLabel(activeTab) }</span>
+					<form method="post" action="/tasks/cleanup-finished" hx-post="/tasks/cleanup-finished" hx-target="body" hx-swap="outerHTML" hx-confirm="Delete only finished tasks (done/cancelled)? Running tasks will be kept.">
+						<button class="activity-action button-danger" type="submit">Delete finished</button>
+					</form>
+				</div>
 			</div>
-			<div hx-get="/partials/tasks" hx-trigger="every 5s" hx-swap="innerHTML">
-				@TaskTable(tasks, agents, projects)
-			</div>
+			@TaskTable(tasks, agents, projects)
 		</section>
-		@TaskModal("task-create-modal", "", projects, agents)
-	}
 }
 
 templ tasksAction() {

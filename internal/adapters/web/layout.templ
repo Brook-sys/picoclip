@@ -11,7 +11,7 @@ templ PageShell(active string, title string, subtitle string, action templ.Compo
 				(function(){var mode=localStorage.getItem('picoclip.theme')||'system';var dark=window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches;var resolved=mode==='system'?(dark?'dark':'light'):mode;document.documentElement.dataset.theme=resolved;document.documentElement.dataset.themeMode=mode;var density=localStorage.getItem('picoclip.density')||'comfortable';document.documentElement.dataset.density=density;})();
 			</script>
 			<script src="/assets/htmx.min.js"></script>
-			<link rel="stylesheet" href="/assets/app.css?v=18"/>
+			<link rel="stylesheet" href="/assets/app.css?v=21"/>
 		</head>
 		<body>
 			<div class="app-shell">
@@ -335,6 +335,28 @@ templ PageShell(active string, title string, subtitle string, action templ.Compo
 								}
 							}
 							if (!customElements.get('pc-env-editor')) customElements.define('pc-env-editor', EnvEditor);
+
+							function closeLiveSources(){
+								if(window.__picoclipLiveTimer){ clearTimeout(window.__picoclipLiveTimer); window.__picoclipLiveTimer = null; }
+								if(window.__picoclipLiveSource){ window.__picoclipLiveSource.close(); window.__picoclipLiveSource = null; }
+								if(window.__picoclipRunLogHandle){ window.__picoclipRunLogHandle.close(); window.__picoclipRunLogHandle = null; window.__picoclipRunLogSource = null; }
+							}
+							window.addEventListener('pagehide', closeLiveSources);
+							window.addEventListener('beforeunload', closeLiveSources);
+							document.addEventListener('click', function(evt){
+								var link = evt.target.closest && evt.target.closest('a[href^="/"]');
+								if(link && !link.hasAttribute('target') && !evt.metaKey && !evt.ctrlKey && !evt.shiftKey && !evt.altKey) closeLiveSources();
+							}, true);
+							if(window.EventSource && !window.__picoclipLiveSource && document.querySelector('[hx-trigger*="picoclip-live"]')){
+								window.__picoclipLiveTimer = setTimeout(function(){
+									if(window.__picoclipLiveSource || !document.querySelector('[hx-trigger*="picoclip-live"]')) return;
+									window.__picoclipLiveSource = new EventSource('/sse/activity');
+									window.__picoclipLiveSource.onmessage = function(evt){
+										try { window.__picoclipLastEvent = JSON.parse(evt.data || '{}'); } catch(e) {}
+										document.body.dispatchEvent(new CustomEvent('picoclip-live', { detail: window.__picoclipLastEvent || {} }));
+									};
+								}, 1200);
+							}
 
 							document.addEventListener('click', function(e) {
 								if (e.target.matches('.runtime-copy-button')) {

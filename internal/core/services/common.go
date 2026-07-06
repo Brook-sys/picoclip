@@ -13,13 +13,15 @@ type Config struct {
 	TaskTimeout       time.Duration
 	MaxConcurrentRuns int
 	MaxAttempts       int
+	RuntimeBaseURL    string
 }
 
 func DefaultConfig() Config {
 	return Config{
 		PollInterval:      2 * time.Second,
-		TaskTimeout:       2 * time.Minute,
+		TaskTimeout:       30 * time.Minute,
 		MaxConcurrentRuns: 2,
 		MaxAttempts:       1,
+		RuntimeBaseURL:    "http://127.0.0.1:8080",
 	}
 }

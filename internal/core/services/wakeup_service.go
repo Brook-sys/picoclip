@@ -96,6 +96,11 @@ func (s *WakeupService) wakeTask(ctx context.Context, taskID string) error {
 	if task.CheckoutRunID != "" || task.CheckedOutByAgentID != "" {
 		return nil
 	}
+	if task.Mode == domain.TaskModeContinuous {
+		if task.LoopPausedAt != nil || task.Status == domain.TaskStatusWaitingNextCycle {
+			return nil
+		}
+	}
 	if task.Status == domain.TaskStatusInReview || task.Status == domain.TaskStatusBlocked || task.Status == domain.TaskStatusBacklog {
 		task.Status = domain.TaskStatusTodo
 	}

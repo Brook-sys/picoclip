@@ -100,7 +100,12 @@ func testCoreFlow(t *testing.T, factory StorageFactory) {
 	if _, err := storage.Tasks().ClaimNextPending(ctx); err != domain.ErrNoPendingTasks {
 		t.Fatalf("expected locked and exhausted tasks skipped, got %v", err)
 	}
-	runnable := domain.Task{ID: "tsk_runnable", WorkspaceID: workspace.ID, AgentID: agent.ID, Title: "Runnable", Prompt: "Run me", Status: domain.TaskStatusTodo, NeedsRun: true, CreatedAt: now.Add(5 * time.Second), UpdatedAt: now.Add(5 * time.Second)}
+	future := now.Add(time.Minute)
+	futureContinuous := domain.Task{ID: "tsk_future_continuous", WorkspaceID: workspace.ID, AgentID: agent.ID, Title: "Future Continuous", Prompt: "Run later", Status: domain.TaskStatusWaitingNextCycle, Mode: domain.TaskModeContinuous, LoopNextRunAt: &future, NeedsRun: true, Priority: 20, CreatedAt: now.Add(5 * time.Second), UpdatedAt: now.Add(5 * time.Second)}
+	if err := storage.Tasks().Create(ctx, futureContinuous); err != nil {
+		t.Fatal(err)
+	}
+	runnable := domain.Task{ID: "tsk_runnable", WorkspaceID: workspace.ID, AgentID: agent.ID, Title: "Runnable", Prompt: "Run me", Status: domain.TaskStatusTodo, NeedsRun: true, CreatedAt: now.Add(6 * time.Second), UpdatedAt: now.Add(6 * time.Second)}
 	if err := storage.Tasks().Create(ctx, runnable); err != nil {
 		t.Fatal(err)
 	}

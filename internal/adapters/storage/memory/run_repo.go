@@ -59,3 +59,47 @@ func (r runRepository) Update(ctx context.Context, run domain.Run) error {
 	r.storage.runs[run.ID] = run
 	return nil
 }
+
+func (r runRepository) Delete(ctx context.Context, id string) error {
+	r.storage.mu.Lock()
+	defer r.storage.mu.Unlock()
+	if _, ok := r.storage.runs[id]; !ok {
+		return domain.ErrNotFound
+	}
+	delete(r.storage.runs, id)
+	for eventID, event := range r.storage.events {
+		if event.RunID == id {
+			delete(r.storage.events, eventID)
+		}
+	}
+	for usageID, usage := range r.storage.usage {
+		if usage.RunID == id {
+			delete(r.storage.usage, usageID)
+		}
+	}
+	return nil
+}
+
+func (r runRepository) DeleteFinished(ctx context.Context) (int, error) {
+	r.storage.mu.Lock()
+	defer r.storage.mu.Unlock()
+	count := 0
+	for id, run := range r.storage.runs {
+		if run.Status == domain.RunStatusRunning {
+			continue
+		}
+		delete(r.storage.runs, id)
+		for eventID, event := range r.storage.events {
+			if event.RunID == id {
+				delete(r.storage.events, eventID)
+			}
+		}
+		for usageID, usage := range r.storage.usage {
+			if usage.RunID == id {
+				delete(r.storage.usage, usageID)
+			}
+		}
+		count++
+	}
+	return count, nil
+}

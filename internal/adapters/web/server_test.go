@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"testing"
 
@@ -65,6 +66,43 @@ func postJSON(t *testing.T, client *http.Client, url string, payload any) map[st
 		t.Fatalf("decode %s: %v", url, err)
 	}
 	return decoded
+}
+
+func TestPicoClawBasicConfigUsesExplicitProviderAndCleanModel(t *testing.T) {
+	configPath := t.TempDir() + "/config.json"
+	if err := os.WriteFile(configPath, []byte(`{"hooks":{"processes":{"custom":{"enabled":true}}}}`), 0644); err != nil {
+		t.Fatal(err)
+	}
+	form := strings.NewReader("provider_id=cliproxyapi&provider_name=Cliproxy&provider_type=openai&base_url=http%3A%2F%2Fexample.test%2Fv1&model_id=cliproxyapi%2Ftopmodel&model_alias=topmodel&api_key=%24API_KEY")
+	req := httptest.NewRequest(http.MethodPost, "/", form)
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	if err := req.ParseForm(); err != nil {
+		t.Fatal(err)
+	}
+	content, fileName, err := runtimeBasicConfigContent("picoclaw", domain.RuntimeState{HomePath: "/tmp/picoclaw-home", ConfigPath: configPath}, req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if fileName != "config.json" {
+		t.Fatalf("fileName = %s", fileName)
+	}
+	var config map[string]any
+	if err := json.Unmarshal(content, &config); err != nil {
+		t.Fatal(err)
+	}
+	models := config["model_list"].([]any)
+	model := models[0].(map[string]any)
+	if model["provider"] != "openai" {
+		t.Fatalf("provider = %v, want openai", model["provider"])
+	}
+	if model["model"] != "topmodel" {
+		t.Fatalf("model = %v, want topmodel", model["model"])
+	}
+	hooks := config["hooks"].(map[string]any)
+	processes := hooks["processes"].(map[string]any)
+	if _, ok := processes["custom"]; !ok {
+		t.Fatalf("custom hooks were not preserved: %#v", hooks)
+	}
 }
 
 func TestAgentTaskLifecycleAPI(t *testing.T) {

@@ -100,3 +100,56 @@ func TestWakeupServiceProcessDueWakesTask(t *testing.T) {
 		t.Fatalf("wakeup status=%s want completed", wakeup.Status)
 	}
 }
+
+func TestWakeupServiceDoesNotWakeContinuousTaskBeforeNextRun(t *testing.T) {
+	st := memory.NewStorage()
+	clock := fixedClock{t: time.Date(2026, 6, 25, 15, 0, 0, 0, time.UTC)}
+	idgen := &seqID{}
+	bus := noopBus{}
+	taskSvc := NewTaskService(st, clock, idgen, bus)
+
+	agent := domain.Agent{ID: "agt_cont", Name: "c", Type: "internal", Enabled: true, Capability: domain.CapabilityWorker, CreatedAt: clock.t, UpdatedAt: clock.t}
+	_ = st.Agents().Create(context.Background(), agent)
+
+	task, err := taskSvc.CreateWithOptions(context.Background(), CreateTaskInput{AgentID: agent.ID, Title: "t", Prompt: "do", Mode: domain.TaskModeContinuous, LoopDelaySeconds: 60})
+	if err != nil {
+		t.Fatalf("create task: %v", err)
+	}
+
+	task.Status = domain.TaskStatusWaitingNextCycle
+	task.NeedsRun = false
+	next := clock.t.Add(60 * time.Second)
+	task.LoopNextRunAt = &next
+	if err := st.Tasks().Update(context.Background(), task); err != nil {
+		t.Fatalf("update task: %v", err)
+	}
+
+	wakeupSvc := NewWakeupService(st, clock, idgen)
+	created, err := wakeupSvc.Create(context.Background(), CreateWakeupInput{AgentID: agent.ID, TaskID: task.ID, Reason: domain.WakeupReasonComment, Priority: 1})
+	if err != nil {
+		t.Fatalf("create wakeup: %v", err)
+	}
+	processed, err := wakeupSvc.ProcessDue(context.Background(), 10)
+	if err != nil {
+		t.Fatalf("process due: %v", err)
+	}
+	if processed != 2 {
+		t.Fatalf("processed=%d want 2", processed)
+	}
+
+	got, err := st.Tasks().Get(context.Background(), task.ID)
+	if err != nil {
+		t.Fatalf("get task: %v", err)
+	}
+	if got.Status != domain.TaskStatusWaitingNextCycle || got.NeedsRun {
+		t.Fatalf("expected continuous task to remain waiting, got status=%s needs_run=%v", got.Status, got.NeedsRun)
+	}
+
+	wakeup, err := st.Wakeups().Get(context.Background(), created.ID)
+	if err != nil {
+		t.Fatalf("get wakeup: %v", err)
+	}
+	if wakeup.Status != domain.WakeupStatusCompleted {
+		t.Fatalf("wakeup status=%s want completed", wakeup.Status)
+	}
+}

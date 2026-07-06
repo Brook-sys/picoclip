@@ -1,8 +1,11 @@
 package web
 
 import (
+	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
+	"os"
 	"sort"
 	"strconv"
 	"strings"
@@ -13,10 +16,10 @@ import (
 	"picoclip/internal/core/services"
 )
 
-func (s *Server) handleWebRuns(w http.ResponseWriter, r *http.Request) {
+func (s *Server) loadRunsPageState(w http.ResponseWriter, r *http.Request) ([]domain.Run, []domain.Run, map[string]taskResponse, map[string]domain.Agent, string, bool) {
 	agents, tasks, projects, _, ok := s.loadWebState(w, r)
 	if !ok {
-		return
+		return nil, nil, nil, nil, "", false
 	}
 
 	var allRuns []domain.Run
@@ -41,6 +44,9 @@ func (s *Server) handleWebRuns(w http.ResponseWriter, r *http.Request) {
 	sort.Slice(runs, func(i, j int) bool {
 		return runs[i].StartedAt.After(runs[j].StartedAt)
 	})
+	if len(runs) > 15 {
+		runs = runs[:15]
+	}
 
 	agentMap := make(map[string]domain.Agent)
 	for _, a := range agents {
@@ -53,8 +59,38 @@ func (s *Server) handleWebRuns(w http.ResponseWriter, r *http.Request) {
 	}
 
 	_ = projects
+	return runs, allRuns, taskMap, agentMap, statusFilter, true
+}
 
+func limitTaskTimeline(messages []domain.Message, runs []domain.Run, events []domain.Event) ([]domain.Message, []domain.Run, []domain.Event) {
+	if len(messages) > 12 {
+		messages = messages[len(messages)-12:]
+	}
+	if len(runs) > 20 {
+		runs = runs[len(runs)-20:]
+	}
+	if len(events) > 20 {
+		events = events[:20]
+	}
+	return messages, runs, events
+}
+
+func (s *Server) handleWebRuns(w http.ResponseWriter, r *http.Request) {
+	runs, allRuns, taskMap, agentMap, statusFilter, ok := s.loadRunsPageState(w, r)
+	if !ok {
+		return
+	}
 	if err := RunsPage(runs, allRuns, taskMap, agentMap, statusFilter).Render(r.Context(), w); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
+}
+
+func (s *Server) handleWebPartialsRuns(w http.ResponseWriter, r *http.Request) {
+	runs, allRuns, taskMap, agentMap, statusFilter, ok := s.loadRunsPageState(w, r)
+	if !ok {
+		return
+	}
+	if err := RunsLive(runs, allRuns, taskMap, agentMap, statusFilter).Render(r.Context(), w); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
 }
@@ -78,12 +114,101 @@ func (s *Server) loadRunDetailState(w http.ResponseWriter, r *http.Request) (dom
 	return run, s.taskResponse(r, task), agent, true
 }
 
+type ToolCallView struct {
+	Time    string
+	Tool    string
+	Command string
+	File    string
+}
+
+func (s *Server) toolCallsForRun(ctx context.Context, run domain.Run) []ToolCallView {
+	state, err := s.runtimes.State(ctx, domain.RuntimeID(run.DriverType))
+	if err != nil || state.LogsPath == "" || run.ID == "" {
+		return nil
+	}
+	raw, err := os.ReadFile(state.LogsPath + "/tool-calls.log")
+	if err != nil {
+		return nil
+	}
+	lines := strings.Split(string(raw), "\n")
+	calls := make([]ToolCallView, 0)
+	needle := " run=" + run.ID + " "
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		if strings.HasPrefix(line, "{") {
+			var entry struct {
+				Time    string `json:"ts"`
+				Run     string `json:"run"`
+				Stage   string `json:"stage"`
+				Tool    string `json:"tool"`
+				Command string `json:"command"`
+			}
+			if err := json.Unmarshal([]byte(line), &entry); err == nil && entry.Run == run.ID {
+				call := ToolCallView{Time: entry.Time, Tool: entry.Tool, Command: entry.Command}
+				if call.Tool == "" {
+					call.Tool = entry.Stage
+				}
+				if call.Command == "" {
+					call.Command = "(no command)"
+				}
+				calls = append(calls, call)
+			}
+			continue
+		}
+		if !strings.Contains(line, needle) {
+			continue
+		}
+		call := ToolCallView{Time: fieldBefore(line, " tool=")}
+		call.Tool = fieldBetween(line, " tool=", " task=")
+		call.File = fieldAfter(line, " file=")
+		commandPart := fieldBetween(line, " command=", " file=")
+		call.Command = commandPart
+		if call.Command == "" {
+			call.Command = "(no command)"
+		}
+		calls = append(calls, call)
+	}
+	return calls
+}
+
+func fieldBefore(value string, marker string) string {
+	idx := strings.Index(value, marker)
+	if idx < 0 {
+		return value
+	}
+	return value[:idx]
+}
+
+func fieldBetween(value string, start string, end string) string {
+	idx := strings.Index(value, start)
+	if idx < 0 {
+		return ""
+	}
+	value = value[idx+len(start):]
+	endIdx := strings.Index(value, end)
+	if endIdx < 0 {
+		return strings.TrimSpace(value)
+	}
+	return strings.TrimSpace(value[:endIdx])
+}
+
+func fieldAfter(value string, marker string) string {
+	idx := strings.Index(value, marker)
+	if idx < 0 {
+		return ""
+	}
+	return strings.TrimSpace(value[idx+len(marker):])
+}
+
 func (s *Server) handleWebRunDetail(w http.ResponseWriter, r *http.Request) {
 	run, task, agent, ok := s.loadRunDetailState(w, r)
 	if !ok {
 		return
 	}
-	if err := RunDetailPage(run, task, agent).Render(r.Context(), w); err != nil {
+	if err := RunDetailPage(run, task, agent, s.toolCallsForRun(r.Context(), run)).Render(r.Context(), w); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
 }
@@ -93,22 +218,40 @@ func (s *Server) handleWebPartialsRunDetail(w http.ResponseWriter, r *http.Reque
 	if !ok {
 		return
 	}
-	if err := RunLive(run, task, agent).Render(r.Context(), w); err != nil {
+	if err := RunLive(run, task, agent, s.toolCallsForRun(r.Context(), run)).Render(r.Context(), w); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
 }
 
-func (s *Server) handleWebDashboard(w http.ResponseWriter, r *http.Request) {
+func (s *Server) loadDashboardPageState(w http.ResponseWriter, r *http.Request) (DashboardView, []domain.Agent, []domain.Workspace, bool) {
 	agents, _, projects, _, ok := s.loadWebState(w, r)
 	if !ok {
-		return
+		return DashboardView{}, nil, nil, false
 	}
 	view, err := loadDashboardView(r.Context(), s, r)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return DashboardView{}, nil, nil, false
+	}
+	return view, agents, projects, true
+}
+
+func (s *Server) handleWebDashboard(w http.ResponseWriter, r *http.Request) {
+	view, agents, projects, ok := s.loadDashboardPageState(w, r)
+	if !ok {
 		return
 	}
 	if err := DashboardPage(view, agents, projects).Render(r.Context(), w); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
+}
+
+func (s *Server) handleWebPartialsDashboard(w http.ResponseWriter, r *http.Request) {
+	view, agents, projects, ok := s.loadDashboardPageState(w, r)
+	if !ok {
+		return
+	}
+	if err := DashboardLive(view, agents, projects).Render(r.Context(), w); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
 }
@@ -679,31 +822,52 @@ func (s *Server) handleWebAgentDetail(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (s *Server) handleWebTasks(w http.ResponseWriter, r *http.Request) {
+func (s *Server) loadTasksPageState(w http.ResponseWriter, r *http.Request) ([]taskResponse, []taskResponse, []domain.Agent, []domain.Workspace, string, bool) {
 	agents, err := s.agents.List(r.Context())
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
+		return nil, nil, nil, nil, "", false
 	}
 	projects, err := s.projects.List(r.Context())
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
+		return nil, nil, nil, nil, "", false
 	}
 	baseFilter := ports.TaskFilter{AgentID: r.URL.Query().Get("agent_id"), ParentID: r.URL.Query().Get("parent_id"), WorkspaceID: r.URL.Query().Get("project_id")}
 	allTasks, err := s.tasks.List(r.Context(), baseFilter)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
+		return nil, nil, nil, nil, "", false
 	}
 	filter := baseFilter
-	filter.Status = domain.TaskStatus(r.URL.Query().Get("status"))
+	activeTab := r.URL.Query().Get("status")
+	filter.Status = domain.TaskStatus(activeTab)
 	tasks, err := s.tasks.List(r.Context(), filter)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return nil, nil, nil, nil, "", false
+	}
+	sortTasksForBoard(tasks)
+	sortTasksForBoard(allTasks)
+	return s.taskResponses(r, tasks), s.taskResponses(r, allTasks), agents, projects, activeTab, true
+}
+
+func (s *Server) handleWebTasks(w http.ResponseWriter, r *http.Request) {
+	tasks, allTasks, agents, projects, activeTab, ok := s.loadTasksPageState(w, r)
+	if !ok {
 		return
 	}
-	if err := TasksPage(s.taskResponses(r, tasks), s.taskResponses(r, allTasks), agents, projects, r.URL.Query().Get("status")).Render(r.Context(), w); err != nil {
+	if err := TasksPage(tasks, allTasks, agents, projects, activeTab).Render(r.Context(), w); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
+}
+
+func (s *Server) handleWebPartialsTasksPage(w http.ResponseWriter, r *http.Request) {
+	tasks, allTasks, agents, projects, activeTab, ok := s.loadTasksPageState(w, r)
+	if !ok {
+		return
+	}
+	if err := TasksLive(tasks, allTasks, agents, projects, activeTab).Render(r.Context(), w); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
 }
@@ -727,6 +891,7 @@ func (s *Server) handleWebTaskDetail(w http.ResponseWriter, r *http.Request) {
 	messages, _ := s.tasks.GetMessages(r.Context(), task.ID)
 	runs, _ := s.tasks.GetRuns(r.Context(), task.ID)
 	events, _ := s.storage.Events().ListByTask(r.Context(), task.ID)
+	messages, runs, events = limitTaskTimeline(messages, runs, events)
 	children, _ := s.tasks.List(r.Context(), ports.TaskFilter{ParentID: task.ID})
 	if err := TaskDetailPage(s.taskResponse(r, task), task, agents, projects, messages, runs, events, s.taskResponses(r, children)).Render(r.Context(), w); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -929,11 +1094,88 @@ func (s *Server) handleWebCancelTask(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	if _, err := s.tasks.Cancel(r.Context(), r.PathValue("id"), r.FormValue("reason")); err != nil {
+	task, err := s.tasks.Cancel(r.Context(), r.PathValue("id"), r.FormValue("reason"))
+	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
+	if r.FormValue("partial_row") == "true" {
+		agents, _ := s.agents.List(r.Context())
+		projects, _ := s.projects.List(r.Context())
+		w.Header().Set("HX-Trigger", `{"picoclip-toast":{"message":"Task stopped.","type":"success"}}`)
+		if err := TaskRow(s.taskResponse(r, task), agents, projects).Render(r.Context(), w); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		}
+		return
+	}
 	s.handleWebTaskDetail(w, r)
+}
+
+func (s *Server) handleWebDeleteTask(w http.ResponseWriter, r *http.Request) {
+	if err := services.NewCleanupService(s.storage).DeleteTask(r.Context(), r.PathValue("id")); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	w.Header().Set("HX-Trigger", `{"picoclip-toast":{"message":"Task deleted.","type":"success"}}`)
+	s.handleWebTasks(w, r)
+}
+
+func (s *Server) handleWebCleanupFinishedTasks(w http.ResponseWriter, r *http.Request) {
+	result, err := services.NewCleanupService(s.storage).DeleteFinishedTasks(r.Context())
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	w.Header().Set("HX-Trigger", fmt.Sprintf(`{"picoclip-toast":{"message":"Deleted %d finished tasks.","type":"success"}}`, result.Deleted))
+	s.handleWebTasks(w, r)
+}
+
+func (s *Server) handleWebDeleteRun(w http.ResponseWriter, r *http.Request) {
+	if err := services.NewCleanupService(s.storage).DeleteRun(r.Context(), r.PathValue("id")); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	w.Header().Set("HX-Trigger", `{"picoclip-toast":{"message":"Run deleted.","type":"success"}}`)
+	s.handleWebRuns(w, r)
+}
+
+func (s *Server) handleWebCleanupFinishedRuns(w http.ResponseWriter, r *http.Request) {
+	result, err := services.NewCleanupService(s.storage).DeleteFinishedRuns(r.Context())
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	w.Header().Set("HX-Trigger", fmt.Sprintf(`{"picoclip-toast":{"message":"Deleted %d finished runs.","type":"success"}}`, result.Deleted))
+	s.handleWebRuns(w, r)
+}
+
+func (s *Server) handleWebDeleteActivityEvent(w http.ResponseWriter, r *http.Request) {
+	if err := services.NewCleanupService(s.storage).DeleteEvent(r.Context(), r.PathValue("id")); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	w.Header().Set("HX-Trigger", `{"picoclip-toast":{"message":"Activity event deleted.","type":"success"}}`)
+	s.handleWebActivity(w, r)
+}
+
+func (s *Server) handleWebCleanupFinishedActivity(w http.ResponseWriter, r *http.Request) {
+	result, err := services.NewCleanupService(s.storage).DeleteFinishedActivity(r.Context())
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	w.Header().Set("HX-Trigger", fmt.Sprintf(`{"picoclip-toast":{"message":"Deleted %d finished activity events.","type":"success"}}`, result.Deleted))
+	s.handleWebActivity(w, r)
+}
+
+func (s *Server) handleWebCleanupAllActivity(w http.ResponseWriter, r *http.Request) {
+	result, err := services.NewCleanupService(s.storage).DeleteAllActivity(r.Context())
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	w.Header().Set("HX-Trigger", fmt.Sprintf(`{"picoclip-toast":{"message":"Deleted %d activity events.","type":"success"}}`, result.Deleted))
+	s.handleWebActivity(w, r)
 }
 
 func (s *Server) handleWebUpdateTaskStatus(w http.ResponseWriter, r *http.Request) {
@@ -1186,6 +1428,7 @@ func (s *Server) handleWebPartialsTaskDetail(w http.ResponseWriter, r *http.Requ
 	messages, _ := s.tasks.GetMessages(r.Context(), task.ID)
 	runs, _ := s.tasks.GetRuns(r.Context(), task.ID)
 	events, _ := s.storage.Events().ListByTask(r.Context(), task.ID)
+	messages, runs, events = limitTaskTimeline(messages, runs, events)
 	children, _ := s.tasks.List(r.Context(), ports.TaskFilter{ParentID: task.ID})
 	if err := TaskLive(s.taskResponse(r, task), messages, runs, events, s.taskResponses(r, children), agents, projects).Render(r.Context(), w); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -1205,6 +1448,7 @@ func (s *Server) handleWebPartialsTasks(w http.ResponseWriter, r *http.Request) 
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+	sortTasksForBoard(tasks)
 	if err := TaskTable(s.taskResponses(r, tasks), agents, projects).Render(r.Context(), w); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
@@ -1232,6 +1476,40 @@ func (s *Server) loadWebState(w http.ResponseWriter, r *http.Request) ([]domain.
 		return nil, nil, nil, nil, false
 	}
 	return agents, s.taskResponses(r, tasks), projects, skills, true
+}
+
+func sortTasksForBoard(tasks []domain.Task) {
+	sort.SliceStable(tasks, func(i, j int) bool {
+		left := taskBoardRank(tasks[i])
+		right := taskBoardRank(tasks[j])
+		if left != right {
+			return left < right
+		}
+		return tasks[i].UpdatedAt.After(tasks[j].UpdatedAt)
+	})
+}
+
+func taskBoardRank(task domain.Task) int {
+	switch task.Status {
+	case domain.TaskStatusInProgress:
+		return 0
+	case domain.TaskStatusTodo:
+		return 1
+	case domain.TaskStatusWaitingNextCycle:
+		return 2
+	case domain.TaskStatusBlocked:
+		return 3
+	case domain.TaskStatusInReview:
+		return 4
+	case domain.TaskStatusBacklog:
+		return 5
+	case domain.TaskStatusDone:
+		return 6
+	case domain.TaskStatusCancelled:
+		return 7
+	default:
+		return 8
+	}
 }
 
 func (s *Server) taskResponses(r *http.Request, tasks []domain.Task) []taskResponse {

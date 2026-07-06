@@ -179,7 +179,9 @@ func (s *TaskService) AddMessage(ctx context.Context, taskID, fromID, toID strin
 						_ = s.storage.Messages().Create(txCtx, domain.Message{ID: s.idGen.NewID("msg"), TaskID: task.ID, FromID: fromID, ToID: toID, Role: domain.MessageRoleSystem, Body: "Created follow-up subtask " + child.ID + " from this comment.", CreatedAt: now})
 					}
 				} else {
-					task.NeedsRun = true
+					if task.Mode != domain.TaskModeContinuous || task.Status != domain.TaskStatusWaitingNextCycle {
+						task.NeedsRun = true
+					}
 					if task.Status == domain.TaskStatusInReview || task.Status == domain.TaskStatusBlocked {
 						task.Status = domain.TaskStatusTodo
 					}
@@ -363,6 +365,9 @@ func (s *TaskService) Wake(ctx context.Context, id string) (domain.Task, error) 
 	task, err := s.storage.Tasks().Get(ctx, id)
 	if err != nil {
 		return domain.Task{}, err
+	}
+	if task.Mode == domain.TaskModeContinuous && (task.Status == domain.TaskStatusWaitingNextCycle || task.LoopPausedAt != nil) {
+		return task, nil
 	}
 	if task.Status == domain.TaskStatusDone || task.Status == domain.TaskStatusCancelled {
 		task.Status = domain.TaskStatusTodo

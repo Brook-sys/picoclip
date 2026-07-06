@@ -51,9 +51,48 @@ func (r eventRepository) ListRecent(ctx context.Context, limit int) ([]domain.Ev
 	for _, event := range r.storage.events {
 		events = append(events, event)
 	}
-	sort.Slice(events, func(i, j int) bool { return events[i].CreatedAt.After(events[j].CreatedAt) }) // Descending
+	sort.Slice(events, func(i, j int) bool { return events[i].CreatedAt.After(events[j].CreatedAt) })
 	if len(events) > limit {
 		events = events[:limit]
 	}
 	return events, nil
+}
+
+func (r eventRepository) Delete(ctx context.Context, id string) error {
+	r.storage.mu.Lock()
+	defer r.storage.mu.Unlock()
+	if _, ok := r.storage.events[id]; !ok {
+		return domain.ErrNotFound
+	}
+	delete(r.storage.events, id)
+	return nil
+}
+
+func (r eventRepository) DeleteAll(ctx context.Context) (int, error) {
+	r.storage.mu.Lock()
+	defer r.storage.mu.Unlock()
+	count := len(r.storage.events)
+	r.storage.events = make(map[string]domain.Event)
+	return count, nil
+}
+
+func (r eventRepository) DeleteFinished(ctx context.Context) (int, error) {
+	r.storage.mu.Lock()
+	defer r.storage.mu.Unlock()
+	count := 0
+	for id, event := range r.storage.events {
+		if event.RunID != "" {
+			if run, ok := r.storage.runs[event.RunID]; ok && run.Status == domain.RunStatusRunning {
+				continue
+			}
+		}
+		if event.TaskID != "" {
+			if task, ok := r.storage.tasks[event.TaskID]; ok && task.Status == domain.TaskStatusInProgress {
+				continue
+			}
+		}
+		delete(r.storage.events, id)
+		count++
+	}
+	return count, nil
 }

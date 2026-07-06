@@ -90,6 +90,15 @@ templ RuntimeBanner(id string, name string) {
 	}
 }
 
+func runtimeProviderIsCustom(providerID string) bool {
+	switch providerID {
+	case "", "openai", "anthropic", "openrouter", "deepseek", "ollama":
+		return false
+	default:
+		return true
+	}
+}
+
 templ RuntimeCompatibilityNotice(id string) {
 	if id == "claurst" {
 		<div class="runtime-compatibility-notice">
@@ -164,9 +173,11 @@ templ RuntimeConfiguredCard(r RuntimeCardView) {
 			<form hx-post={ "/runtimes/" + string(r.ID) + "/test" } data-no-toast="true" hx-target="body" hx-swap="outerHTML">
 				<button class="pc-btn pc-btn-secondary" type="submit" data-loading-text="Testing CLI...">@Icon("play", 16) Test CLI</button>
 			</form>
-			<form hx-post={ "/runtimes/" + string(r.ID) + "/test-ai" } hx-confirm="This will send a real test request to the configured AI provider. It may consume tokens. Continue?" data-no-toast="true" hx-target="body" hx-swap="outerHTML">
-				<button class="pc-btn pc-btn-secondary" type="submit" data-loading-text="Testing AI...">@Icon("zap", 16) Test AI</button>
-			</form>
+			if r.ID != "crush" && r.ID != "picoclaw" {
+				<form hx-post={ "/runtimes/" + string(r.ID) + "/test-ai" } hx-confirm="This will send a real test request to the configured AI provider. It may consume tokens. Continue?" data-no-toast="true" hx-target="body" hx-swap="outerHTML">
+					<button class="pc-btn pc-btn-secondary" type="submit" data-loading-text="Testing AI...">@Icon("zap", 16) Test AI</button>
+				</form>
+			}
 			<form hx-post={ "/runtimes/" + string(r.ID) + "/uninstall" } hx-confirm="Are you sure you want to uninstall this runtime? Configuration files will be deleted if installed exclusively." hx-target="body" hx-swap="outerHTML">
 				<button class="pc-btn pc-btn-ghost runtime-danger-action" type="submit">@Icon("trash", 16) Uninstall</button>
 			</form>
@@ -174,28 +185,95 @@ templ RuntimeConfiguredCard(r RuntimeCardView) {
 	</div>
 }
 
-templ RuntimeConfigEditors(r RuntimeCardView) {
-	if len(r.ConfigFiles) > 0 {
-		for _, file := range r.ConfigFiles {
-			<form hx-post={ "/runtimes/" + string(r.ID) + "/config" } hx-target="body" hx-swap="outerHTML" class="runtime-config-editor" data-success="Runtime config saved.">
-				<div class="runtime-config-header">
-					<strong>{ file.Name }</strong>
-					if file.Sensitive {
-						<span class="pc-badge pc-badge-bad">Sensitive</span>
+templ RuntimeBasicConfigForm(r RuntimeCardView) {
+	<form hx-post={ "/runtimes/" + string(r.ID) + "/basic-config" } hx-target="body" hx-swap="outerHTML" class="runtime-basic-config" data-success="Runtime provider saved.">
+		<div class="runtime-config-header">
+			<strong>Provider & model</strong>
+			<span class="pc-badge">Basic</span>
+		</div>
+		<p class="muted">Configure the common provider/model fields without editing JSON. Prefer env references for secrets, e.g. <code>$OPENAI_API_KEY</code>.</p>
+		<div class="runtime-basic-grid">
+			<label>Provider ID
+				<input class="pc-input" name="provider_id" value={ r.BasicConfig.ProviderID } list={ "provider-presets-" + string(r.ID) } placeholder="openai" required />
+				<datalist id={ "provider-presets-" + string(r.ID) }>
+					<option value="openai">OpenAI</option>
+					<option value="anthropic">Anthropic</option>
+					<option value="openrouter">OpenRouter</option>
+					<option value="deepseek">DeepSeek</option>
+					<option value="ollama">Ollama / local</option>
+				</datalist>
+			</label>
+			<label>Provider display name
+				<input class="pc-input" name="provider_name" value={ r.BasicConfig.ProviderName } placeholder="OpenAI" />
+			</label>
+			<label>Provider protocol/type
+				<select name="provider_type" class="pc-input">
+					if r.ID == "crush" {
+						<option value="openai" selected?={ r.BasicConfig.ProviderType == "openai" }>openai</option>
+						<option value="openai-compat" selected?={ r.BasicConfig.ProviderType == "openai-compat" }>openai-compat</option>
+						<option value="anthropic" selected?={ r.BasicConfig.ProviderType == "anthropic" }>anthropic</option>
+						<option value="ollama" selected?={ r.BasicConfig.ProviderType == "ollama" }>ollama</option>
+					} else {
+						<option value="openai" selected?={ r.BasicConfig.ProviderType == "openai" }>openai</option>
+						<option value="anthropic" selected?={ r.BasicConfig.ProviderType == "anthropic" }>anthropic</option>
+						<option value="openrouter" selected?={ r.BasicConfig.ProviderType == "openrouter" }>openrouter</option>
+						<option value="ollama" selected?={ r.BasicConfig.ProviderType == "ollama" }>ollama</option>
 					}
-				</div>
-				<input type="hidden" name="file_name" value={ file.Name } />
-				<textarea name="content" spellcheck="false">{ string(file.Content) }</textarea>
-				<button class="pc-btn pc-btn-secondary" type="submit">Save { file.Name }</button>
-			</form>
-		}
+				</select>
+			</label>
+			<label>Model ID
+				<input class="pc-input" name="model_id" value={ r.BasicConfig.ModelID } placeholder="gpt-4o" required />
+			</label>
+			<label>Model alias/name
+				<input class="pc-input" name="model_alias" value={ r.BasicConfig.ModelAlias } placeholder="default" />
+			</label>
+			<label>Base URL
+				<input class="pc-input" name="base_url" value={ r.BasicConfig.BaseURL } placeholder="https://api.openai.com/v1" />
+			</label>
+			<label>API key or env reference
+				<input class="pc-input" name="api_key" value={ r.BasicConfig.APIKey } placeholder="$OPENAI_API_KEY" autocomplete="off" />
+			</label>
+		</div>
+		<div class="runtime-basic-actions">
+			<button class="pc-btn pc-btn-primary" type="submit">@Icon("check", 16) Save provider</button>
+			<button class="pc-btn pc-btn-secondary" type="submit" name="test_ai" value="true" data-no-toast="true">@Icon("zap", 16) Save & test AI</button>
+		</div>
+	</form>
+}
+
+templ RuntimeConfigEditors(r RuntimeCardView) {
+	if r.ID == "crush" || r.ID == "picoclaw" {
+		@RuntimeBasicConfigForm(r)
+	}
+	if len(r.ConfigFiles) > 0 {
+		<details class="runtime-advanced-config">
+			<summary>Advanced JSON / raw config files</summary>
+			<div class="runtime-advanced-config-body">
+				for _, file := range r.ConfigFiles {
+					<form hx-post={ "/runtimes/" + string(r.ID) + "/config" } hx-target="body" hx-swap="outerHTML" class="runtime-config-editor" data-success="Runtime config saved.">
+						<div class="runtime-config-header">
+							<strong>{ file.Name }</strong>
+							if file.Sensitive {
+								<span class="pc-badge pc-badge-bad">Sensitive</span>
+							}
+						</div>
+						<input type="hidden" name="file_name" value={ file.Name } />
+						<textarea name="content" spellcheck="false">{ string(file.Content) }</textarea>
+						<button class="pc-btn pc-btn-secondary" type="submit">Save { file.Name }</button>
+					</form>
+				}
+			</div>
+		</details>
 	} else if r.State.ConfigPath != "" {
-		<form hx-post={ "/runtimes/" + string(r.ID) + "/config" } hx-target="body" hx-swap="outerHTML" class="runtime-config-editor" data-success="Runtime config saved.">
-			<div class="runtime-config-header"><strong>config.json</strong></div>
-			<input type="hidden" name="file_name" value="config.json" />
-			<textarea name="content" spellcheck="false"></textarea>
-			<button class="pc-btn pc-btn-secondary" type="submit">Save Config</button>
-		</form>
+		<details class="runtime-advanced-config">
+			<summary>Advanced JSON / raw config files</summary>
+			<form hx-post={ "/runtimes/" + string(r.ID) + "/config" } hx-target="body" hx-swap="outerHTML" class="runtime-config-editor" data-success="Runtime config saved.">
+				<div class="runtime-config-header"><strong>config.json</strong></div>
+				<input type="hidden" name="file_name" value="config.json" />
+				<textarea name="content" spellcheck="false"></textarea>
+				<button class="pc-btn pc-btn-secondary" type="submit">Save Config</button>
+			</form>
+		</details>
 	}
 }
 

@@ -123,12 +123,77 @@ func TestTaskServiceControlsContinuousTask(t *testing.T) {
 		t.Fatalf("unexpected resumed task: %#v", resumed)
 	}
 
+	resumed, err = svc.Wake(context.Background(), task.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resumed.Status != domain.TaskStatusWaitingNextCycle || resumed.NeedsRun || resumed.LoopNextRunAt == nil {
+		t.Fatalf("wake should not bypass continuous delay: %#v", resumed)
+	}
+
 	queued, err := svc.RunContinuousNow(context.Background(), task.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if queued.Status != domain.TaskStatusTodo || !queued.NeedsRun || queued.LoopNextRunAt != nil || queued.LoopPausedAt != nil {
 		t.Fatalf("unexpected queued task: %#v", queued)
+	}
+}
+
+func TestRateLimitBackoffDuration(t *testing.T) {
+	cases := []struct {
+		failures int
+		want     time.Duration
+	}{
+		{0, 6 * time.Second},
+		{1, 6 * time.Second},
+		{2, 18 * time.Second},
+		{3, 54 * time.Second},
+		{4, 162 * time.Second},
+		{20, 2 * time.Hour},
+	}
+	for _, tc := range cases {
+		if got := rateLimitBackoffDuration(tc.failures); got != tc.want {
+			t.Fatalf("failures %d: got %s, want %s", tc.failures, got, tc.want)
+		}
+	}
+}
+
+func TestTransientProviderErrorBackoff(t *testing.T) {
+	if !isTransientProviderError(`{"message":"Internal server error","type":"internal_server_error","code":500}`) {
+		t.Fatal("expected provider 500 to be transient")
+	}
+	cases := []struct {
+		failures int
+		want     time.Duration
+	}{
+		{0, 2 * time.Minute},
+		{1, 2 * time.Minute},
+		{2, 4 * time.Minute},
+		{3, 8 * time.Minute},
+		{4, 16 * time.Minute},
+		{20, time.Hour},
+	}
+	for _, tc := range cases {
+		if got := transientProviderBackoffDuration(tc.failures); got != tc.want {
+			t.Fatalf("failures %d: got %s, want %s", tc.failures, got, tc.want)
+		}
+	}
+}
+
+func TestSkillCatalogKeepsFullInstructionsOutOfPrompt(t *testing.T) {
+	runner := NewRunner(memory.NewStorage(), fixedClock{t: time.Now()}, &seqID{}, noopBus{}, nil, NoopMemoryProvider{}, testLogger{}, Config{})
+	skill := domain.Skill{ID: "skill_large", Name: "Large Skill", Description: "Use for large operations", Instructions: strings.Repeat("very detailed instruction ", 100), Kind: domain.SkillKindBuiltin, Enabled: true}
+	catalog := runner.skillCatalogContext([]domain.Skill{skill})
+	if !strings.Contains(catalog, "GET /agent-api/skills") || !strings.Contains(catalog, "Large Skill") {
+		t.Fatalf("unexpected catalog: %s", catalog)
+	}
+	if strings.Contains(catalog, "very detailed instruction") {
+		t.Fatalf("catalog should not include full skill instructions: %s", catalog)
+	}
+	full := runner.skillContext(skill)
+	if !strings.Contains(full, "very detailed instruction") {
+		t.Fatalf("manual skill context should keep instructions: %s", full)
 	}
 }
 
@@ -151,12 +216,12 @@ func TestContinuousTaskProtocolContextIncludesLoopGuidance(t *testing.T) {
 		t.Fatal(err)
 	}
 	messages := []domain.Message{
-		{ID: "msg_question", TaskID: task.ID, Role: domain.MessageRoleAgent, Body: "Which branch should I monitor?", CreatedAt: clock.t},
+		{ID: "msg_question", TaskID: task.ID, Role: domain.MessageRoleAgent, Body: "Pergunta para você: Qual branch devo monitorar? Opções: main, develop, outra. Padrão seguro: main.", CreatedAt: clock.t},
 		{ID: "msg_user", TaskID: task.ID, Role: domain.MessageRoleUser, Body: "Use main.", CreatedAt: clock.t.Add(time.Second)},
 	}
 	runner := NewRunner(st, clock, idgen, noopBus{}, nil, NoopMemoryProvider{}, testLogger{}, Config{})
 	contextText := runner.taskProtocolContext(context.Background(), task, domain.Run{ID: "run_prompt"}, messages)
-	for _, want := range []string{"Continuous Task Instructions", "Current cycle: 3", "non-blocking", "Child Tasks To Supervise", "do child", "latest run: succeeded", "investigated branch", "latest message: agent: summary done", "Open Questions Raised For User", "Which branch should I monitor?", "Latest User Comment", "Use main."} {
+	for _, want := range []string{"Continuous Task Rules", "Cycle 3", "safe assumptions", "Child Tasks To Supervise", "do child", "latest run: succeeded", "investigated branch", "latest message: agent: summary done", "Open Questions Raised For User", "Qual branch devo monitorar?", "Latest User Comment", "Use main."} {
 		if !strings.Contains(contextText, want) {
 			t.Fatalf("expected context to contain %q:\n%s", want, contextText)
 		}

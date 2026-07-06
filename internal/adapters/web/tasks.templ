@@ -17,33 +17,51 @@ templ TaskTable(tasks []taskResponse, agents []domain.Agent, projects []domain.W
 	} else {
 		<div class="task-list">
 			for _, task := range tasks {
-				<a class={ "task-list-row", taskToneClass(task.Status) } href={ templ.URL("/tasks/" + task.ID) }>
-					<span class="task-list-icon">@Icon(taskStatusIcon(task.Status), 15)</span>
-					<div class="task-list-main">
-						<div class="task-list-title-row">
-							<span class="task-type">{ issuePriorityLabel(task.Status) }</span>
-							if task.Mode == domain.TaskModeContinuous {
-								<span class="task-type" style="color: var(--info); border-color: color-mix(in srgb, var(--info) 24%, var(--border));">@Icon("activity", 10) Continuous</span>
-							}
-							<strong>{ taskDisplayTitle(task) }</strong>
-						</div>
-						if taskExcerpt(task.Prompt) != "" {
-							<p class="task-list-excerpt">{ taskExcerpt(task.Prompt) }</p>
-						}
-						<div class="task-list-meta-grid">
-							<div><span>Agent</span><strong>{ agentName(agents, task.AgentID) }</strong></div>
-							<div><span>Project</span><strong>{ projectName(projects, task.ProjectID) }</strong></div>
-							<div><span>Updated</span><strong>{ task.UpdatedAt }</strong></div>
-						</div>
-					</div>
-					<div class="task-list-action">
-						<span class={ "issue-list-status", statusClass(task.Status) }>{ string(task.Status) }</span>
-						<span class="activity-action">Open task</span>
-					</div>
-				</a>
+				@TaskRow(task, agents, projects)
 			}
 		</div>
 	}
+}
+
+templ TaskRow(task taskResponse, agents []domain.Agent, projects []domain.Workspace) {
+	<div id={ "task-row-" + task.ID } class={ "task-list-row", taskToneClass(task.Status), templ.KV("task-list-row-running", task.Status == domain.TaskStatusInProgress) }>
+		<span class={ "task-list-icon", templ.KV("pulse", task.Status == domain.TaskStatusInProgress) }>@Icon(taskStatusIcon(task.Status), 15)</span>
+		<div class="task-list-main">
+			<div class="task-list-title-row">
+				<span class="task-type">{ issuePriorityLabel(task.Status) }</span>
+				if task.Status == domain.TaskStatusInProgress {
+					<span class="task-type task-live-pill">@Icon("radio", 10) Running now</span>
+				}
+				if task.Mode == domain.TaskModeContinuous {
+					<span class="task-type" style="color: var(--info); border-color: color-mix(in srgb, var(--info) 24%, var(--border));">@Icon("activity", 10) Continuous</span>
+				}
+				<strong><a href={ templ.URL("/tasks/" + task.ID) }>{ taskDisplayTitle(task) }</a></strong>
+			</div>
+			if taskExcerpt(task.Prompt) != "" {
+				<p class="task-list-excerpt">{ taskExcerpt(task.Prompt) }</p>
+			}
+			<div class="task-list-meta-grid">
+				<div><span>Agent</span><strong>{ agentName(agents, task.AgentID) }</strong></div>
+				<div><span>Project</span><strong>{ projectName(projects, task.ProjectID) }</strong></div>
+				<div><span>Updated</span><strong>{ task.UpdatedAt }</strong></div>
+			</div>
+		</div>
+		<div class="task-list-action">
+			<span class={ "issue-list-status", statusClass(task.Status), templ.KV("pulse", task.Status == domain.TaskStatusInProgress) }>{ string(task.Status) }</span>
+			if task.Status == domain.TaskStatusInProgress {
+				<form method="post" action={ templ.URL("/tasks/" + task.ID + "/cancel") } hx-post={ "/tasks/" + task.ID + "/cancel" } hx-target={ "#task-row-" + task.ID } hx-swap="outerHTML" hx-confirm="Stop this running task now?">
+					<input type="hidden" name="reason" value="Stopped from task list"/>
+					<input type="hidden" name="partial_row" value="true"/>
+					<button class="activity-action button-danger" type="submit">Stop now</button>
+				</form>
+			} else {
+				<form method="post" action={ templ.URL("/tasks/" + task.ID + "/delete") } hx-post={ "/tasks/" + task.ID + "/delete" } hx-target="body" hx-swap="outerHTML" hx-confirm="Delete this task and its history?">
+					<button class="activity-action button-danger" type="submit">Delete</button>
+				</form>
+			}
+			<a class="activity-action" href={ templ.URL("/tasks/" + task.ID) }>Open task</a>
+		</div>
+	</div>
 }
 
 func issueAttentionClass(status domain.TaskStatus) string {
@@ -118,8 +136,8 @@ templ TaskLive(task taskResponse, messages []domain.Message, runs []domain.Run, 
 		</div>
 	}
 	<div class="panel issue-thread-panel">
-		@SectionHeader("Thread", "Timeline of comments, actions and runs.")
-		@IssueThread(messages, runs, events)
+		@SectionHeader("Thread", "Comentários e resumos enviados pelo agente ou usuário.")
+		@IssueThread(messages)
 	</div>
 }
 
@@ -130,12 +148,12 @@ type timelineItem struct {
 	Message *domain.Message
 }
 
-templ IssueThread(messages []domain.Message, runs []domain.Run, events []domain.Event) {
+templ IssueThread(messages []domain.Message) {
 	<div class="issue-thread">
-		if len(messages) == 0 && len(runs) == 0 && len(events) == 0 {
-			@EmptyState("No activity yet", "Comments, status changes and runs will appear here.", "message-square") {}
+		if len(threadMessages(messages)) == 0 {
+			@EmptyState("No comments yet", "Agent summaries, user comments and useful system notes will appear here.", "message-square") {}
 		} else {
-			@renderTimelineItems(buildTimeline(messages, runs, events))
+			@renderTimelineItems(buildMessageTimeline(threadMessages(messages)))
 		}
 	</div>
 }
@@ -148,6 +166,38 @@ func buildTimeline(messages []domain.Message, runs []domain.Run, events []domain
 	for i := range runs {
 		items = append(items, timelineItem{Time: runs[i].StartedAt, Run: &runs[i]})
 	}
+	for i := range messages {
+		items = append(items, timelineItem{Time: messages[i].CreatedAt, Message: &messages[i]})
+	}
+	sort.Slice(items, func(i, j int) bool {
+		return items[i].Time.Before(items[j].Time)
+	})
+	return items
+}
+
+func threadMessages(messages []domain.Message) []domain.Message {
+	filtered := make([]domain.Message, 0, len(messages))
+	for _, message := range messages {
+		body := strings.TrimSpace(message.Body)
+		if body == "" {
+			continue
+		}
+		switch message.Role {
+		case domain.MessageRoleAgent, domain.MessageRoleUser, domain.MessageRoleDelegated:
+			filtered = append(filtered, message)
+		case domain.MessageRoleSystem:
+			lower := strings.ToLower(body)
+			if strings.Contains(lower, "continuous task delayed") || strings.Contains(lower, "continuous task paused after runtime/provider error") || strings.Contains(lower, "run failed:") || strings.Contains(lower, "crush execution failed") || strings.Contains(lower, "stderr:") || strings.Contains(lower, "internal_server_error") || strings.Contains(lower, "too many requests") {
+				continue
+			}
+			filtered = append(filtered, message)
+		}
+	}
+	return filtered
+}
+
+func buildMessageTimeline(messages []domain.Message) []timelineItem {
+	items := make([]timelineItem, 0, len(messages))
 	for i := range messages {
 		items = append(items, timelineItem{Time: messages[i].CreatedAt, Message: &messages[i]})
 	}
@@ -216,11 +266,33 @@ templ TimelineMessageItem(item timelineItem) {
 				<strong class="capitalize">{ string(item.Message.Role) }</strong>
 				<small>{ item.Time.Format("15:04:05") }</small>
 			</div>
-			<div class="issue-timeline-body">
-				{ item.Message.Body }
-			</div>
+			@ThreadMessageBody(item.Message.Body)
 		</div>
 	</div>
+}
+
+templ ThreadMessageBody(body string) {
+	if len([]rune(body)) > 700 {
+		<details class="thread-message-details">
+			<summary><span class="thread-message-preview">{ threadPreview(body, 360) }</span><span class="thread-message-more">Ler mais</span></summary>
+			<div class="issue-timeline-body thread-message-full">
+				{ body }
+			</div>
+		</details>
+	} else {
+		<div class="issue-timeline-body">
+			{ body }
+		</div>
+	}
+}
+
+func threadPreview(value string, limit int) string {
+	value = strings.TrimSpace(value)
+	if len([]rune(value)) <= limit {
+		return value
+	}
+	runes := []rune(value)
+	return string(runes[:limit]) + "..."
 }
 
 func messageIcon(role domain.MessageRole) string {

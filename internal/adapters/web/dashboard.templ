@@ -8,7 +8,14 @@ import (
 
 templ DashboardPage(view DashboardView, agents []domain.Agent, projects []domain.Workspace) {
 	@PageShell("dashboard", "Dashboard", "System health and operational overview.", dashboardAction()) {
-		<section class="dashboard-overview-grid">
+		<div id="dashboard-live" hx-get="/partials/dashboard" hx-trigger="picoclip-live from:body throttle:700ms, every 15s" hx-swap="innerHTML">
+			@DashboardLive(view, agents, projects)
+		</div>
+	}
+}
+
+templ DashboardLive(view DashboardView, agents []domain.Agent, projects []domain.Workspace) {
+	<section class="dashboard-overview-grid">
 			<a class="panel dashboard-overview-card" href="/tasks">
 				<span>Tasks</span>
 				<strong>{ strconv.Itoa(view.Stats.OpenTasks) }</strong>
@@ -37,9 +44,9 @@ templ DashboardPage(view DashboardView, agents []domain.Agent, projects []domain
 					<div class="panel dashboard-panel">
 						<div class="dashboard-panel-header">
 							<div>
-								<span class="eyebrow text-info">Questions</span>
-								<h2 class="text-info">Questions for you</h2>
-								<p>Continuous tasks asked for input but will keep running on schedule.</p>
+								<span class="eyebrow text-info">Perguntas</span>
+								<h2 class="text-info">Perguntas para você</h2>
+								<p>Tasks contínuas pediram uma decisão explícita, mas continuam seguindo uma opção segura quando possível.</p>
 							</div>
 						</div>
 						<div class="question-list">
@@ -172,7 +179,6 @@ templ DashboardPage(view DashboardView, agents []domain.Agent, projects []domain
 				</div>
 			</div>
 		</section>
-	}
 }
 
 templ dashboardAction() {

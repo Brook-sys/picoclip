@@ -8,7 +8,14 @@ import (
 
 templ RunsPage(runs []domain.Run, allRuns []domain.Run, tasks map[string]taskResponse, agents map[string]domain.Agent, activeStatus string) {
 	@PageShell("runs", "Runs", "Execution history, runtime status, and agent output for tasks.", nil) {
-		<section class="runs-overview-grid">
+		<div id="runs-live" hx-get={ templ.URL("/partials/runs?status=" + activeStatus) } hx-trigger="picoclip-live from:body throttle:1500ms, every 30s" hx-swap="innerHTML">
+			@RunsLive(runs, allRuns, tasks, agents, activeStatus)
+		</div>
+	}
+}
+
+templ RunsLive(runs []domain.Run, allRuns []domain.Run, tasks map[string]taskResponse, agents map[string]domain.Agent, activeStatus string) {
+	<section class="runs-overview-grid">
 			<a class="panel runs-overview-card" href="/runs">
 				<span>Total</span>
 				<strong>{ fmt.Sprintf("%d", len(allRuns)) }</strong>
@@ -51,7 +58,12 @@ templ RunsPage(runs []domain.Run, allRuns []domain.Run, tasks map[string]taskRes
 					<h2>Run timeline</h2>
 					<p>Scan runtime status, agent, task context and output links.</p>
 				</div>
-				<span class="runs-filter-pill">{ runFilterLabel(activeStatus) }</span>
+				<div class="cleanup-actions">
+					<span class="runs-filter-pill">{ runFilterLabel(activeStatus) }</span>
+					<form method="post" action="/runs/cleanup-finished" hx-post="/runs/cleanup-finished" hx-target="body" hx-swap="outerHTML" hx-confirm="Delete only finished runs? Running runs will be kept.">
+						<button class="activity-action button-danger" type="submit">Delete finished</button>
+					</form>
+				</div>
 			</div>
 			if len(runs) == 0 {
 				<div class="runs-empty-wrap">
@@ -60,12 +72,12 @@ templ RunsPage(runs []domain.Run, allRuns []domain.Run, tasks map[string]taskRes
 			} else {
 				<div class="run-activity-list">
 					for _, run := range runs {
-						<a class={ "run-activity-row", runActivityClass(run.Status) } href={ templ.URL("/runs/" + run.ID) }>
+						<div class={ "run-activity-row", runActivityClass(run.Status) }>
 							<span class="run-activity-icon">@Icon(runActivityIcon(run.Status), 15)</span>
 							<div class="run-activity-main">
 								<div class="run-activity-title-row">
 									<span class="run-type">{ runStatusLabel(run.Status) }</span>
-									<strong>{ runTaskTitle(run, tasks) }</strong>
+									<strong><a href={ templ.URL("/runs/" + run.ID) }>{ runTaskTitle(run, tasks) }</a></strong>
 								</div>
 								<div class="run-activity-meta-grid">
 									<div><span>Agent</span><strong>{ runAgentName(run, agents) }</strong></div>
@@ -75,18 +87,25 @@ templ RunsPage(runs []domain.Run, allRuns []domain.Run, tasks map[string]taskRes
 								<div class="run-activity-footer">
 									<span class="run-id-chip">{ runShortID(run.ID) }</span>
 									<span class="run-attempt-pill">attempt { runAttemptText(run) }</span>
+									if runIssueLabel(run) != "" {
+										<span class={ "badge", runIssueClass(run) }>{ runIssueLabel(run) }</span>
+									}
 								</div>
 							</div>
 							<div class="run-activity-action">
 								<span class={ "issue-list-status", runStatusClass(run.Status), templ.KV("pulse", run.Status == domain.RunStatusRunning) }>{ string(run.Status) }</span>
-								<span class="activity-action">Open run</span>
+								if run.Status != domain.RunStatusRunning {
+									<form method="post" action={ templ.URL("/runs/" + run.ID + "/delete") } hx-post={ "/runs/" + run.ID + "/delete" } hx-target="body" hx-swap="outerHTML" hx-confirm="Delete this run?">
+										<button class="activity-action button-danger" type="submit">Delete</button>
+									</form>
+								}
+								<a class="activity-action" href={ templ.URL("/runs/" + run.ID) }>Open run</a>
 							</div>
-						</a>
+						</div>
 					}
 				</div>
 			}
 		</section>
-	}
 }
 
 func runShortID(id string) string {

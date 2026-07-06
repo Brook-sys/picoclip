@@ -120,6 +120,56 @@ func (r *RunRepository) Update(ctx context.Context, run domain.Run) error {
 	return nil
 }
 
+func (r *RunRepository) Delete(ctx context.Context, id string) error {
+	q := getQueryer(ctx, r.db)
+	for _, query := range []string{
+		`DELETE FROM usage_events WHERE run_id = ?`,
+		`DELETE FROM events WHERE run_id = ?`,
+	} {
+		if _, err := q.ExecContext(ctx, query, id); err != nil {
+			return err
+		}
+	}
+	res, err := q.ExecContext(ctx, `DELETE FROM runs WHERE id = ?`, id)
+	if err != nil {
+		return err
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return domain.ErrNotFound
+	}
+	return nil
+}
+
+func (r *RunRepository) DeleteFinished(ctx context.Context) (int, error) {
+	q := getQueryer(ctx, r.db)
+	rows, err := q.QueryContext(ctx, `SELECT id FROM runs WHERE status != 'running'`)
+	if err != nil {
+		return 0, err
+	}
+	defer rows.Close()
+	ids := make([]string, 0)
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return 0, err
+		}
+		ids = append(ids, id)
+	}
+	if err := rows.Err(); err != nil {
+		return 0, err
+	}
+	for _, id := range ids {
+		if err := r.Delete(ctx, id); err != nil && !errors.Is(err, domain.ErrNotFound) {
+			return 0, err
+		}
+	}
+	return len(ids), nil
+}
+
 func scanRun(row scanner) (domain.Run, error) {
 	var r domain.Run
 	var driverStr, statusStr string

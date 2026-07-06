@@ -2,6 +2,7 @@ package services
 
 import (
 	"context"
+	"time"
 
 	"picoclip/internal/core/domain"
 	"picoclip/internal/core/ports"
@@ -43,8 +44,19 @@ func (s *LockRecoveryService) SweepStaleLocks(ctx context.Context) (int, error) 
 		task.ExecutionLockedAt = nil
 		task.LockExpiresAt = nil
 		if task.Status == domain.TaskStatusInProgress {
-			task.Status = domain.TaskStatusTodo
-			task.NeedsRun = true
+			if task.Mode == domain.TaskModeContinuous {
+				delay := task.LoopDelaySeconds
+				if delay < 1 {
+					delay = 60
+				}
+				task.Status = domain.TaskStatusWaitingNextCycle
+				task.NeedsRun = false
+				next := now.Add(time.Duration(delay) * time.Second)
+				task.LoopNextRunAt = &next
+			} else {
+				task.Status = domain.TaskStatusTodo
+				task.NeedsRun = true
+			}
 		}
 		task.UpdatedAt = now
 		if err := s.storage.Tasks().Update(ctx, task); err != nil {
