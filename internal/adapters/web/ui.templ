@@ -218,6 +218,28 @@ templ EmptyState(title string, message string, iconName string) {
 	</div>
 }
 
+templ OverviewGrid() {
+	<section class="pc-overview-grid">
+		{ children... }
+	</section>
+}
+
+templ OverviewCard(title string, value string, caption string, href string, tone string) {
+	if href != "" {
+		<a class={ "panel", "pc-overview-card", templ.KV(tone, tone != "") } href={ templ.URL(href) }>
+			<span>{ title }</span>
+			<strong>{ value }</strong>
+			<small>{ caption }</small>
+		</a>
+	} else {
+		<div class={ "panel", "pc-overview-card", templ.KV(tone, tone != "") }>
+			<span>{ title }</span>
+			<strong>{ value }</strong>
+			<small>{ caption }</small>
+		</div>
+	}
+}
+
 templ Tabs() {
 	<nav class="pc-tabs" aria-label="Sections">
 		{ children... }

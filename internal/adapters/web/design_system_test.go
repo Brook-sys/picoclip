@@ -75,6 +75,52 @@ func TestDesignSystemCSSDefinesDarkModeDepthAndContrastTokens(t *testing.T) {
 	}
 }
 
+func TestOverviewCardsUseCanonicalHelperAndCSS(t *testing.T) {
+	t.Parallel()
+
+	uiBody, err := os.ReadFile("ui.templ")
+	if err != nil {
+		t.Fatalf("read ui.templ: %v", err)
+	}
+	ui := string(uiBody)
+	if !strings.Contains(ui, "templ OverviewGrid()") || !strings.Contains(ui, "templ OverviewCard(") {
+		t.Fatalf("ui.templ must define canonical OverviewGrid and OverviewCard helpers")
+	}
+	if !strings.Contains(ui, `class="pc-overview-grid"`) || !strings.Contains(ui, `"pc-overview-card"`) {
+		t.Fatalf("overview helpers must emit canonical pc-overview-* classes")
+	}
+
+	for _, name := range []string{"dashboard.templ", "tasks_page.templ", "runs_page.templ", "activity.templ"} {
+		body, err := os.ReadFile(name)
+		if err != nil {
+			t.Fatalf("read %s: %v", name, err)
+		}
+		text := string(body)
+		if !strings.Contains(text, "@OverviewGrid()") || !strings.Contains(text, "@OverviewCard(") {
+			t.Fatalf("%s must render overview stats through OverviewGrid and OverviewCard helpers", name)
+		}
+		for _, legacy := range []string{"dashboard-overview-card", "tasks-overview-card", "runs-overview-card", "activity-overview-card"} {
+			if strings.Contains(text, legacy) {
+				t.Fatalf("%s still contains legacy %s markup; use OverviewCard helper instead", name, legacy)
+			}
+		}
+	}
+
+	cssBody, err := os.ReadFile("assets/app.css")
+	if err != nil {
+		t.Fatalf("read app.css: %v", err)
+	}
+	css := string(cssBody)
+	for _, selector := range []string{".pc-overview-grid", ".pc-overview-card", ".pc-overview-card.live", ".pc-overview-card.attention", ".pc-overview-card.success", ".pc-overview-card.error", ".pc-overview-card.muted"} {
+		_ = cssBlock(t, css, selector)
+	}
+	for _, legacy := range []string{".dashboard-overview-card", ".tasks-overview-card", ".runs-overview-card", ".activity-overview-card"} {
+		if strings.Contains(css, legacy) {
+			t.Fatalf("app.css still contains legacy selector %s; use pc-overview-* selectors instead", legacy)
+		}
+	}
+}
+
 func cssBlock(t *testing.T, css, selector string) string {
 	t.Helper()
 	start := strings.Index(css, selector+" {")

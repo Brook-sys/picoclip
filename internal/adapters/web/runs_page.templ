@@ -8,33 +8,13 @@ import (
 
 templ RunsPage(runs []domain.Run, allRuns []domain.Run, tasks map[string]taskResponse, agents map[string]domain.Agent, activeStatus string) {
 	@PageShell("runs", "Runs", "Execution history, runtime status, and agent output for tasks.", nil) {
-		<section class="runs-overview-grid">
-			<a class="panel runs-overview-card" href="/runs">
-				<span>Total</span>
-				<strong>{ fmt.Sprintf("%d", len(allRuns)) }</strong>
-				<small>All executions</small>
-			</a>
-			<a class="panel runs-overview-card live" href="/runs?status=running">
-				<span>Running</span>
-				<strong>{ fmt.Sprintf("%d", runStatusCount(allRuns, domain.RunStatusRunning)) }</strong>
-				<small>Currently active</small>
-			</a>
-			<a class="panel runs-overview-card success" href="/runs?status=succeeded">
-				<span>Succeeded</span>
-				<strong>{ fmt.Sprintf("%d", runStatusCount(allRuns, domain.RunStatusSucceeded)) }</strong>
-				<small>Finished successfully</small>
-			</a>
-			<a class="panel runs-overview-card attention" href="/runs?status=failed">
-				<span>Failed</span>
-				<strong>{ fmt.Sprintf("%d", runStatusCount(allRuns, domain.RunStatusFailed)+runStatusCount(allRuns, domain.RunStatusTimeout)) }</strong>
-				<small>Failed or timed out</small>
-			</a>
-			<a class="panel runs-overview-card muted" href="/runs?status=canceled">
-				<span>Canceled</span>
-				<strong>{ fmt.Sprintf("%d", runStatusCount(allRuns, domain.RunStatusCanceled)) }</strong>
-				<small>Stopped before finish</small>
-			</a>
-		</section>
+		@OverviewGrid() {
+			@OverviewCard("Total", fmt.Sprintf("%d", len(allRuns)), "All executions", "/runs", "")
+			@OverviewCard("Running", fmt.Sprintf("%d", runStatusCount(allRuns, domain.RunStatusRunning)), "Currently active", "/runs?status=running", "live")
+			@OverviewCard("Succeeded", fmt.Sprintf("%d", runStatusCount(allRuns, domain.RunStatusSucceeded)), "Finished successfully", "/runs?status=succeeded", "success")
+			@OverviewCard("Failed", fmt.Sprintf("%d", runStatusCount(allRuns, domain.RunStatusFailed)+runStatusCount(allRuns, domain.RunStatusTimeout)), "Failed or timed out", "/runs?status=failed", "attention")
+			@OverviewCard("Canceled", fmt.Sprintf("%d", runStatusCount(allRuns, domain.RunStatusCanceled)), "Stopped before finish", "/runs?status=canceled", "muted")
+		}
 		<div class="runs-toolbar">
 			@Tabs() {
 				@TabLink("All", "/runs", activeStatus == "")

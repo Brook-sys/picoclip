@@ -205,6 +205,7 @@ Definidos principalmente em `internal/adapters/web/ui.templ`.
 | `Chip`, `Badge`, `StatusBadge` | Metadados, tags e status. |
 | `PropertyList`, `PropertyItem`, `PropertyItemHTML` | Detail rails e metadados estruturados. |
 | `EmptyState` | Estados vazios com ícone, título, mensagem e actions. |
+| `OverviewGrid`, `OverviewCard` | Cards de métricas/overview em Dashboard, Tasks, Runs e Activity, usando classes `pc-overview-*` e tons canônicos. |
 | `Tabs`, `TabLink` | Navegação local por abas. |
 | `EntityRow` | Lista compacta de entidades navegáveis. |
 | `CommandPalette` | Modal global de busca/comandos. |

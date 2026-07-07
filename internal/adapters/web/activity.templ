@@ -5,23 +5,11 @@ import "picoclip/internal/core/domain"
 
 templ ActivityPage(events []domain.Event, tasks map[string]taskResponse, agents map[string]domain.Agent) {
 	@PageShell("activity", "Activity", "Understand what happened, who did it, where it happened, and what needs attention.", nil) {
-		<section class="activity-overview-grid">
-			<div class="panel activity-overview-card">
-				<span>Recent</span>
-				<strong>{ fmt.Sprintf("%d", len(events)) }</strong>
-				<small>Latest system events</small>
-			</div>
-			<div class="panel activity-overview-card attention">
-				<span>Attention</span>
-				<strong>{ fmt.Sprintf("%d", activityAttentionCount(events)) }</strong>
-				<small>Failed, canceled or blocked</small>
-			</div>
-			<div class="panel activity-overview-card success">
-				<span>Completed</span>
-				<strong>{ fmt.Sprintf("%d", activityCompletedCount(events)) }</strong>
-				<small>Finished successfully</small>
-			</div>
-		</section>
+		@OverviewGrid() {
+			@OverviewCard("Recent", fmt.Sprintf("%d", len(events)), "Latest system events", "", "")
+			@OverviewCard("Attention", fmt.Sprintf("%d", activityAttentionCount(events)), "Failed, canceled or blocked", "", "attention")
+			@OverviewCard("Completed", fmt.Sprintf("%d", activityCompletedCount(events)), "Finished successfully", "", "success")
+		}
 		<section class="panel activity-panel">
 			<div class="activity-panel-header">
 				<div>

@@ -8,38 +8,14 @@ import (
 
 templ TasksPage(tasks []taskResponse, allTasks []taskResponse, agents []domain.Agent, projects []domain.Workspace, activeTab string) {
 	@PageShell("tasks", "Tasks", "Issue-style queue for work, delegation, review and agent execution.", tasksAction()) {
-		<section class="tasks-overview-grid">
-			<a class="panel tasks-overview-card" href="/tasks">
-				<span>Total</span>
-				<strong>{ fmt.Sprintf("%d", len(allTasks)) }</strong>
-				<small>All tasks</small>
-			</a>
-			<a class="panel tasks-overview-card queued" href="/tasks?status=todo">
-				<span>Todo</span>
-				<strong>{ fmt.Sprintf("%d", taskStatusCount(allTasks, domain.TaskStatusTodo)) }</strong>
-				<small>Waiting to run</small>
-			</a>
-			<a class="panel tasks-overview-card live" href="/tasks?status=in_progress">
-				<span>In Progress</span>
-				<strong>{ fmt.Sprintf("%d", taskStatusCount(allTasks, domain.TaskStatusInProgress)) }</strong>
-				<small>Currently executing</small>
-			</a>
-			<a class="panel tasks-overview-card review" href="/tasks?status=in_review">
-				<span>Review</span>
-				<strong>{ fmt.Sprintf("%d", taskStatusCount(allTasks, domain.TaskStatusInReview)) }</strong>
-				<small>Awaiting review</small>
-			</a>
-			<a class="panel tasks-overview-card attention" href="/tasks?status=blocked">
-				<span>Attention</span>
-				<strong>{ fmt.Sprintf("%d", taskAttentionCount(allTasks)) }</strong>
-				<small>Blocked or needs action</small>
-			</a>
-			<a class="panel tasks-overview-card success" href="/tasks?status=done">
-				<span>Done</span>
-				<strong>{ fmt.Sprintf("%d", taskStatusCount(allTasks, domain.TaskStatusDone)) }</strong>
-				<small>Completed work</small>
-			</a>
-		</section>
+		@OverviewGrid() {
+			@OverviewCard("Total", fmt.Sprintf("%d", len(allTasks)), "All tasks", "/tasks", "")
+			@OverviewCard("Todo", fmt.Sprintf("%d", taskStatusCount(allTasks, domain.TaskStatusTodo)), "Waiting to run", "/tasks?status=todo", "queued")
+			@OverviewCard("In Progress", fmt.Sprintf("%d", taskStatusCount(allTasks, domain.TaskStatusInProgress)), "Currently executing", "/tasks?status=in_progress", "live")
+			@OverviewCard("Review", fmt.Sprintf("%d", taskStatusCount(allTasks, domain.TaskStatusInReview)), "Awaiting review", "/tasks?status=in_review", "review")
+			@OverviewCard("Attention", fmt.Sprintf("%d", taskAttentionCount(allTasks)), "Blocked or needs action", "/tasks?status=blocked", "attention")
+			@OverviewCard("Done", fmt.Sprintf("%d", taskStatusCount(allTasks, domain.TaskStatusDone)), "Completed work", "/tasks?status=done", "success")
+		}
 		<div class="runs-toolbar">
 			@Tabs() {
 				@TabLink("All", "/tasks", activeTab == "" || activeTab == "all")

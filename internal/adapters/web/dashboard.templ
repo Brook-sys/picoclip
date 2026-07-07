@@ -8,28 +8,12 @@ import (
 
 templ DashboardPage(view DashboardView, agents []domain.Agent, projects []domain.Workspace) {
 	@PageShell("dashboard", "Dashboard", "System health and operational overview.", dashboardAction()) {
-		<section class="dashboard-overview-grid">
-			<a class="panel dashboard-overview-card" href="/tasks">
-				<span>Tasks</span>
-				<strong>{ strconv.Itoa(view.Stats.OpenTasks) }</strong>
-				<small>Open Tasks</small>
-			</a>
-			<a class="panel dashboard-overview-card live" href="/runs?status=running">
-				<span>Running</span>
-				<strong>{ strconv.Itoa(view.Stats.RunningRuns) }</strong>
-				<small>Active Runs</small>
-			</a>
-			<a class="panel dashboard-overview-card attention" href="/tasks?status=blocked">
-				<span>Attention</span>
-				<strong>{ strconv.Itoa(view.Stats.BlockedTasks) }</strong>
-				<small>Blocked Tasks</small>
-			</a>
-			<a class="panel dashboard-overview-card error" href="/runs?status=failed">
-				<span>Failed</span>
-				<strong>{ strconv.Itoa(view.Stats.FailedRuns) }</strong>
-				<small>Failed Runs</small>
-			</a>
-		</section>
+		@OverviewGrid() {
+			@OverviewCard("Tasks", strconv.Itoa(view.Stats.OpenTasks), "Open Tasks", "/tasks", "")
+			@OverviewCard("Running", strconv.Itoa(view.Stats.RunningRuns), "Active Runs", "/runs?status=running", "live")
+			@OverviewCard("Attention", strconv.Itoa(view.Stats.BlockedTasks), "Blocked Tasks", "/tasks?status=blocked", "attention")
+			@OverviewCard("Failed", strconv.Itoa(view.Stats.FailedRuns), "Failed Runs", "/runs?status=failed", "error")
+		}
 
 		<section class="dashboard-content-grid">
 			<div class="dashboard-main-col">
