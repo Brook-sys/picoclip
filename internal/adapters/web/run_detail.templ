@@ -160,7 +160,7 @@ templ RunProperties(run domain.Run, task taskResponse, agent domain.Agent) {
 
 templ runDetailAction(taskID string) {
 	<div style="display: flex; gap: 8px;">
-		<a class="button secondary" href={ templ.URL("/runs") }>All runs</a>
-		<a class="button" href={ templ.URL("/tasks/" + taskID) }>Open task</a>
+		@ButtonLink("All runs", "/runs", "secondary", "")
+		@ButtonLink("Open task", "/tasks/" + taskID, "primary", "")
 	</div>
 }

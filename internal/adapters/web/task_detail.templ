@@ -11,12 +11,12 @@ templ TaskDetailPage(task taskResponse, rawTask domain.Task, agents []domain.Age
 					<div class="issue-hero-topline">
 						<div class="issue-hero-badges">
 							@StatusBadge(string(task.Status), statusClass(task.Status), isLiveTask(task, rawTask))
-							<span class="badge">{ task.ID }</span>
+							@Badge(task.ID, "")
 							if isLiveTask(task, rawTask) {
-								<span class="badge badge-warn">Agent running</span>
+								@Badge("Agent running", "warn")
 							}
 							if rawTask.Mode == domain.TaskModeContinuous {
-								<span class="badge">Continuous</span>
+								@Badge("Continuous", "")
 							}
 						</div>
 					</div>
@@ -94,7 +94,7 @@ templ TaskDetailPage(task taskResponse, rawTask domain.Task, agents []domain.Age
 					<form hx-post={ "/tasks/" + task.ID + "/messages" } hx-target="#task-live" hx-swap="innerHTML" class="stacked">
 						<input name="role" value="user" type="hidden"/>
 						<textarea name="body" placeholder="Add a comment or instruction..." required></textarea>
-						<button type="submit">Post comment</button>
+						<button class="pc-btn pc-btn-primary" type="submit">Post comment</button>
 					</form>
 				</div>
 			</div>
@@ -179,10 +179,10 @@ templ TaskPropertiesRail(task taskResponse, rawTask domain.Task, agents []domain
 		<form hx-post={ "/tasks/" + task.ID + "/status" } hx-target="body" hx-swap="outerHTML" data-success="Status updated." class="stacked">
 			@TaskStatusSelect(task.Status)
 			<textarea name="comment" placeholder="Add context for this status change..."></textarea>
-			<button type="submit">Update status</button>
+			<button class="pc-btn pc-btn-primary" type="submit">Update status</button>
 		</form>
 		<form hx-post={ "/tasks/" + task.ID + "/wake" } hx-target="body" hx-swap="outerHTML" data-success="Agent triggered." class="stacked">
-			<button class="button secondary" type="submit">Wake agent</button>
+			<button class="pc-btn pc-btn-secondary" type="submit">Wake agent</button>
 		</form>
 	</div>
 
@@ -194,11 +194,11 @@ templ TaskPropertiesRail(task taskResponse, rawTask domain.Task, agents []domain
 			</form>
 			if rawTask.LoopPausedAt == nil {
 				<form hx-post={ "/tasks/" + task.ID + "/pause" } hx-target="body" hx-swap="outerHTML" data-success="Continuous task paused." class="stacked">
-					<button class="button secondary" type="submit">Pause continuous task</button>
+					<button class="pc-btn pc-btn-secondary" type="submit">Pause continuous task</button>
 				</form>
 			} else {
 				<form hx-post={ "/tasks/" + task.ID + "/resume" } hx-target="body" hx-swap="outerHTML" data-success="Continuous task resumed." class="stacked">
-					<button class="button secondary" type="submit">Resume continuous task</button>
+					<button class="pc-btn pc-btn-secondary" type="submit">Resume continuous task</button>
 				</form>
 			}
 		</div>
@@ -218,7 +218,7 @@ templ TaskPropertiesRail(task taskResponse, rawTask domain.Task, agents []domain
 		<h2 class="text-danger">Danger Zone</h2>
 		<form hx-post={ "/tasks/" + task.ID + "/cancel" } hx-confirm="Are you sure you want to cancel this task?" data-success="Task cancelled." hx-target="body" hx-swap="outerHTML" class="stacked">
 			<input name="reason" placeholder="Reason for cancellation..." required />
-			<button class="button button-danger" type="submit">Cancel task</button>
+			<button class="pc-btn pc-btn-danger" type="submit">Cancel task</button>
 		</form>
 	</div>
 }
@@ -237,7 +237,7 @@ func isLiveTask(task taskResponse, raw domain.Task) bool {
 }
 
 templ taskDetailAction() {
-	<a class="button secondary" href="/tasks">Back to tasks</a>
+	@ButtonLink("Back to tasks", "/tasks", "secondary", "")
 }
 
 templ TaskStatusSelect(selected domain.TaskStatus) {

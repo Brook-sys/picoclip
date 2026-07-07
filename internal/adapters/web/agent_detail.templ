@@ -175,7 +175,7 @@ templ AgentDetailPage(agent domain.Agent, agents []domain.Agent, tasks []taskRes
 					<h2>Permissions Preset</h2>
 					<form hx-post={ "/agents/" + agent.ID + "/permissions" } hx-target="body" hx-swap="outerHTML" class="stacked" data-success="Permissions applied.">
 						<select name="permission_preset">@templ.Raw(permissionPresetOptionsHTML(agent.Permissions))</select>
-						<button type="submit">Apply preset</button>
+						<button class="pc-btn pc-btn-primary" type="submit">Apply preset</button>
 					</form>
 				</div>
 				<div class="card">
@@ -183,7 +183,7 @@ templ AgentDetailPage(agent domain.Agent, agents []domain.Agent, tasks []taskRes
 						<summary class="advanced-summary">Advanced manual permissions</summary>
 						<form hx-post={ "/agents/" + agent.ID + "/permissions" } hx-target="body" hx-swap="outerHTML" class="stacked permission-list compact-permissions">
 							@templ.Raw(permissionCheckboxesHTML(agent.Permissions))
-							<button type="submit">Save permissions</button>
+							<button class="pc-btn pc-btn-primary" type="submit">Save permissions</button>
 						</form>
 					</details>
 				</div>
@@ -193,7 +193,7 @@ templ AgentDetailPage(agent domain.Agent, agents []domain.Agent, tasks []taskRes
 				</div>
 				<div class="card">
 					<form hx-post={ "/agents/" + agent.ID + "/delete" } hx-confirm="Delete this agent? This cannot be undone." data-success="Agent deleted." hx-target="body" hx-swap="outerHTML">
-						<button class="danger" type="submit">Delete agent</button>
+						<button class="pc-btn pc-btn-danger" type="submit">Delete agent</button>
 					</form>
 				</div>
 			</aside>
@@ -202,7 +202,7 @@ templ AgentDetailPage(agent domain.Agent, agents []domain.Agent, tasks []taskRes
 }
 
 templ agentDetailAction() {
-	<a class="button secondary" href="/agents">Voltar</a>
+	@ButtonLink("Voltar", "/agents", "secondary", "")
 }
 
 func permissionPresetOptionsHTML(selected []domain.AgentPermission) string {

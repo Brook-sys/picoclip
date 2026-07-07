@@ -16,6 +16,9 @@ func TestCanonicalActionAndBadgeHelpersReplaceLegacyProjectAndSkillMarkup(t *tes
 		"skills.templ",
 		"modals.templ",
 		"layout.templ",
+		"task_detail.templ",
+		"run_detail.templ",
+		"agent_detail.templ",
 	}
 	legacySnippets := []string{
 		`class="button`,
