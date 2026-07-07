@@ -511,13 +511,13 @@ td small {
   margin-top: 16px;
 }
 
-.pc-overview-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 16px; margin-bottom: 24px; }
-.pc-overview-card { position: relative; overflow: hidden; display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: 8px 18px; min-height: 104px; padding: 18px 20px; border-color: color-mix(in srgb, var(--info) 10%, var(--border)); background: linear-gradient(145deg, var(--surface), var(--surface-soft)); color: var(--text); text-decoration: none; transition: border-color 0.12s ease, box-shadow 0.12s ease, transform 0.12s ease; }
+.pc-overview-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; margin-bottom: 24px; }
+.pc-overview-card { position: relative; overflow: hidden; isolation: isolate; display: flex; flex-direction: column; align-items: flex-start; justify-content: space-between; gap: 12px; min-height: 124px; padding: 20px; border-color: color-mix(in srgb, var(--info) 10%, var(--border)); background: linear-gradient(145deg, var(--surface), var(--surface-soft)); color: var(--text); text-decoration: none; transition: border-color 0.12s ease, box-shadow 0.12s ease, transform 0.12s ease; }
 .pc-overview-card:hover { border-color: var(--border-strong); box-shadow: var(--shadow-md); transform: translateY(-1px); }
-.pc-overview-card::after { content: ""; position: absolute; inset: auto -42px -58px auto; width: 138px; height: 138px; border-radius: 999px; background: color-mix(in srgb, var(--info) 10%, transparent); pointer-events: none; }
-.pc-overview-card span { grid-column: 1; align-self: start; color: var(--muted); font-size: 12px; font-weight: 850; letter-spacing: .08em; text-transform: uppercase; }
-.pc-overview-card strong { grid-column: 2; grid-row: 1 / span 2; z-index: 1; font-size: 38px; line-height: .95; letter-spacing: -.05em; }
-.pc-overview-card small { grid-column: 1; z-index: 1; color: var(--muted); font-size: 13px; line-height: 1.4; }
+.pc-overview-card::after { content: ""; position: absolute; inset: auto -34px -48px auto; z-index: -1; width: 126px; height: 126px; border-radius: 999px; background: color-mix(in srgb, var(--info) 9%, transparent); pointer-events: none; }
+.pc-overview-card span { color: var(--muted); font-size: 12px; font-weight: 850; letter-spacing: .08em; line-height: 1.2; text-transform: uppercase; }
+.pc-overview-card strong { max-width: 100%; font-size: clamp(30px, 4vw, 42px); line-height: .95; letter-spacing: -.05em; word-break: break-word; }
+.pc-overview-card small { color: var(--muted); font-size: 13px; line-height: 1.4; }
 .pc-overview-card.live { border-color: color-mix(in srgb, var(--warn) 18%, var(--border)); }
 .pc-overview-card.live::after { background: color-mix(in srgb, var(--warn) 12%, transparent); }
 .pc-overview-card.attention { border-color: color-mix(in srgb, var(--bad) 18%, var(--border)); }

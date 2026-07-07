@@ -103,6 +103,42 @@ test.describe('PicoClip smoke UI', () => {
     expect(Number.parseFloat(shellMetrics.mainPaddingLeft)).toBeLessThanOrEqual(16);
   });
 
+  test('overview cards keep readable metric flow without overlap', async ({ page }) => {
+    for (const path of ['/', '/tasks']) {
+      await page.setViewportSize({ width: 1280, height: 800 });
+      await page.goto(path);
+
+      const cards = page.locator('.pc-overview-card');
+      await expect(cards.first()).toBeVisible();
+
+      const cardMetrics = await cards.evaluateAll((elements) =>
+        elements.map((element) => {
+          const rectOf = (node: Element) => {
+            const rect = node.getBoundingClientRect();
+            return { left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom, width: rect.width, height: rect.height };
+          };
+          const card = rectOf(element);
+          const label = rectOf(element.querySelector('span')!);
+          const value = rectOf(element.querySelector('strong')!);
+          const caption = rectOf(element.querySelector('small')!);
+          const style = getComputedStyle(element);
+          return { card, label, value, caption, display: style.display, flexDirection: style.flexDirection };
+        }),
+      );
+
+      for (const metric of cardMetrics) {
+        expect(metric.display, `${path} overview cards should use flex flow`).toBe('flex');
+        expect(metric.flexDirection, `${path} overview cards should stack content`).toBe('column');
+        expect(metric.label.bottom, `${path} label should not overlap metric value`).toBeLessThanOrEqual(metric.value.top);
+        expect(metric.value.bottom, `${path} metric value should not overlap caption`).toBeLessThanOrEqual(metric.caption.top);
+        for (const child of [metric.label, metric.value, metric.caption]) {
+          expect(child.left, `${path} child should stay inside card`).toBeGreaterThanOrEqual(metric.card.left);
+          expect(child.right, `${path} child should stay inside card`).toBeLessThanOrEqual(metric.card.right);
+        }
+      }
+    }
+  });
+
   test('diagnostics API exposes health checks', async ({ request }) => {
     const response = await request.get('/api/diagnostics');
     expect(response.ok()).toBeTruthy();

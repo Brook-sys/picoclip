@@ -294,6 +294,7 @@ Use:
 
 - `metrics`/`metrics-dashboard` para métricas;
 - `OverviewGrid`/`OverviewCard` para resumos canônicos de Dashboard, Tasks, Runs e Activity;
+- cards de overview devem manter fluxo vertical legível — label, métrica e legenda empilhados, sem grid lado-a-lado que comprima números grandes ou faça texto competir com decoração;
 - cards com status visual para atenção operacional;
 - `table-wrapper` para tabelas;
 - tabs para filtros de status;

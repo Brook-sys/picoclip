@@ -139,6 +139,41 @@ func TestOverviewCardsUseCanonicalHelperAndCSS(t *testing.T) {
 	}
 }
 
+func TestOverviewCardsKeepMetricTextInReadableVerticalFlow(t *testing.T) {
+	t.Parallel()
+
+	body, err := os.ReadFile("assets/app.css")
+	if err != nil {
+		t.Fatalf("read app.css: %v", err)
+	}
+	css := string(body)
+
+	cardBlock := cssBlock(t, css, ".pc-overview-card")
+	for _, want := range []string{
+		"display: flex;",
+		"flex-direction: column;",
+		"align-items: flex-start;",
+		"isolation: isolate;",
+	} {
+		if !strings.Contains(cardBlock, want) {
+			t.Fatalf("overview cards must use a vertical content flow to avoid cramped title/value/caption overlap; missing %q in:\n%s", want, cardBlock)
+		}
+	}
+	if strings.Contains(cardBlock, "grid-template-columns") {
+		t.Fatalf("overview cards must not split metric text into side-by-side grid columns; block was:\n%s", cardBlock)
+	}
+
+	valueBlock := cssBlock(t, css, ".pc-overview-card strong")
+	for _, want := range []string{
+		"font-size: clamp(30px, 4vw, 42px);",
+		"max-width: 100%;",
+	} {
+		if !strings.Contains(valueBlock, want) {
+			t.Fatalf("overview metric values must remain readable without overflowing; missing %q in:\n%s", want, valueBlock)
+		}
+	}
+}
+
 func TestMobileDashboardCSSStacksCanonicalOverviewAndPanelHeaders(t *testing.T) {
 	t.Parallel()
 
