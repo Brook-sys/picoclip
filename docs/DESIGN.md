@@ -172,6 +172,15 @@ A UI ainda convive com a classe legada `.button` e os helpers novos `.pc-btn*`. 
 - `IconButton`/`.pc-icon-btn` deve parecer superfície elevada, não botão primário;
 - mudanças nos botões devem manter `TestDesignSystemCSSDefinesConsistentActionButtons` verde.
 
+### Badge/status identity
+
+Badges, chips e indicadores de status aparecem em listas, detalhes e configurações. Para manter uma linguagem única:
+
+- `.badge`, `.pc-badge` e `.pc-chip` compartilham `--badge-radius` e `--badge-border`;
+- variantes `good`, `warn`, `bad` e `info` usam as mesmas cores semânticas já existentes;
+- dots de `.status` usam `--status-dot-size` e um halo sutil derivado de `currentColor`;
+- badges devem ser compactos, em uppercase quando forem metadados/status, e nunca criar novas cores locais;
+- mudanças nesse grupo devem manter `TestDesignSystemCSSDefinesConsistentBadgesAndStatus` verde.
 
 ## Componentes Templ canônicos
 

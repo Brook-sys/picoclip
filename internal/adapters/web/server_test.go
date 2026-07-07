@@ -509,6 +509,31 @@ func TestDesignSystemCSSDefinesConsistentActionButtons(t *testing.T) {
 	}
 }
 
+func TestDesignSystemCSSDefinesConsistentBadgesAndStatus(t *testing.T) {
+	css, err := os.ReadFile("assets/app.css")
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(css)
+	for _, want := range []string{
+		"--badge-border: color-mix(in srgb, currentColor 18%, transparent);",
+		"--badge-radius: 999px;",
+		"--status-dot-size: 8px;",
+		"border: 1px solid var(--badge-border);",
+		"border-radius: var(--badge-radius);",
+		"letter-spacing: 0.04em;",
+		".pc-chip { display: inline-flex; align-items: center; gap: 4px; padding: 3px 8px; border-radius: var(--badge-radius);",
+		".pc-badge { display: inline-flex; align-items: center; gap: 4px; border: 1px solid var(--badge-border); border-radius: var(--badge-radius);",
+		"width: var(--status-dot-size);",
+		"height: var(--status-dot-size);",
+		"box-shadow: 0 0 0 3px color-mix(in srgb, currentColor 12%, transparent);",
+	} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("badge/status CSS missing %q", want)
+		}
+	}
+}
+
 func TestResponsiveShellCSSKeepsMobileNavigationCompact(t *testing.T) {
 	css, err := os.ReadFile("assets/app.css")
 	if err != nil {
