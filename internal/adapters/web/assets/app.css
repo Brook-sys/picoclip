@@ -1921,6 +1921,7 @@ pc-tag-multiselect { position: relative; display: flex; flex-wrap: wrap; align-i
   .grid-cols-4,
   .grid-cols-3,
   .metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .pc-overview-grid { grid-template-columns: 1fr; }
   .content-grid,
   .detail-grid { grid-template-columns: 1fr; }
   .issue-detail-grid { grid-template-columns: 1fr; }
@@ -1933,8 +1934,7 @@ pc-tag-multiselect { position: relative; display: flex; flex-wrap: wrap; align-i
   .agent-overview-grid { grid-template-columns: 1fr; }
   .agent-profile-header { flex-direction: column; }
   .agent-config-grid { grid-template-columns: 1fr; }
-  .activity-overview-grid, .runs-overview-grid, .tasks-overview-grid, .dashboard-overview-grid { grid-template-columns: 1fr; }
-  .activity-timeline-header, .activity-footer-row, .activity-panel-header, .runs-panel-header, .tasks-panel-header { flex-direction: column; align-items: stretch; }
+  .activity-timeline-header, .activity-footer-row, .activity-panel-header, .runs-panel-header, .tasks-panel-header, .dashboard-panel-header { flex-direction: column; align-items: stretch; }
   .activity-meta-grid, .task-list-meta-grid { grid-template-columns: 1fr; }
   .activity-timeline-item, .run-activity-row, .task-list-row { grid-template-columns: 34px minmax(0, 1fr); padding: 14px; }
   .activity-timeline-icon, .run-activity-icon, .task-list-icon { width: 32px; height: 32px; border-radius: var(--radius-md); }

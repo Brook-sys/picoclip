@@ -293,10 +293,13 @@ Exemplos de detalhe:
 Use:
 
 - `metrics`/`metrics-dashboard` para métricas;
+- `OverviewGrid`/`OverviewCard` para resumos canônicos de Dashboard, Tasks, Runs e Activity;
 - cards com status visual para atenção operacional;
 - `table-wrapper` para tabelas;
 - tabs para filtros de status;
 - empty states quando listas estiverem vazias.
+
+Em telas até `768px`, grids de overview canônicos devem empilhar em uma coluna (`.pc-overview-grid`) e headers de painéis operacionais devem virar coluna com actions esticadas/alinhadas (`.dashboard-panel-header`, `.tasks-panel-header`, `.runs-panel-header`, `.activity-panel-header`). Esse contrato evita overflow e mantém ações alcançáveis no mobile; mudanças devem manter `TestMobileDashboardCSSStacksCanonicalOverviewAndPanelHeaders` verde.
 
 ## HTMX patterns
 

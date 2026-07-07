@@ -139,6 +139,40 @@ func TestOverviewCardsUseCanonicalHelperAndCSS(t *testing.T) {
 	}
 }
 
+func TestMobileDashboardCSSStacksCanonicalOverviewAndPanelHeaders(t *testing.T) {
+	t.Parallel()
+
+	body, err := os.ReadFile("assets/app.css")
+	if err != nil {
+		t.Fatalf("read app.css: %v", err)
+	}
+	css := string(body)
+
+	mobileBlock := cssMediaBlock(t, css, "@media (max-width: 768px) {")
+	for _, want := range []string{
+		".pc-overview-grid { grid-template-columns: 1fr; }",
+		".dashboard-panel-header { flex-direction: column; align-items: stretch; }",
+	} {
+		if !strings.Contains(mobileBlock, want) {
+			t.Fatalf("mobile dashboard CSS missing %q in:\n%s", want, mobileBlock)
+		}
+	}
+}
+
+func cssMediaBlock(t *testing.T, css, media string) string {
+	t.Helper()
+	idx := strings.Index(css, media)
+	if idx == -1 {
+		t.Fatalf("missing CSS media block %s", media)
+	}
+	nextMedia := strings.Index(css[idx+len(media):], "@media")
+	end := len(css)
+	if nextMedia >= 0 {
+		end = idx + len(media) + nextMedia
+	}
+	return css[idx:end]
+}
+
 func cssBlock(t *testing.T, css, selector string) string {
 	t.Helper()
 	start := strings.Index(css, selector+" {")
