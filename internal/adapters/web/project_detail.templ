@@ -34,7 +34,7 @@ templ ProjectDetailPage(project domain.Workspace, agents []domain.Agent, tasks [
 				</div>
 				<div class="panel">
 					<h2>Nova task</h2>
-					<button class="button" type="button" data-open-modal="project-task-modal">Criar task</button>
+					<button class="pc-btn pc-btn-primary" type="button" data-open-modal="project-task-modal">Criar task</button>
 					<p class="muted">Agentes são globais. Tags como <code>Proj:{ project.Name }</code> ajudam a identificar relação, mas não restringem acesso.</p>
 				</div>
 				<div class="panel">
@@ -48,7 +48,7 @@ templ ProjectDetailPage(project domain.Workspace, agents []domain.Agent, tasks [
 }
 
 templ projectDetailAction() {
-	<a class="button secondary" href="/projects">Voltar</a>
+	@ButtonLink("Voltar", "/projects", "secondary", "")
 }
 
 templ ProjectAgents(project domain.Workspace, agents []domain.Agent) {
@@ -56,7 +56,7 @@ templ ProjectAgents(project domain.Workspace, agents []domain.Agent) {
 		for _, agent := range agents {
 			<article class="agent-mini-card">
 				if hasTag(agent.Tags, "Proj:" + project.Name) {
-					<span class="badge">Relacionado</span>
+					@Badge("Relacionado", "")
 				}
 				<strong><a href={ templ.URL("/agents/" + agent.ID) }>{ agent.Name }</a></strong>
 				<small>{ agent.Title }</small>

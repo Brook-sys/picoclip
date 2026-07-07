@@ -32,7 +32,7 @@ templ SkillDetailPage(skill domain.Skill, projects []domain.Workspace, agents []
 				
 				<div class="panel">
 					@SectionHeader("Files", "Auxiliary scripts and context files.") {
-						<button class="button secondary" type="button" onclick="document.getElementById('add-file-row').style.display='block';">Add File</button>
+						<button class="pc-btn pc-btn-secondary" type="button" onclick="document.getElementById('add-file-row').style.display='block';">Add File</button>
 					}
 					if len(skill.Files) == 0 {
 						@EmptyState("No files attached", "This skill uses only the main instructions.", "book") {}
@@ -42,8 +42,8 @@ templ SkillDetailPage(skill domain.Skill, projects []domain.Workspace, agents []
 							<div class="card-header" style="margin-bottom: 0;">
 								<input name="path" value={ file.Path } required placeholder="filename.py" style="max-width: 250px; font-family: monospace;" />
 								<div class="actions">
-									<button type="submit" class="button secondary">Save</button>
-									<button type="submit" name="action" value="delete" class="button danger">Remove</button>
+									<button type="submit" class="pc-btn pc-btn-secondary">Save</button>
+									<button type="submit" name="action" value="delete" class="pc-btn pc-btn-danger">Remove</button>
 								</div>
 							</div>
 							<textarea name="content" required style="min-height: 120px; font-family: monospace;">{ file.Content }</textarea>
@@ -52,7 +52,7 @@ templ SkillDetailPage(skill domain.Skill, projects []domain.Workspace, agents []
 					<form id="add-file-row" hx-post={ "/skills/" + skill.ID + "/files/new" } data-success="File added." hx-target="body" hx-swap="outerHTML" class="card stack" style="margin-bottom: 16px; display: none;">
 						<div class="card-header" style="margin-bottom: 0;">
 							<input name="path" required placeholder="new_script.js" style="max-width: 250px; font-family: monospace;" />
-							<button type="submit" class="button secondary">Add File</button>
+							<button type="submit" class="pc-btn pc-btn-secondary">Add File</button>
 						</div>
 						<textarea name="content" required style="min-height: 120px; font-family: monospace;" placeholder="File content..."></textarea>
 					</form>
@@ -88,13 +88,13 @@ templ SkillDetailPage(skill domain.Skill, projects []domain.Workspace, agents []
 						if skill.Kind == domain.SkillKindBuiltin {
 							<p class="muted">Restore the original instructions for this built-in skill.</p>
 							<form hx-post={ "/skills/" + skill.ID + "/reset" } hx-confirm="Reset this skill? All local modifications will be lost." data-success="Skill restored to default." hx-target="body" hx-swap="outerHTML" class="stacked">
-								<button class="button button-danger" type="submit">Factory Reset Skill</button>
+								<button class="pc-btn pc-btn-danger" type="submit">Factory Reset Skill</button>
 							</form>
 						}
 						if skill.Kind == domain.SkillKindCustom {
 							<p class="muted">Permanently delete this custom skill.</p>
 							<form hx-post={ "/skills/" + skill.ID + "/delete" } hx-confirm="Delete this skill? This action cannot be undone." data-success="Skill deleted." hx-target="body" hx-swap="outerHTML" class="stacked">
-								<button class="button button-danger" type="submit">Delete Skill</button>
+								<button class="pc-btn pc-btn-danger" type="submit">Delete Skill</button>
 							</form>
 						}
 					</div>
@@ -105,7 +105,7 @@ templ SkillDetailPage(skill domain.Skill, projects []domain.Workspace, agents []
 }
 
 templ skillDetailAction() {
-	<a class="button secondary" href="/skills">Back to skills</a>
+	@ButtonLink("Back to skills", "/skills", "secondary", "")
 }
 
 templ SkillAgentForm(skill domain.Skill, agents []domain.Agent) {

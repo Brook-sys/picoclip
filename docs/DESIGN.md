@@ -166,13 +166,14 @@ Regra: ao criar CSS novo, use tokens existentes antes de codificar cores/espaça
 
 ### Action/button identity
 
-A UI ainda convive com a classe legada `.button` e os helpers novos `.pc-btn*`. Para evitar duas aparências concorrentes, ambas as famílias devem compartilhar a mesma linguagem visual:
+A UI ainda convive com a classe legada `.button` e os helpers novos `.pc-btn*`. Para evitar duas aparências concorrentes, ambas as famílias devem compartilhar a mesma linguagem visual e toda área tocada deve migrar para helpers/classes canônicas:
 
 - ações primárias usam `linear-gradient(135deg, var(--brand), var(--brand-strong))`, `--brand-ink` e `--button-shadow`;
 - ações secundárias usam `--surface-gradient`, borda semântica e `--shadow-sm`;
 - hover vertical usa `--button-hover-transform`, sem animações pesadas;
+- links de ação devem preferir `ButtonLink`; botões simples devem usar `.pc-btn pc-btn-*` ou ganhar um helper Templ quando precisarem de atributos extras;
 - `IconButton`/`.pc-icon-btn` deve parecer superfície elevada, não botão primário;
-- mudanças nos botões devem manter `TestDesignSystemCSSDefinesConsistentActionButtons` verde.
+- mudanças nos botões devem manter `TestDesignSystemCSSDefinesConsistentActionButtons` verde e, quando migrarem uma página, adicionar/ajustar teste de regressão contra `class="button`.
 
 ### Badge/status identity
 
