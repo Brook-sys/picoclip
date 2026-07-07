@@ -457,6 +457,35 @@ func TestWebCreateAgentRejectsUnavailableNoop(t *testing.T) {
 	}
 }
 
+func TestDesignSystemCSSDefinesPicoClipIdentityTokens(t *testing.T) {
+	css, err := os.ReadFile("assets/app.css")
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(css)
+	for _, want := range []string{
+		"--brand: #5e6ad2;",
+		"--brand-strong: #4f46e5;",
+		"--brand-soft: color-mix(in srgb, var(--brand) 12%, transparent);",
+		"--surface-gradient: linear-gradient(180deg, color-mix(in srgb, var(--surface-elevated) 96%, var(--brand-soft)), var(--surface));",
+		"--focus-ring: 0 0 0 3px color-mix(in srgb, var(--brand) 24%, transparent);",
+		"--brand: #8b8cff;",
+		"body {",
+		"font-feature-settings: \"cv01\", \"ss03\";",
+		".brand-mark {",
+		"background: linear-gradient(135deg, var(--brand), var(--brand-strong));",
+		".page-title-icon {",
+		"background: var(--brand-soft);",
+		".pc-card { background: var(--surface-gradient);",
+		".card,\n.panel,\n.metric-card {\n  background: var(--surface-gradient);",
+		"box-shadow: var(--shadow-md);",
+	} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("design-system CSS missing %q", want)
+		}
+	}
+}
+
 func TestResponsiveShellCSSKeepsMobileNavigationCompact(t *testing.T) {
 	css, err := os.ReadFile("assets/app.css")
 	if err != nil {

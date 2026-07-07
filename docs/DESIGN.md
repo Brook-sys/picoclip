@@ -135,6 +135,22 @@ Exemplos:
 - `--a2-border-color-hover`
 - `--a2-focus-color`
 
+### PicoClip identity tokens
+
+A identidade visual usa uma base precisa inspirada em ferramentas de desenvolvimento dark-mode-first, mas continua leve e local-first. Tokens explícitos vivem em `app.css` para evitar cores espalhadas:
+
+- `--brand` e `--brand-strong` definem o indigo/violet principal do produto;
+- `--brand-soft` aplica tintas sutis em ícones, headers e estados ativos;
+- `--brand-ring` e `--focus-ring` padronizam foco e contornos acessíveis;
+- `--surface-gradient` dá profundidade consistente para `card`, `panel`, `metric-card` e `pc-card`.
+
+Regras:
+
+- use `--brand*` apenas para identidade, foco e affordances interativas importantes;
+- use `--surface-gradient` para superfícies canônicas em vez de gradientes locais diferentes;
+- mantenha texto em tokens semânticos (`--text`, `--muted`) para preservar contraste entre temas;
+- mudanças nestes tokens devem manter `TestDesignSystemCSSDefinesPicoClipIdentityTokens` verde.
+
 ### Layout/shape tokens
 
 Exemplos:
