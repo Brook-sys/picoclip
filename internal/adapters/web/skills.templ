@@ -23,7 +23,7 @@ templ SkillsPage(skills []domain.Skill, projects []domain.Workspace, agents []do
 								<a class="primary-link" href={ templ.URL("/skills/" + skill.ID) }>{ skill.Name }</a>
 								<small>{ skill.Description }</small>
 							</td>
-							<td><span class="badge">{ string(skill.Kind) }</span></td>
+							<td>@Badge(string(skill.Kind), "")</td>
 							<td>{ projectName(projects, skill.ProjectID) }</td>
 							<td>{ len(skill.Files) }</td>
 							<td>{ countSkillAgents(skill, agents) }</td>
@@ -38,5 +38,5 @@ templ SkillsPage(skills []domain.Skill, projects []domain.Workspace, agents []do
 }
 
 templ skillsAction() {
-	<button class="button" type="button" data-open-modal="skill-create-modal">Nova skill</button>
+	<button class="pc-btn pc-btn-primary" type="button" data-open-modal="skill-create-modal">@Icon("plus", 16) Nova skill</button>
 }

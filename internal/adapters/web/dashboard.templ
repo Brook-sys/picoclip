@@ -50,7 +50,7 @@ templ DashboardPage(view DashboardView, agents []domain.Agent, projects []domain
 										<strong>{ question.Body }</strong>
 										<small>{ question.TaskTitle } · { question.CreatedAt.Format("Jan 02, 15:04") }</small>
 									</span>
-									<span class="activity-action">Answer</span>
+									<span class="pc-btn pc-btn-secondary">Answer</span>
 								</a>
 							}
 						</div>
@@ -67,7 +67,7 @@ templ DashboardPage(view DashboardView, agents []domain.Agent, projects []domain
 									<p>{ warning }</p>
 								}
 							</div>
-							<a class="activity-action" href="/settings#runtimes">Configure</a>
+							@ButtonLink("Configure", "/settings#runtimes", "secondary", "settings")
 						</div>
 					</div>
 				}
@@ -80,7 +80,7 @@ templ DashboardPage(view DashboardView, agents []domain.Agent, projects []domain
 								<h2 class="text-bad">Needs Attention</h2>
 								<p>Tasks that are blocked or waiting for review.</p>
 							</div>
-							<a class="activity-action" href="/tasks?status=blocked">View all</a>
+							@ButtonLink("View all", "/tasks?status=blocked", "secondary", "check-square")
 						</div>
 						@TaskTable(view.NeedsAttention, agents, projects)
 					</div>
@@ -93,7 +93,7 @@ templ DashboardPage(view DashboardView, agents []domain.Agent, projects []domain
 							<h2 class="text-info">Currently Running</h2>
 							<p>Active agent executions and runtime streams.</p>
 						</div>
-						<a class="activity-action" href="/runs?status=running">View all</a>
+						@ButtonLink("View all", "/runs?status=running", "secondary", "play-circle")
 					</div>
 					if len(view.CurrentlyRunning) > 0 {
 						<div class="run-activity-list">
@@ -113,7 +113,7 @@ templ DashboardPage(view DashboardView, agents []domain.Agent, projects []domain
 									</div>
 									<div class="run-activity-action">
 										<span class={ "issue-list-status", runStatusClass(run.Status), templ.KV("pulse", run.Status == domain.RunStatusRunning) }>{ string(run.Status) }</span>
-										<span class="activity-action">Open run</span>
+										<span class="pc-btn pc-btn-secondary">Open run</span>
 									</div>
 								</a>
 							}
@@ -166,7 +166,7 @@ templ DashboardPage(view DashboardView, agents []domain.Agent, projects []domain
 							<span class="eyebrow">Stream</span>
 							<h2>Recent Activity</h2>
 						</div>
-						<a class="activity-action" href="/activity">View all</a>
+						@ButtonLink("View all", "/activity", "secondary", "activity")
 					</div>
 					@EventTimeline(view.RecentActivity)
 				</div>
@@ -176,6 +176,6 @@ templ DashboardPage(view DashboardView, agents []domain.Agent, projects []domain
 }
 
 templ dashboardAction() {
-	<a class="button" href="/tasks">New Task</a>
+	@ButtonLink("New Task", "/tasks", "primary", "plus")
 }
 

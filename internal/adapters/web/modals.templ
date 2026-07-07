@@ -23,8 +23,8 @@ templ AgentQuickModal(id string, agents []domain.Agent, runtimeOptions []Runtime
 				<select name="permission_preset">
 					@PermissionPresetOptions(nil)
 				</select>
-				<button data-testid="agent-create-submit" type="submit">Criar agente</button>
-				<a class="button secondary" href="/agents/new">Configuração avançada</a>
+				<button class="pc-btn pc-btn-primary" data-testid="agent-create-submit" type="submit">Criar agente</button>
+				<a class="pc-btn pc-btn-secondary" href="/agents/new">Configuração avançada</a>
 			</form>
 		</div>
 	</div>
@@ -114,7 +114,7 @@ templ SkillModal(id string, projects []domain.Workspace) {
 				<textarea name="instructions" placeholder="Instruções principais" required></textarea>
 				<input name="file_path" placeholder="Arquivo opcional"/>
 				<textarea name="file_content" placeholder="Conteúdo do arquivo opcional"></textarea>
-				<button type="submit">Criar skill</button>
+				<button class="pc-btn pc-btn-primary" type="submit">Criar skill</button>
 			</form>
 		</div>
 	</div>
