@@ -11,7 +11,7 @@ templ PageShell(active string, title string, subtitle string, action templ.Compo
 				(function(){var mode=localStorage.getItem('picoclip.theme')||'system';var dark=window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches;var resolved=mode==='system'?(dark?'dark':'light'):mode;document.documentElement.dataset.theme=resolved;document.documentElement.dataset.themeMode=mode;var density=localStorage.getItem('picoclip.density')||'comfortable';document.documentElement.dataset.density=density;})();
 			</script>
 			<script src="/assets/htmx.min.js"></script>
-			<link rel="stylesheet" href="/assets/app.css?v=20"/>
+			<link rel="stylesheet" href="/assets/app.css?v=21"/>
 		</head>
 		<body>
 			<div class="app-shell">

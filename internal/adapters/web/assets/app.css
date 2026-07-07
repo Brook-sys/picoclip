@@ -56,6 +56,8 @@
   --brand-ring: color-mix(in srgb, var(--brand) 28%, var(--border));
   --surface-gradient: linear-gradient(180deg, color-mix(in srgb, var(--surface-elevated) 96%, var(--brand-soft)), var(--surface));
   --focus-ring: 0 0 0 3px color-mix(in srgb, var(--brand) 24%, transparent);
+  --button-shadow: 0 12px 28px -20px var(--brand);
+  --button-hover-transform: translateY(-1px);
 
   --bg: #f7f7f8;
   --bg-accent: #eef2ff;
@@ -890,26 +892,28 @@ button,
   align-items: center;
   justify-content: center;
   gap: 6px;
-  border: 1px solid var(--accent);
-  border-radius: var(--radius-sm);
-  background: var(--accent);
-  color: var(--accent-text);
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  background: linear-gradient(135deg, var(--brand), var(--brand-strong));
+  color: var(--brand-ink);
   padding: 8px 14px;
   font: inherit;
   font-size: 13px;
-  font-weight: 600;
+  font-weight: 700;
   text-decoration: none;
   cursor: pointer;
-  transition: all 0.1s;
+  box-shadow: var(--button-shadow);
+  transition: background 0.12s ease, border-color 0.12s ease, color 0.12s ease, box-shadow 0.12s ease, transform 0.12s ease, opacity 0.12s ease;
 }
 
 .button:hover,
-button:hover { opacity: 0.9; }
+button:hover { opacity: 0.94; transform: var(--button-hover-transform); }
 
 .button.secondary {
-  background: var(--surface);
+  background: var(--surface-gradient);
   color: var(--text);
-  border-color: var(--border-strong);
+  border-color: var(--border);
+  box-shadow: var(--shadow-sm);
 }
 
 .button.secondary:hover { background: var(--surface-hover); opacity: 1; }
@@ -1425,18 +1429,18 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monos
 .pc-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .pc-icon { display: inline-block; flex: none; vertical-align: middle; }
 .pc-btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 38px; padding: 9px 14px; border: 1px solid transparent; border-radius: var(--radius-md); font: inherit; font-size: 14px; font-weight: 750; line-height: 1; cursor: pointer; text-decoration: none; transition: background 0.12s ease, border-color 0.12s ease, color 0.12s ease, box-shadow 0.12s ease, transform 0.12s ease; }
-.pc-btn:hover { transform: translateY(-1px); }
+.pc-btn:hover { transform: var(--button-hover-transform); }
 .pc-btn:disabled, .pc-btn[disabled] { opacity: 0.55; cursor: not-allowed; transform: none; }
 .pc-btn:focus-visible, .pc-icon-btn:focus-visible, .pc-input:focus-visible, pc-tag-multiselect:focus-within { outline: none; border-color: var(--brand); box-shadow: var(--focus-ring); }
-.pc-btn-primary { background: var(--accent); color: var(--accent-text); box-shadow: var(--shadow-sm); }
-.pc-btn-primary:hover { background: var(--a2-neutral-70); }
-.pc-btn-secondary { background: var(--surface-elevated); color: var(--text); border-color: var(--border); }
+.pc-btn-primary { background: linear-gradient(135deg, var(--brand), var(--brand-strong)); color: var(--brand-ink); box-shadow: var(--button-shadow); }
+.pc-btn-primary:hover { filter: saturate(1.06) brightness(1.02); }
+.pc-btn-secondary { background: var(--surface-gradient); color: var(--text); border-color: var(--border); box-shadow: var(--shadow-sm); }
 .pc-btn-secondary:hover { background: var(--surface-hover); border-color: var(--border-strong); }
 .pc-btn-ghost { background: transparent; color: var(--muted); }
 .pc-btn-ghost:hover { background: var(--surface-hover); color: var(--text); }
 .pc-btn-danger { background: var(--bad); color: #fff; box-shadow: var(--shadow-sm); }
 .pc-btn-danger:hover { filter: brightness(0.95); }
-.pc-icon-btn { display: inline-flex; align-items: center; justify-content: center; width: 34px; height: 34px; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface); color: var(--muted); cursor: pointer; }
+.pc-icon-btn { display: inline-flex; align-items: center; justify-content: center; width: 34px; height: 34px; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface-gradient); color: var(--muted); cursor: pointer; }
 .pc-icon-btn:hover { background: var(--surface-hover); color: var(--text); }
 .pc-form-field { display: grid; gap: 6px; }
 .pc-field-label { color: var(--text); font-size: 13px; font-weight: 700; }

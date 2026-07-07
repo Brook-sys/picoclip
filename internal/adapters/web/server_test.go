@@ -486,6 +486,29 @@ func TestDesignSystemCSSDefinesPicoClipIdentityTokens(t *testing.T) {
 	}
 }
 
+func TestDesignSystemCSSDefinesConsistentActionButtons(t *testing.T) {
+	css, err := os.ReadFile("assets/app.css")
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(css)
+	for _, want := range []string{
+		"--button-shadow: 0 12px 28px -20px var(--brand);",
+		"--button-hover-transform: translateY(-1px);",
+		"background: linear-gradient(135deg, var(--brand), var(--brand-strong));",
+		"box-shadow: var(--button-shadow);",
+		"transform: var(--button-hover-transform);",
+		".button.secondary {\n  background: var(--surface-gradient);",
+		".pc-btn-primary { background: linear-gradient(135deg, var(--brand), var(--brand-strong)); color: var(--brand-ink); box-shadow: var(--button-shadow); }",
+		".pc-btn-secondary { background: var(--surface-gradient); color: var(--text); border-color: var(--border); box-shadow: var(--shadow-sm); }",
+		".pc-icon-btn { display: inline-flex; align-items: center; justify-content: center; width: 34px; height: 34px; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface-gradient);",
+	} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("action button CSS missing %q", want)
+		}
+	}
+}
+
 func TestResponsiveShellCSSKeepsMobileNavigationCompact(t *testing.T) {
 	css, err := os.ReadFile("assets/app.css")
 	if err != nil {

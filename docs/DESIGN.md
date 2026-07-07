@@ -157,9 +157,21 @@ Exemplos:
 
 - spacing: `--space-1` até `--space-8`;
 - radius: `--radius-sm`, `--radius-md`, `--radius-lg`;
-- elevation: `--shadow-sm`, `--shadow-md`.
+- elevation: `--shadow-sm`, `--shadow-md`;
+- actions: `--button-shadow` e `--button-hover-transform`.
 
 Regra: ao criar CSS novo, use tokens existentes antes de codificar cores/espaçamentos literais.
+
+### Action/button identity
+
+A UI ainda convive com a classe legada `.button` e os helpers novos `.pc-btn*`. Para evitar duas aparências concorrentes, ambas as famílias devem compartilhar a mesma linguagem visual:
+
+- ações primárias usam `linear-gradient(135deg, var(--brand), var(--brand-strong))`, `--brand-ink` e `--button-shadow`;
+- ações secundárias usam `--surface-gradient`, borda semântica e `--shadow-sm`;
+- hover vertical usa `--button-hover-transform`, sem animações pesadas;
+- `IconButton`/`.pc-icon-btn` deve parecer superfície elevada, não botão primário;
+- mudanças nos botões devem manter `TestDesignSystemCSSDefinesConsistentActionButtons` verde.
+
 
 ## Componentes Templ canônicos
 
