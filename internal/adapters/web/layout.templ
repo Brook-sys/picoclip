@@ -69,7 +69,7 @@ templ PageShell(active string, title string, subtitle string, action templ.Compo
 					</header>
 					{ children... }
 					@CommandPalette()
-					<div id="toast-root" class="toast-root" aria-live="polite"></div>
+					<div id="toast-root" class="toast-root" role="status" aria-live="polite" aria-atomic="true"></div>
 					<script>
 						(function(){
 							if(window.__picoclipUIInitialized) return;
@@ -131,7 +131,10 @@ templ PageShell(active string, title string, subtitle string, action templ.Compo
 								var form = requestForm(evt);
 								var button = form && form.querySelector ? form.querySelector('button[type="submit"]') : null;
 								if(button){ button.dataset.originalText = button.textContent; button.textContent = button.dataset.loadingText || 'Salvando...'; button.disabled = true; }
-								if(form && form.classList) form.classList.add('is-loading');
+								if(form && form.classList) {
+									form.classList.add('is-loading');
+									form.setAttribute('aria-busy', 'true');
+								}
 							});
 							document.addEventListener('picoclip-toast', function(evt){
 								if(evt.detail && evt.detail.message) toast(evt.detail.message, evt.detail.type || 'success');
@@ -142,7 +145,10 @@ templ PageShell(active string, title string, subtitle string, action templ.Compo
 								var form = requestForm(evt);
 								var button = form && form.querySelector ? form.querySelector('button[type="submit"]') : null;
 								if(button){ button.disabled = false; button.textContent = button.dataset.originalText || button.textContent; }
-								if(form && form.classList) form.classList.remove('is-loading');
+								if(form && form.classList) {
+									form.classList.remove('is-loading');
+									form.removeAttribute('aria-busy');
+								}
 								var requestPath = (evt.detail.pathInfo && evt.detail.pathInfo.requestPath) || (evt.detail.requestConfig && evt.detail.requestConfig.path) || '';
 								var triggerHeader = evt.detail.xhr && (evt.detail.xhr.getResponseHeader('HX-Trigger') || evt.detail.xhr.getResponseHeader('HX-Trigger-After-Swap') || evt.detail.xhr.getResponseHeader('HX-Trigger-After-Settle'));
 								if(triggerHeader){ try { var events = JSON.parse(triggerHeader); if(events['picoclip-toast']) toast(events['picoclip-toast'].message, events['picoclip-toast'].type || 'success'); } catch(e){} }

@@ -566,6 +566,35 @@ func TestResponsiveShellCSSKeepsMobileNavigationCompact(t *testing.T) {
 	}
 }
 
+func TestPageShellExposesAccessibleAsyncFeedback(t *testing.T) {
+	ts := newTestServer(t)
+	defer ts.Close()
+
+	res, err := ts.Client().Get(ts.URL + "/")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer res.Body.Close()
+	buf := new(bytes.Buffer)
+	if _, err := buf.ReadFrom(res.Body); err != nil {
+		t.Fatal(err)
+	}
+	html := buf.String()
+
+	for _, want := range []string{
+		`id="toast-root"`,
+		`role="status"`,
+		`aria-live="polite"`,
+		`aria-atomic="true"`,
+		`form.setAttribute('aria-busy', 'true')`,
+		`form.removeAttribute('aria-busy')`,
+	} {
+		if !strings.Contains(html, want) {
+			t.Fatalf("page shell async feedback missing %q", want)
+		}
+	}
+}
+
 func TestRunDetailUsesSSEDrivenPartialRefresh(t *testing.T) {
 	storage := memory.NewStorage()
 	started := time.Now().Add(-1 * time.Minute)

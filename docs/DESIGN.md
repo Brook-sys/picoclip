@@ -47,6 +47,8 @@ A UI do PicoClip deve:
    - Botões icon-only precisam de `aria-label`.
    - Forms precisam de labels.
    - Modais devem focar primeiro controle e fechar com Escape.
+   - Feedback assíncrono global deve usar uma região live (`role="status"`, `aria-live="polite"`, `aria-atomic="true"`).
+   - Forms HTMX em andamento devem marcar `aria-busy="true"` e remover o atributo ao concluir.
    - Estados destrutivos devem ser claros visualmente e semanticamente.
 
 6. **Sem segredos na UI/docs**
