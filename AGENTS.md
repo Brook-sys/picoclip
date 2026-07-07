@@ -15,6 +15,7 @@ Antes de alterar código, leia:
    - `docs/ROBUSTNESS.md` para scheduler, dispatcher, runner, reconciler, locks, retry e cancelamento.
    - `docs/STORAGE.md` para SQLite, migrations, repositories e restore.
    - `docs/DESIGN.md` para UI, Templ, HTMX e padrões visuais.
+   - `docs/AUTONOMOUS_IMPROVEMENT.md` para o ciclo Hermes Kanban/cron de melhoria contínua.
    - `docs/ROADMAP.md` e `docs/CURRENT_STATE.md` para contexto de produto.
 
 Documentação faz parte do trabalho. Sempre que uma mudança alterar comportamento, API, comando, arquitetura, UI, storage, runtime ou operação, atualize os documentos correspondentes no mesmo conjunto de mudanças.
@@ -170,6 +171,17 @@ Principais grupos:
 - Agent API: `/agent-api/...`
 - páginas web: `/`, `/projects`, `/agents`, `/tasks`, `/runs`, `/skills`, `/activity`, `/settings`
 - live/partials: `/sse/...`, `/partials/...`
+
+## Ciclo autônomo de melhorias
+
+Melhorias recorrentes do PicoClip podem ser geridas pelo Hermes Kanban no board `picoclip` e executadas por cron/autonomia. Quando trabalhar nesse fluxo:
+
+- leia `docs/AUTONOMOUS_IMPROVEMENT.md`;
+- consulte o Kanban antes de escolher trabalho;
+- execute no máximo uma melhoria por rodada;
+- crie cards novos apenas quando forem específicos, pequenos e verificáveis;
+- comente início/fim, validações e commit no card;
+- pause o cron autônomo durante execução manual no mesmo workspace e reative ao final.
 
 ## Storage
 

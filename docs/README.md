@@ -12,6 +12,7 @@ Este diretório contém a documentação canônica do PicoClip. Use este índice
 | [Operations Runbook](OPERATIONS.md) | Guia operacional para diagnóstico, recovery, backup/restore e incidentes locais. |
 | [Current State](CURRENT_STATE.md) | Estado real atual do projeto, capacidades implementadas e limitações. |
 | [Roadmap](ROADMAP.md) | Plano de evolução e prioridades por fase. |
+| [Autonomous Improvement](AUTONOMOUS_IMPROVEMENT.md) | Política do ciclo Hermes Kanban/cron para descobrir, priorizar e executar melhorias contínuas. |
 
 ## Por área
 
@@ -22,6 +23,7 @@ Este diretório contém a documentação canônica do PicoClip. Use este índice
 | Robustez, locks, retry, wakeups, recovery e cancelamento | [Robustness](ROBUSTNESS.md) / [pt-BR](ROBUSTNESS.pt-BR.md) |
 | SQLite, memory storage, migrations, backup/restore | [Storage Architecture](STORAGE.md) |
 | UI, Templ, HTMX, componentes e design system | [Design System](DESIGN.md) |
+| Melhoria contínua via Hermes Kanban e cron | [Autonomous Improvement](AUTONOMOUS_IMPROVEMENT.md) |
 | Alinhamento estratégico com Paperclip | [Paperclip Alignment](PAPERCLIP_ALIGNMENT.md) |
 | Plano histórico de tasks contínuas | [Continuous Tasks Implementation Plan](CONTINUOUS_TASKS_IMPLEMENTATION_PLAN.md) |
 
@@ -55,8 +57,9 @@ Este diretório contém a documentação canônica do PicoClip. Use este índice
 1. Leia `../AGENTS.md`.
 2. Leia [Project Map](PROJECT_MAP.md).
 3. Leia [Documentation Policy](DOCUMENTATION_POLICY.md).
-4. Leia o documento da área que será modificada.
-5. Atualize documentação junto com qualquer mudança de comportamento.
+4. Leia [Autonomous Improvement](AUTONOMOUS_IMPROVEMENT.md) se estiver operando via Hermes Kanban/cron.
+5. Leia o documento da área que será modificada.
+6. Atualize documentação junto com qualquer mudança de comportamento.
 
 ## Regra de manutenção
 

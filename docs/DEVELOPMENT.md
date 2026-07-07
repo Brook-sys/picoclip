@@ -9,6 +9,7 @@ Este guia descreve o workflow local repetível para desenvolver, testar, depurar
 - [Robustness](ROBUSTNESS.md)
 - [Storage Architecture](STORAGE.md)
 - [Design System](DESIGN.md)
+- [Autonomous Improvement](AUTONOMOUS_IMPROVEMENT.md)
 
 ## Pré-requisitos
 
@@ -211,6 +212,30 @@ make check
 6. Playwright E2E.
 
 Use `make check` antes de considerar uma mudança relevante concluída, especialmente se ela toca UI, APIs, scheduler, storage, runtimes ou documentação com comandos.
+
+## Ciclo autônomo via Hermes Kanban
+
+O PicoClip pode ser melhorado por um ciclo autônomo do Hermes que consulta o board Kanban `picoclip`, cria novas demandas objetivas e executa uma melhoria pequena por rodada.
+
+Política completa: [Autonomous Improvement](AUTONOMOUS_IMPROVEMENT.md).
+
+Resumo operacional:
+
+```sh
+hermes kanban boards switch picoclip
+hermes kanban list --tenant picoclip --sort priority-desc
+hermes kanban stats
+```
+
+Regras principais:
+
+- o Kanban é a fila operacional; roadmap/docs continuam sendo referência estratégica;
+- cada rodada executa no máximo um card;
+- cada rodada cria no máximo três cards novos;
+- não iniciar nova melhoria se `git status --short` mostrar trabalho rastreado não relacionado;
+- pausar o cron autônomo durante execução manual no mesmo workspace;
+- validar, revisar diff/segredos, commitar, pushar e atualizar o card antes de concluir;
+- não adicionar `graphify-out/` ou artefatos locais ao commit.
 
 ## Testes Go
 
