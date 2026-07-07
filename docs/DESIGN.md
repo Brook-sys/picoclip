@@ -173,7 +173,8 @@ A UI ainda convive com a classe legada `.button` e os helpers novos `.pc-btn*`. 
 - hover vertical usa `--button-hover-transform`, sem animações pesadas;
 - links de ação devem preferir `ButtonLink`; botões simples devem usar `.pc-btn pc-btn-*` ou ganhar um helper Templ quando precisarem de atributos extras;
 - `IconButton`/`.pc-icon-btn` deve parecer superfície elevada, não botão primário;
-- mudanças nos botões devem manter `TestDesignSystemCSSDefinesConsistentActionButtons` verde e, quando migrarem uma página, adicionar/ajustar teste de regressão contra `class="button`.
+- mudanças nos botões devem manter `TestDesignSystemCSSDefinesConsistentActionButtons` verde; o teste verifica declarações CSS por seletor/propriedade em vez de depender de strings longas de formatação;
+- quando migrarem uma página, adicionar/ajustar teste de regressão contra `class="button`.
 
 ### Badge/status identity
 

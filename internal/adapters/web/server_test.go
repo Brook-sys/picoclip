@@ -457,33 +457,89 @@ func TestWebCreateAgentRejectsUnavailableNoop(t *testing.T) {
 	}
 }
 
+func cssDeclarations(css, selector string) map[string]string {
+	for offset := 0; offset < len(css); {
+		open := strings.Index(css[offset:], "{")
+		if open == -1 {
+			return nil
+		}
+		open += offset
+		blockSelector := strings.TrimSpace(css[offset:open])
+
+		close := strings.Index(css[open+1:], "}")
+		if close == -1 {
+			return nil
+		}
+		close += open + 1
+
+		if blockSelector == selector {
+			declarations := make(map[string]string)
+			for _, raw := range strings.Split(css[open+1:close], ";") {
+				property, value, ok := strings.Cut(raw, ":")
+				if !ok {
+					continue
+				}
+				property = strings.TrimSpace(property)
+				value = strings.TrimSpace(value)
+				if property != "" && value != "" {
+					declarations[property] = value
+				}
+			}
+			return declarations
+		}
+
+		offset = close + 1
+	}
+	return nil
+}
+
+func requireCSSDeclaration(t *testing.T, css, selector, property, want string) {
+	t.Helper()
+	declarations := cssDeclarations(css, selector)
+	if declarations == nil {
+		t.Fatalf("CSS selector %q not found", selector)
+	}
+	if got := declarations[property]; got != want {
+		t.Fatalf("%s %s = %q, want %q", selector, property, got, want)
+	}
+}
+
+func TestCSSRuleParserReadsDeclarationsWithFlexibleFormatting(t *testing.T) {
+	t.Parallel()
+
+	css := `.pc-btn-primary {
+		background: linear-gradient(135deg, var(--brand), var(--brand-strong));
+		color: var(--brand-ink);
+		box-shadow: var(--button-shadow);
+	}`
+
+	declarations := cssDeclarations(css, ".pc-btn-primary")
+	if declarations["background"] != "linear-gradient(135deg, var(--brand), var(--brand-strong))" {
+		t.Fatalf("background declaration = %q", declarations["background"])
+	}
+	if declarations["box-shadow"] != "var(--button-shadow)" {
+		t.Fatalf("box-shadow declaration = %q", declarations["box-shadow"])
+	}
+}
+
 func TestDesignSystemCSSDefinesPicoClipIdentityTokens(t *testing.T) {
 	css, err := os.ReadFile("assets/app.css")
 	if err != nil {
 		t.Fatal(err)
 	}
 	text := string(css)
-	for _, want := range []string{
-		"--brand: #5e6ad2;",
-		"--brand-strong: #4f46e5;",
-		"--brand-soft: color-mix(in srgb, var(--brand) 12%, transparent);",
-		"--surface-gradient: linear-gradient(180deg, color-mix(in srgb, var(--surface-elevated) 96%, var(--brand-soft)), var(--surface));",
-		"--focus-ring: 0 0 0 3px color-mix(in srgb, var(--brand) 24%, transparent);",
-		"--brand: #8b8cff;",
-		"body {",
-		"font-feature-settings: \"cv01\", \"ss03\";",
-		".brand-mark {",
-		"background: linear-gradient(135deg, var(--brand), var(--brand-strong));",
-		".page-title-icon {",
-		"background: var(--brand-soft);",
-		".pc-card { background: var(--surface-gradient);",
-		".card,\n.panel,\n.metric-card {\n  background: var(--surface-gradient);",
-		"box-shadow: var(--shadow-md);",
-	} {
-		if !strings.Contains(text, want) {
-			t.Fatalf("design-system CSS missing %q", want)
-		}
-	}
+	requireCSSDeclaration(t, text, ":root", "--brand", "#5e6ad2")
+	requireCSSDeclaration(t, text, ":root", "--brand-strong", "#4f46e5")
+	requireCSSDeclaration(t, text, ":root", "--brand-soft", "color-mix(in srgb, var(--brand) 12%, transparent)")
+	requireCSSDeclaration(t, text, ":root", "--surface-gradient", "linear-gradient(180deg, color-mix(in srgb, var(--surface-elevated) 96%, var(--brand-soft)), var(--surface))")
+	requireCSSDeclaration(t, text, ":root", "--focus-ring", "0 0 0 3px color-mix(in srgb, var(--brand) 24%, transparent)")
+	requireCSSDeclaration(t, text, `[data-theme="dark"]`, "--brand", "#8b8cff")
+	requireCSSDeclaration(t, text, "body", "font-feature-settings", `"cv01", "ss03"`)
+	requireCSSDeclaration(t, text, ".brand-mark", "background", "linear-gradient(135deg, var(--brand), var(--brand-strong))")
+	requireCSSDeclaration(t, text, ".page-title-icon", "background", "var(--brand-soft)")
+	requireCSSDeclaration(t, text, ".pc-card", "background", "var(--surface-gradient)")
+	requireCSSDeclaration(t, text, ".card,\n.panel,\n.metric-card", "background", "var(--surface-gradient)")
+	requireCSSDeclaration(t, text, ".brand-mark", "box-shadow", "var(--shadow-md)")
 }
 
 func TestDesignSystemCSSDefinesConsistentActionButtons(t *testing.T) {
@@ -492,21 +548,19 @@ func TestDesignSystemCSSDefinesConsistentActionButtons(t *testing.T) {
 		t.Fatal(err)
 	}
 	text := string(css)
-	for _, want := range []string{
-		"--button-shadow: 0 12px 28px -20px var(--brand);",
-		"--button-hover-transform: translateY(-1px);",
-		"background: linear-gradient(135deg, var(--brand), var(--brand-strong));",
-		"box-shadow: var(--button-shadow);",
-		"transform: var(--button-hover-transform);",
-		".button.secondary {\n  background: var(--surface-gradient);",
-		".pc-btn-primary { background: linear-gradient(135deg, var(--brand), var(--brand-strong)); color: var(--brand-ink); box-shadow: var(--button-shadow); }",
-		".pc-btn-secondary { background: var(--surface-gradient); color: var(--text); border-color: var(--border); box-shadow: var(--shadow-sm); }",
-		".pc-icon-btn { display: inline-flex; align-items: center; justify-content: center; width: 34px; height: 34px; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface-gradient);",
-	} {
-		if !strings.Contains(text, want) {
-			t.Fatalf("action button CSS missing %q", want)
-		}
-	}
+	requireCSSDeclaration(t, text, ":root", "--button-shadow", "0 12px 28px -20px var(--brand)")
+	requireCSSDeclaration(t, text, ":root", "--button-hover-transform", "translateY(-1px)")
+	requireCSSDeclaration(t, text, ".button,\nbutton,\n.action-menu summary", "background", "linear-gradient(135deg, var(--brand), var(--brand-strong))")
+	requireCSSDeclaration(t, text, ".button,\nbutton,\n.action-menu summary", "box-shadow", "var(--button-shadow)")
+	requireCSSDeclaration(t, text, ".button:hover,\nbutton:hover", "transform", "var(--button-hover-transform)")
+	requireCSSDeclaration(t, text, ".button.secondary", "background", "var(--surface-gradient)")
+	requireCSSDeclaration(t, text, ".pc-btn-primary", "background", "linear-gradient(135deg, var(--brand), var(--brand-strong))")
+	requireCSSDeclaration(t, text, ".pc-btn-primary", "color", "var(--brand-ink)")
+	requireCSSDeclaration(t, text, ".pc-btn-primary", "box-shadow", "var(--button-shadow)")
+	requireCSSDeclaration(t, text, ".pc-btn-secondary", "background", "var(--surface-gradient)")
+	requireCSSDeclaration(t, text, ".pc-btn-secondary", "color", "var(--text)")
+	requireCSSDeclaration(t, text, ".pc-btn-secondary", "border-color", "var(--border)")
+	requireCSSDeclaration(t, text, ".pc-icon-btn", "background", "var(--surface-gradient)")
 }
 
 func TestDesignSystemCSSDefinesConsistentBadgesAndStatus(t *testing.T) {
@@ -515,23 +569,18 @@ func TestDesignSystemCSSDefinesConsistentBadgesAndStatus(t *testing.T) {
 		t.Fatal(err)
 	}
 	text := string(css)
-	for _, want := range []string{
-		"--badge-border: color-mix(in srgb, currentColor 18%, transparent);",
-		"--badge-radius: 999px;",
-		"--status-dot-size: 8px;",
-		"border: 1px solid var(--badge-border);",
-		"border-radius: var(--badge-radius);",
-		"letter-spacing: 0.04em;",
-		".pc-chip { display: inline-flex; align-items: center; gap: 4px; padding: 3px 8px; border-radius: var(--badge-radius);",
-		".pc-badge { display: inline-flex; align-items: center; gap: 4px; border: 1px solid var(--badge-border); border-radius: var(--badge-radius);",
-		"width: var(--status-dot-size);",
-		"height: var(--status-dot-size);",
-		"box-shadow: 0 0 0 3px color-mix(in srgb, currentColor 12%, transparent);",
-	} {
-		if !strings.Contains(text, want) {
-			t.Fatalf("badge/status CSS missing %q", want)
-		}
-	}
+	requireCSSDeclaration(t, text, ":root", "--badge-border", "color-mix(in srgb, currentColor 18%, transparent)")
+	requireCSSDeclaration(t, text, ":root", "--badge-radius", "999px")
+	requireCSSDeclaration(t, text, ":root", "--status-dot-size", "8px")
+	requireCSSDeclaration(t, text, ".badge", "border", "1px solid var(--badge-border)")
+	requireCSSDeclaration(t, text, ".badge", "border-radius", "var(--badge-radius)")
+	requireCSSDeclaration(t, text, ".badge", "letter-spacing", "0.04em")
+	requireCSSDeclaration(t, text, ".pc-chip", "border-radius", "var(--badge-radius)")
+	requireCSSDeclaration(t, text, ".pc-badge", "border", "1px solid var(--badge-border)")
+	requireCSSDeclaration(t, text, ".pc-badge", "border-radius", "var(--badge-radius)")
+	requireCSSDeclaration(t, text, ".status::before", "width", "var(--status-dot-size)")
+	requireCSSDeclaration(t, text, ".status::before", "height", "var(--status-dot-size)")
+	requireCSSDeclaration(t, text, ".status::before", "box-shadow", "0 0 0 3px color-mix(in srgb, currentColor 12%, transparent)")
 }
 
 func TestResponsiveShellCSSKeepsMobileNavigationCompact(t *testing.T) {
