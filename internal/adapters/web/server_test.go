@@ -342,6 +342,32 @@ func TestAgentInboxLiteAndHeartbeatContext(t *testing.T) {
 	if _, duplicatesPrompt := executionState["prompt"]; duplicatesPrompt {
 		t.Fatalf("execution_state should stay compact and not duplicate prompt: %+v", executionState)
 	}
+
+	leanCtxRes, err := client.Get(ts.URL + "/agent-api/tasks/" + task["id"].(string) + "/heartbeat-context?include=execution_state")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer leanCtxRes.Body.Close()
+	if leanCtxRes.StatusCode != http.StatusOK {
+		t.Fatalf("lean heartbeat context status = %d", leanCtxRes.StatusCode)
+	}
+	var lean map[string]any
+	if err := json.NewDecoder(leanCtxRes.Body).Decode(&lean); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := lean["execution_state"]; !ok {
+		t.Fatalf("lean heartbeat context should include requested execution_state: %+v", lean)
+	}
+	if _, ok := lean["skills"]; ok {
+		t.Fatalf("lean heartbeat context should omit unrequested skills: %+v", lean)
+	}
+	if _, ok := lean["prompt"]; ok {
+		t.Fatalf("lean heartbeat context should omit unrequested prompt: %+v", lean)
+	}
+	meta, ok := lean["meta"].(map[string]any)
+	if !ok || meta["mode"] != "selective" {
+		t.Fatalf("lean heartbeat context should advertise selective mode: %+v", lean)
+	}
 }
 
 func readHTML(t *testing.T, client *http.Client, url string) string {

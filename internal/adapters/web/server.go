@@ -331,6 +331,8 @@ func (s *Server) handleAgentHeartbeatContext(w http.ResponseWriter, r *http.Requ
 		http.Error(w, err.Error(), http.StatusNotFound)
 		return
 	}
+	include := parseIncludeSet(r.URL.Query().Get("include"))
+	selective := len(include) > 0
 	messages, _ := s.tasks.GetMessages(r.Context(), task.ID)
 	lastUser := ""
 	for i := len(messages) - 1; i >= 0; i-- {
@@ -342,16 +344,65 @@ func (s *Server) handleAgentHeartbeatContext(w http.ResponseWriter, r *http.Requ
 	ctx := map[string]any{
 		"task_id":           task.ID,
 		"title":             task.Title,
-		"prompt":            task.Prompt,
 		"last_user_comment": lastUser,
 		"status":            task.Status,
 		"checkout_run_id":   task.CheckoutRunID,
 		"wake_reason":       s.latestWakeReason(r, task.ID),
-		"execution_state":   s.compactExecutionState(r, task),
-		"skills":            s.compactSkills(r, task),
-		"apis":              []string{"/agent-api/tasks", "/agent-api/projects", "/agent-api/skills"},
+		"meta": map[string]any{
+			"mode":     heartbeatContextMode(selective),
+			"included": includedSections(include),
+		},
+	}
+	if includeSection(include, "prompt") {
+		ctx["prompt"] = task.Prompt
+	}
+	if includeSection(include, "execution_state") {
+		ctx["execution_state"] = s.compactExecutionState(r, task)
+	}
+	if includeSection(include, "skills") {
+		ctx["skills"] = s.compactSkills(r, task)
+	}
+	if includeSection(include, "apis") {
+		ctx["apis"] = []string{"/agent-api/tasks", "/agent-api/projects", "/agent-api/skills"}
 	}
 	s.jsonResponse(w, ctx)
+}
+
+func parseIncludeSet(raw string) map[string]struct{} {
+	include := map[string]struct{}{}
+	for _, part := range strings.Split(raw, ",") {
+		part = strings.TrimSpace(part)
+		if part != "" {
+			include[part] = struct{}{}
+		}
+	}
+	return include
+}
+
+func includeSection(include map[string]struct{}, section string) bool {
+	if len(include) == 0 {
+		return true
+	}
+	_, ok := include[section]
+	return ok
+}
+
+func heartbeatContextMode(selective bool) string {
+	if selective {
+		return "selective"
+	}
+	return "default"
+}
+
+func includedSections(include map[string]struct{}) []string {
+	if len(include) == 0 {
+		return []string{"prompt", "execution_state", "skills", "apis"}
+	}
+	sections := make([]string, 0, len(include))
+	for section := range include {
+		sections = append(sections, section)
+	}
+	return sections
 }
 
 func (s *Server) compactExecutionState(r *http.Request, task domain.Task) map[string]any {

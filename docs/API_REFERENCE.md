@@ -176,6 +176,15 @@ Superfície para agentes lerem contexto, atualizarem tasks, comentarem, delegare
 - skills compactas disponíveis ao agente;
 - `execution_state`, com `needs_run`, checkout/lock atual, última run resumida, até 3 wakeups pendentes, até 5 eventos recentes e contadores totais.
 
+Para economizar tokens, a rota aceita `include` com seções separadas por vírgula. Sem `include`, retorna o contexto padrão completo. Com `include`, retorna somente as seções solicitadas além dos campos básicos da task:
+
+```text
+GET /agent-api/tasks/{id}/heartbeat-context?include=execution_state
+GET /agent-api/tasks/{id}/heartbeat-context?include=execution_state,skills
+```
+
+Seções disponíveis: `prompt`, `execution_state`, `skills`, `apis`. A resposta inclui `meta.mode` (`default` ou `selective`) e `meta.included` para o agente saber qual forma recebeu.
+
 Use `/agent-api/tasks/{id}` somente quando o agente realmente precisar de mensagens/runs/eventos completos.
 
 ## Páginas web e ações HTMX/server-rendered
