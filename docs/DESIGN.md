@@ -144,14 +144,16 @@ A identidade visual usa uma base precisa inspirada em ferramentas de desenvolvim
 - `--brand` e `--brand-strong` definem o indigo/violet principal do produto;
 - `--brand-soft` aplica tintas sutis em ícones, headers e estados ativos;
 - `--brand-ring` e `--focus-ring` padronizam foco e contornos acessíveis;
-- `--surface-gradient` dá profundidade consistente para `card`, `panel`, `metric-card` e `pc-card`.
+- `--surface-gradient` dá profundidade consistente para `card`, `panel` e `metric-card`;
+- `--surface-overlay`, `--surface-raised`, `--text-strong`, `--text-muted` e `--shadow-glow` refinam contraste e profundidade do modo escuro sem espalhar cores locais.
 
 Regras:
 
 - use `--brand*` apenas para identidade, foco e affordances interativas importantes;
 - use `--surface-gradient` para superfícies canônicas em vez de gradientes locais diferentes;
-- mantenha texto em tokens semânticos (`--text`, `--muted`) para preservar contraste entre temas;
-- mudanças nestes tokens devem manter `TestDesignSystemCSSDefinesPicoClipIdentityTokens` verde.
+- use `--surface-raised` em componentes que precisam se destacar do canvas escuro (`.pc-card`, botões secundários, ícones de header) e `--surface-overlay` em controles/editors;
+- mantenha texto em tokens semânticos (`--text`, `--muted`, `--text-strong`, `--text-muted`) para preservar contraste entre temas;
+- mudanças nestes tokens devem manter `TestDesignSystemCSSDefinesDarkModeDepthAndContrastTokens` verde.
 
 ### Layout/shape tokens
 
