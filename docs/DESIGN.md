@@ -216,6 +216,18 @@ Toda página principal deve usar o header do `PageShell`:
 
 Não recrie headers locais sem necessidade.
 
+### Responsive shell
+
+O shell mantém a navegação lateral fixa em desktop. Em telas até `980px`, a sidebar vira uma barra superior `sticky`, compacta e com navegação horizontal rolável. Esse padrão reduz altura ocupada no mobile, preserva acesso rápido às áreas principais e evita overflow horizontal da página.
+
+Regras:
+
+- a sidebar mobile deve permanecer `position: sticky; top: 0` para manter navegação acessível;
+- links de navegação devem usar `flex: 0 0 auto` e `white-space: nowrap` dentro de um nav com `overflow-x: auto`;
+- a área principal deve reduzir padding em telas pequenas para aproveitar largura útil;
+- o brand pode ocultar subtítulo secundário no mobile, mas deve manter o nome PicoClip e ícone;
+- mudanças no shell responsivo devem manter o teste `TestResponsiveShellCSSKeepsMobileNavigationCompact` verde.
+
 ### Detail pages
 
 Use `detail-grid` para páginas de detalhe:

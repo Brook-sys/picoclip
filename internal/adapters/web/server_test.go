@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -453,6 +454,38 @@ func TestWebCreateAgentRejectsUnavailableNoop(t *testing.T) {
 	defer res.Body.Close()
 	if res.StatusCode != http.StatusBadRequest {
 		t.Fatalf("expected bad request, got %d", res.StatusCode)
+	}
+}
+
+func TestResponsiveShellCSSKeepsMobileNavigationCompact(t *testing.T) {
+	css, err := os.ReadFile("assets/app.css")
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(css)
+	mobileBlock := "@media (max-width: 980px) {"
+	idx := strings.Index(text, mobileBlock)
+	if idx == -1 {
+		t.Fatalf("responsive shell media query %q not found", mobileBlock)
+	}
+	nextMedia := strings.Index(text[idx+len(mobileBlock):], "@media")
+	end := len(text)
+	if nextMedia >= 0 {
+		end = idx + len(mobileBlock) + nextMedia
+	}
+	mobileCSS := text[idx:end]
+	for _, want := range []string{
+		".app-shell { grid-template-columns: minmax(0, 1fr); max-width: 100vw; overflow-x: clip; }",
+		".sidebar { position: sticky; top: 0; z-index:",
+		"max-width: 100vw; min-width: 0;",
+		".sidebar nav { display: flex; flex-wrap: nowrap; width: 100%; min-width: 0; max-width: 100vw; overflow-x: auto;",
+		".sidebar nav a { flex: 0 0 auto;",
+		".main { width: 100%; max-width: 100vw; min-width: 0; padding:",
+		".brand-copy small { display: none; }",
+	} {
+		if !strings.Contains(mobileCSS, want) {
+			t.Fatalf("mobile shell CSS missing %q in:\n%s", want, mobileCSS)
+		}
 	}
 }
 

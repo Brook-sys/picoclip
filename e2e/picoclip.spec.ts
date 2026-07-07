@@ -74,6 +74,35 @@ test.describe('PicoClip smoke UI', () => {
     await expect(page).toHaveURL('/settings');
   });
 
+  test('mobile shell keeps navigation compact and prevents horizontal overflow', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto('/');
+
+    const shellMetrics = await page.evaluate(() => {
+      const sidebar = document.querySelector('.sidebar');
+      const nav = document.querySelector('.sidebar nav');
+      const main = document.querySelector('.main');
+      if (!sidebar || !nav || !main) throw new Error('shell elements missing');
+      const sidebarStyle = getComputedStyle(sidebar);
+      const navStyle = getComputedStyle(nav);
+      const mainStyle = getComputedStyle(main);
+      return {
+        documentWidth: document.documentElement.scrollWidth,
+        viewportWidth: window.innerWidth,
+        sidebarPosition: sidebarStyle.position,
+        sidebarTop: sidebarStyle.top,
+        navOverflowX: navStyle.overflowX,
+        mainPaddingLeft: mainStyle.paddingLeft,
+      };
+    });
+
+    expect(shellMetrics.documentWidth).toBeLessThanOrEqual(shellMetrics.viewportWidth);
+    expect(shellMetrics.sidebarPosition).toBe('sticky');
+    expect(shellMetrics.sidebarTop).toBe('0px');
+    expect(['auto', 'scroll']).toContain(shellMetrics.navOverflowX);
+    expect(Number.parseFloat(shellMetrics.mainPaddingLeft)).toBeLessThanOrEqual(16);
+  });
+
   test('diagnostics API exposes health checks', async ({ request }) => {
     const response = await request.get('/api/diagnostics');
     expect(response.ok()).toBeTruthy();
