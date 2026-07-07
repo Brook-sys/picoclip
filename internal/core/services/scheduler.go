@@ -24,17 +24,20 @@ func (s *Scheduler) reconcile(ctx context.Context) {
 	}
 }
 
+func (s *Scheduler) runOnce(ctx context.Context) {
+	s.reconcile(ctx)
+	s.dispatcher.Dispatch(ctx)
+}
+
 func (s *Scheduler) Start(ctx context.Context) {
 	ticker := time.NewTicker(s.interval)
 	defer ticker.Stop()
 
-	s.reconcile(ctx)
-	s.dispatcher.Dispatch(ctx)
+	s.runOnce(ctx)
 	for {
 		select {
 		case <-ticker.C:
-			s.reconcile(ctx)
-			s.dispatcher.Dispatch(ctx)
+			s.runOnce(ctx)
 		case <-ctx.Done():
 			s.logger.Info("scheduler.stopped")
 			return
