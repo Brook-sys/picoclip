@@ -273,7 +273,7 @@ templ EventTimelineFull(events []domain.Event, tasks map[string]taskResponse, ag
 					</div>
 					if activityActionURL(event) != "" {
 						<div class="activity-footer-row">
-							<a class="activity-action" href={ templ.URL(activityActionURL(event)) }>{ activityActionLabel(event) }</a>
+							@ButtonLink(activityActionLabel(event), activityActionURL(event), "secondary", "arrow-right")
 						</div>
 					}
 				</div>

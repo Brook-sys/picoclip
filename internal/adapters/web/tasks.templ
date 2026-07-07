@@ -38,7 +38,7 @@ templ TaskTable(tasks []taskResponse, agents []domain.Agent, projects []domain.W
 					</div>
 					<div class="task-list-action">
 						<span class={ "issue-list-status", statusClass(task.Status) }>{ string(task.Status) }</span>
-						<span class="activity-action">Open task</span>
+						<span class="pc-btn pc-btn-secondary">Open task</span>
 					</div>
 				</a>
 			}

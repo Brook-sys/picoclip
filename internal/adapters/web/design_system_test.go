@@ -78,6 +78,21 @@ func TestDesignSystemCSSDefinesDarkModeDepthAndContrastTokens(t *testing.T) {
 	}
 }
 
+func TestActivityTasksAndRunsUseCanonicalActionHelpers(t *testing.T) {
+	t.Parallel()
+
+	for _, name := range []string{"activity.templ", "tasks.templ", "runs_page.templ"} {
+		body, err := os.ReadFile(name)
+		if err != nil {
+			t.Fatalf("read %s: %v", name, err)
+		}
+		text := string(body)
+		if strings.Contains(text, `class="activity-action"`) {
+			t.Fatalf("%s still contains legacy class=\"activity-action\" markup; use ButtonLink or pc-btn helpers instead", name)
+		}
+	}
+}
+
 func TestOverviewCardsUseCanonicalHelperAndCSS(t *testing.T) {
 	t.Parallel()
 

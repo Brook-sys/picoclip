@@ -59,7 +59,7 @@ templ RunsPage(runs []domain.Run, allRuns []domain.Run, tasks map[string]taskRes
 							</div>
 							<div class="run-activity-action">
 								<span class={ "issue-list-status", runStatusClass(run.Status), templ.KV("pulse", run.Status == domain.RunStatusRunning) }>{ string(run.Status) }</span>
-								<span class="activity-action">Open run</span>
+								<span class="pc-btn pc-btn-secondary">Open run</span>
 							</div>
 						</a>
 					}
