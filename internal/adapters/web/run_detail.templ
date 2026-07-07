@@ -6,14 +6,65 @@ import "picoclip/internal/core/domain"
 templ RunDetailPage(run domain.Run, task taskResponse, agent domain.Agent) {
 	@PageShell("runs", "Run " + run.ID, "Execution output, runtime metadata and raw agent context.", runDetailAction(task.ID)) {
 		<section class="detail-grid">
+			<div class="main-column" id="run-live" hx-get={ "/partials/runs/" + run.ID } hx-swap="innerHTML" data-run-id={ run.ID } data-run-live-url={ "/partials/runs/" + run.ID }>
+				@RunLive(run, task, agent)
+			</div>
 			if run.Status == domain.RunStatusRunning {
-				<div class="main-column" id="run-live" hx-get={ "/partials/runs/" + run.ID } hx-trigger="every 5s" hx-swap="innerHTML">
-					@RunLive(run, task, agent)
-				</div>
-			} else {
-				<div class="main-column" id="run-live" hx-get={ "/partials/runs/" + run.ID } hx-swap="innerHTML">
-					@RunLive(run, task, agent)
-				</div>
+				<script>
+					(function(){
+						var root = document.getElementById('run-live');
+						var runId = root ? root.getAttribute('data-run-id') : '';
+						if (!runId || !root || !window.EventSource || window.__picoclipRunLiveSource === runId) return;
+						if (window.__picoclipRunLiveHandle) window.__picoclipRunLiveHandle.close();
+						window.__picoclipRunLiveSource = runId;
+						var source = new EventSource('/sse/runs/' + runId + '/logs');
+						var fallbackTimer = null;
+						window.__picoclipRunLiveHandle = source;
+						function refresh(){
+							var liveRoot = document.getElementById('run-live');
+							if (window.htmx && liveRoot) htmx.ajax('GET', liveRoot.getAttribute('data-run-live-url'), '#run-live');
+						}
+						function clearFallback(){
+							if (fallbackTimer) window.clearTimeout(fallbackTimer);
+							fallbackTimer = null;
+						}
+						function scheduleFallback(){
+							if (fallbackTimer) return;
+							fallbackTimer = window.setTimeout(function(){ fallbackTimer = null; refresh(); scheduleFallback(); }, 10000);
+						}
+						function stopRunLive(){
+							clearFallback();
+							if (window.__picoclipRunLiveHandle) window.__picoclipRunLiveHandle.close();
+							window.__picoclipRunLiveHandle = null;
+							window.__picoclipRunLiveSource = '';
+						}
+						function append(id, value){
+							if (!value) return;
+							var el = document.getElementById(id);
+							if (!el) return;
+							el.textContent += value;
+							el.scrollTop = el.scrollHeight;
+							var empty = document.getElementById('run-output-empty');
+							if (empty) empty.innerHTML = '';
+						}
+						source.onmessage = function(evt){
+							try {
+								var ev = JSON.parse(evt.data);
+								append('run-stdout', ev.data && ev.data.stdout);
+								append('run-stderr', ev.data && ev.data.stderr);
+								if (ev.type === 'run.completed' || ev.type === 'run.failed' || ev.type === 'run.canceled') {
+									stopRunLive();
+									refresh();
+								}
+							} catch(e) {}
+						};
+						source.addEventListener('open', clearFallback);
+						source.addEventListener('error', scheduleFallback);
+						source.addEventListener('ping', function(){});
+						window.addEventListener('pagehide', stopRunLive, { once: true });
+						window.addEventListener('beforeunload', stopRunLive, { once: true });
+					})();
+				</script>
 			}
 			<aside class="side-column">
 				<div id="run-properties">
@@ -58,41 +109,6 @@ templ RunLive(run domain.Run, task taskResponse, agent domain.Agent) {
 			<pre id="run-stderr" class="log-viewer run-log-viewer error-log">{ run.Error }</pre>
 		</div>
 	</div>
-	if run.Status == domain.RunStatusRunning {
-		<script>
-			(function(){
-				var card = document.querySelector('.run-console-card[data-run-id]');
-				var runId = card ? card.getAttribute('data-run-id') : '';
-				if (!runId || !window.EventSource || window.__picoclipRunLogSource === runId) return;
-				if (window.__picoclipRunLogHandle) window.__picoclipRunLogHandle.close();
-				window.__picoclipRunLogSource = runId;
-				var source = new EventSource('/sse/runs/' + runId + '/logs');
-				window.__picoclipRunLogHandle = source;
-				function append(id, value){
-					if (!value) return;
-					var el = document.getElementById(id);
-					if (!el) return;
-					el.textContent += value;
-					el.scrollTop = el.scrollHeight;
-					var empty = document.getElementById('run-output-empty');
-					if (empty) empty.innerHTML = '';
-				}
-				source.onmessage = function(evt){
-					try {
-						var ev = JSON.parse(evt.data);
-						append('run-stdout', ev.data && ev.data.stdout);
-						append('run-stderr', ev.data && ev.data.stderr);
-						if (ev.type === 'run.completed' || ev.type === 'run.failed' || ev.type === 'run.canceled') {
-							source.close();
-							window.__picoclipRunLogHandle = null;
-							if (window.htmx) htmx.ajax('GET', '/partials/runs/' + runId, '#run-live');
-						}
-					} catch(e) {}
-				};
-			})();
-		</script>
-	}
-
 	if run.Input != "" {
 		<div class="panel run-context-card">
 			@SectionHeader("System Context", "Raw prompt and context sent to the runtime.") {}

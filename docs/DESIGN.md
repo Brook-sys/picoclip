@@ -305,7 +305,7 @@ Ao criar partial:
 
 ## SSE e live observability
 
-Activity usa SSE em `/sse/activity`. Detalhe de task usa SSE filtrado em `/sse/tasks/{id}` para acionar refresh do fragmento `/partials/tasks/{id}` somente quando um evento da própria task chega. Detalhe de run usa `/sse/runs/{id}/logs` para anexar output e atualizar status final.
+Activity usa SSE em `/sse/activity`. Detalhe de task usa SSE filtrado em `/sse/tasks/{id}` para acionar refresh do fragmento `/partials/tasks/{id}` somente quando um evento da própria task chega. Detalhe de run usa `/sse/runs/{id}/logs` para anexar output incremental e acionar refresh do fragmento `/partials/runs/{id}` quando a run termina, sem polling periódico.
 
 Padrão esperado:
 

@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"picoclip/internal/adapters/events"
 	"picoclip/internal/adapters/storage/memory"
@@ -452,6 +453,81 @@ func TestWebCreateAgentRejectsUnavailableNoop(t *testing.T) {
 	defer res.Body.Close()
 	if res.StatusCode != http.StatusBadRequest {
 		t.Fatalf("expected bad request, got %d", res.StatusCode)
+	}
+}
+
+func TestRunDetailUsesSSEDrivenPartialRefresh(t *testing.T) {
+	storage := memory.NewStorage()
+	started := time.Now().Add(-1 * time.Minute)
+	agent := domain.Agent{ID: "agent_run_live", Name: "Run UI Agent", Type: "noop", CreatedAt: started, UpdatedAt: started}
+	task := domain.Task{ID: "task_run_live", AgentID: agent.ID, Title: "Run live task", Prompt: "Stream run output", Status: domain.TaskStatusInProgress, CheckoutRunID: "run_live", CreatedAt: started, UpdatedAt: started}
+	run := domain.Run{ID: "run_live", TaskID: task.ID, AgentID: agent.ID, Status: domain.RunStatusRunning, DriverType: "noop", StartedAt: started}
+	if err := storage.Agents().Create(t.Context(), agent); err != nil {
+		t.Fatal(err)
+	}
+	if err := storage.Tasks().Create(t.Context(), task); err != nil {
+		t.Fatal(err)
+	}
+	if err := storage.Runs().Create(t.Context(), run); err != nil {
+		t.Fatal(err)
+	}
+	ts := newTestServerWithStorage(t, storage, true)
+	defer ts.Close()
+
+	client := ts.Client()
+	res, err := client.Get(ts.URL + "/runs/" + run.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer res.Body.Close()
+	buf := new(bytes.Buffer)
+	if _, err := buf.ReadFrom(res.Body); err != nil {
+		t.Fatal(err)
+	}
+	html := buf.String()
+	if strings.Contains(html, `hx-trigger="every`) || strings.Contains(html, `<section class="detail-grid" hx-`) {
+		t.Fatalf("run detail should not poll or refresh a full page region")
+	}
+	if !strings.Contains(html, `id="run-live"`) || !strings.Contains(html, `/partials/runs/`+run.ID) {
+		t.Fatalf("run detail should keep a small run-live partial target")
+	}
+	if !strings.Contains(html, `data-run-id="`+run.ID+`"`) || !strings.Contains(html, `data-run-live-url="/partials/runs/`+run.ID+`"`) {
+		t.Fatalf("run detail should expose data attributes for scoped live refresh")
+	}
+	if !strings.Contains(html, `new EventSource('/sse/runs/' + runId + '/logs')`) {
+		t.Fatalf("run detail should subscribe to run-scoped SSE")
+	}
+	if !strings.Contains(html, `source.addEventListener('error', scheduleFallback)`) || !strings.Contains(html, `window.addEventListener('pagehide', stopRunLive`) {
+		t.Fatalf("run detail SSE should degrade gracefully and clean up connections")
+	}
+
+	partialRes, err := client.Get(ts.URL + "/partials/runs/" + run.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer partialRes.Body.Close()
+	partial := new(bytes.Buffer)
+	if _, err := partial.ReadFrom(partialRes.Body); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(partial.String(), "Console Output") || strings.Contains(partial.String(), "<html") {
+		t.Fatalf("run partial should render live fragment only")
+	}
+
+	sseReq, err := http.NewRequestWithContext(t.Context(), http.MethodGet, ts.URL+"/sse/runs/"+run.ID+"/logs", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sseRes, err := client.Do(sseReq)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer sseRes.Body.Close()
+	if sseRes.StatusCode != http.StatusOK {
+		t.Fatalf("run SSE status = %d, want 200", sseRes.StatusCode)
+	}
+	if got := sseRes.Header.Get("Content-Type"); !strings.Contains(got, "text/event-stream") {
+		t.Fatalf("run SSE content-type = %q, want text/event-stream", got)
 	}
 }
 
