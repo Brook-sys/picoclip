@@ -181,6 +181,7 @@ Melhorias recorrentes do PicoClip podem ser geridas pelo Hermes Kanban no board 
 - leia `docs/AUTONOMOUS_IMPROVEMENT.md`;
 - consulte o Kanban antes de escolher trabalho;
 - execute no máximo uma melhoria por rodada;
+- use `docs/IMPROVEMENT_BACKLOG.md` para formato de cards, categorias, deduplicação, priorização e critérios de conclusão;
 - crie cards novos apenas quando forem específicos, pequenos e verificáveis;
 - antes de criar cards, deduplique contra itens `ready`, `blocked` e `done`, reutilize uma `--idempotency-key` estável e comente card existente quando a lacuna for apenas follow-up pequeno;
 - comente início/fim, validações e commit no card;

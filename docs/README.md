@@ -13,6 +13,7 @@ Este diretório contém a documentação canônica do PicoClip. Use este índice
 | [Current State](CURRENT_STATE.md) | Estado real atual do projeto, capacidades implementadas e limitações. |
 | [Roadmap](ROADMAP.md) | Plano de evolução e prioridades por fase. |
 | [Autonomous Improvement](AUTONOMOUS_IMPROVEMENT.md) | Política do ciclo Hermes Kanban/cron para descobrir, priorizar e executar melhorias contínuas. |
+| [Improvement Backlog](IMPROVEMENT_BACKLOG.md) | Contrato operacional do backlog: categorias, formato de cards, priorização e critérios de conclusão. |
 
 ## Por área
 
@@ -24,6 +25,7 @@ Este diretório contém a documentação canônica do PicoClip. Use este índice
 | SQLite, memory storage, migrations, backup/restore | [Storage Architecture](STORAGE.md) |
 | UI, Templ, HTMX, componentes e design system | [Design System](DESIGN.md) |
 | Melhoria contínua via Hermes Kanban e cron | [Autonomous Improvement](AUTONOMOUS_IMPROVEMENT.md) |
+| Backlog canônico de melhorias | [Improvement Backlog](IMPROVEMENT_BACKLOG.md) |
 | Alinhamento estratégico com Paperclip | [Paperclip Alignment](PAPERCLIP_ALIGNMENT.md) |
 | Plano histórico de tasks contínuas | [Continuous Tasks Implementation Plan](CONTINUOUS_TASKS_IMPLEMENTATION_PLAN.md) |
 

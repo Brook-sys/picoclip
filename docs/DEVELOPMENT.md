@@ -232,7 +232,7 @@ Use `make check` antes de considerar uma mudança relevante concluída, especial
 
 O PicoClip pode ser melhorado por um ciclo autônomo do Hermes que consulta o board Kanban `picoclip`, cria novas demandas objetivas e executa uma melhoria pequena por rodada.
 
-Política completa: [Autonomous Improvement](AUTONOMOUS_IMPROVEMENT.md).
+Política completa: [Autonomous Improvement](AUTONOMOUS_IMPROVEMENT.md). O contrato de backlog — categorias, formato de cards, deduplicação, priorização e critérios de conclusão — fica em [Improvement Backlog](IMPROVEMENT_BACKLOG.md).
 
 Resumo operacional:
 

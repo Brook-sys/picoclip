@@ -6,6 +6,8 @@ Este roadmap é a referência absoluta para evolução do PicoClip. Ele substitu
 
 O objetivo é transformar PicoClip em um sistema local-first que oferece as capacidades centrais do Paperclip (orquestração de agentes, tarefas/índices, heartbeat, checkout/locking, comentários/inbox, delegação, hierarquia, permissões, custos/tokens, recuperação, UI e APIs) com menor consumo de RAM, menor overhead de tokens e maior modularidade.
 
+O roadmap define direção e fases. A fila operacional de melhorias recorrentes vive no Hermes Kanban board `picoclip`; o contrato do backlog — categorias, formato de cards, deduplicação, priorização e critérios de conclusão — está em [Improvement Backlog](IMPROVEMENT_BACKLOG.md).
+
 Princípios que não podem ser violados:
 
 - Core pequeno, sem frameworks pesados.

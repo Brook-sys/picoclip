@@ -10,6 +10,7 @@ Este documento descreve o estado real atual do PicoClip. Ele deve ser lido junto
 - [Storage Architecture](STORAGE.md)
 - [Roadmap](ROADMAP.md)
 - [Documentation Policy](DOCUMENTATION_POLICY.md)
+- [Improvement Backlog](IMPROVEMENT_BACKLOG.md)
 
 ## Resumo executivo
 
@@ -384,8 +385,11 @@ A documentação agora tem política formal:
 - [Storage Architecture](STORAGE.md)
 - [Robustness](ROBUSTNESS.md)
 - [Design System](DESIGN.md)
+- [Improvement Backlog](IMPROVEMENT_BACKLOG.md)
 
 Regra: novas funcionalidades devem atualizar documentação proporcional no mesmo conjunto de mudanças.
+
+O backlog operacional de melhorias recorrentes é gerido no Hermes Kanban board `picoclip`; [Improvement Backlog](IMPROVEMENT_BACKLOG.md) documenta categorias, formato de cards, deduplicação, priorização e critérios de conclusão.
 
 ## Lacunas principais
 

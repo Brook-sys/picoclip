@@ -227,6 +227,7 @@ Veja:
 - [Runbook Operacional](docs/OPERATIONS.md)
 - [Roadmap](docs/ROADMAP.md)
 - [Estado Atual](docs/CURRENT_STATE.md)
+- [Backlog Canônico de Melhorias](docs/IMPROVEMENT_BACKLOG.md)
 - [Arquitetura de Storage](docs/STORAGE.md)
 - [Robustez, Recovery e Aprendizado com Falhas](docs/ROBUSTNESS.pt-BR.md)
 - [Guia de Desenvolvimento](docs/DEVELOPMENT.md)
