@@ -183,6 +183,61 @@ hermes kanban comment <id> "Concluído: resumo, validações, commit e observaç
 hermes kanban complete <id>
 ```
 
+### Relatório operacional por rodada
+
+Cada rodada autônoma deve produzir dois níveis de relatório: um comentário curto no
+card executado e uma entrega final mais completa para humanos. O objetivo é tornar
+o ciclo auditável sem obrigar a leitura de sessões longas do Hermes.
+
+#### Comentário curto no Kanban
+
+Use um comentário único e compacto ao finalizar o card, com no máximo alguns
+parágrafos:
+
+```text
+Concluído:
+- resumo: <mudança objetiva feita>;
+- validação: <comando focado>, <make check ou justificativa>;
+- commit: <SHA curto ou "sem commit: motivo">;
+- follow-ups: <cards novos ou "nenhum">.
+```
+
+Se a rodada bloquear, o comentário deve substituir o resumo por `bloqueador`,
+incluindo comando executado, erro real e próximo passo recomendado.
+
+#### Entrega final do cron
+
+A mensagem final entregue pelo cron deve ser mais operacional e sempre seguir a
+mesma ordem:
+
+1. card trabalhado;
+2. novos cards criados, se houver;
+3. alterações feitas;
+4. validações reais executadas;
+5. commit/push ou motivo para não commitar;
+6. status do servidor local em `8088` e IP Tailscale quando disponível;
+7. estado resumido do Kanban;
+8. anomalias observadas no contexto do cron, como workspace sujo, sessão anterior
+   aberta, falha de entrega, servidor fora do ar ou artefatos locais preservados;
+9. passos restantes;
+10. melhorias ainda recomendadas;
+11. correções pendentes.
+
+Não use a entrega final para despejar logs extensos. Cite os comandos e o
+resultado essencial. Logs completos continuam disponíveis no histórico da sessão.
+
+#### Regras anti-ruído
+
+- Se nada novo e útil foi observado, a rodada pode finalizar sem entrega visível
+  quando o mecanismo de cron suportar supressão explícita.
+- Quando houver mudança, bloqueio, falha de validação, card criado ou anomalia
+  operacional, entregue relatório completo.
+- Não envie a mesma informação por múltiplos canais dentro da rodada; use o
+  comentário Kanban para o histórico do card e a entrega final para o resumo
+  humano.
+- Não inclua segredos, tokens, URLs sensíveis ou dumps de ambiente. Use apenas
+  caminhos locais, comandos e resultados sanitizados.
+
 Ao bloquear:
 
 ```sh
