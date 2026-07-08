@@ -91,6 +91,60 @@ func readBodyString(t *testing.T, body io.Reader) string {
 	return string(b)
 }
 
+func TestAgentDocsAdvertisesPaperclipLikeWorkflow(t *testing.T) {
+	ts := newTestServer(t)
+	defer ts.Close()
+
+	res, err := ts.Client().Get(ts.URL + "/agent-api/docs")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("agent docs status = %d, want 200", res.StatusCode)
+	}
+
+	var docs struct {
+		Endpoints []struct {
+			Method      string `json:"method"`
+			Path        string `json:"path"`
+			Description string `json:"description"`
+		} `json:"endpoints"`
+		RecommendedFlow []string `json:"recommended_flow"`
+	}
+	if err := json.NewDecoder(res.Body).Decode(&docs); err != nil {
+		t.Fatal(err)
+	}
+
+	wantPaths := []string{
+		"/agent-api/agents/me/inbox-lite?agent_id=...",
+		"/agent-api/tasks/{id}/heartbeat-context?include=execution_state,skills,apis",
+		"/agent-api/issues/{id}/heartbeat-context?include=execution_state,skills,apis",
+		"/agent-api/issues/{id}/checkout",
+		"/agent-api/issues/{id}/comments",
+		"/agent-api/issues/{id}/release",
+	}
+	for _, want := range wantPaths {
+		found := false
+		for _, endpoint := range docs.Endpoints {
+			if endpoint.Path == want {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Fatalf("agent docs missing endpoint path %q in %#v", want, docs.Endpoints)
+		}
+	}
+
+	flow := strings.Join(docs.RecommendedFlow, " -> ")
+	for _, want := range []string{"inbox-lite", "checkout", "heartbeat-context", "comment", "status", "release"} {
+		if !strings.Contains(flow, want) {
+			t.Fatalf("recommended flow %q missing %q", flow, want)
+		}
+	}
+}
+
 func TestAgentTaskLifecycleAPI(t *testing.T) {
 	ts := newTestServer(t)
 	defer ts.Close()

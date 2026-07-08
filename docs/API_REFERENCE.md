@@ -167,7 +167,7 @@ Superfície para agentes lerem contexto, atualizarem tasks, comentarem, delegare
 
 | Método | Rota | Finalidade |
 | --- | --- | --- |
-| `GET` | `/agent-api/docs` | Documentação dinâmica para agentes. |
+| `GET` | `/agent-api/docs` | Documentação dinâmica para agentes, incluindo endpoints Paperclip-like, aliases `/issues`, `include` do heartbeat-context e fluxo recomendado. |
 | `GET` | `/agent-api/me` | Identidade/contexto do agente chamador quando disponível. |
 | `GET` | `/agent-api/agents/me/inbox-lite` | Inbox compacto para heartbeat/triagem. |
 | `GET` | `/agent-api/agents` | Lista agentes. |
@@ -233,6 +233,19 @@ Use `/agent-api/tasks/{id}` somente quando o agente realmente precisar de mensag
 ### Contratos JSON compactos da Agent API
 
 Esta seção fixa o shape real dos endpoints compactos usados por agentes. Os handlers atuais retornam JSON direto, sem envelope `data/meta/error` da API v1; erros usam `http.Error` ou `writeTaskError`, portanto o corpo de erro é texto simples no estado atual.
+
+#### `GET /agent-api/docs`
+
+`/agent-api/docs` é o ponto de descoberta dinâmico para agentes. A resposta lista os endpoints agent-facing atuais, incluindo aliases Paperclip-like `/agent-api/issues...`, `inbox-lite`, `heartbeat-context` e a allowlist `include=prompt,execution_state,skills,apis`. Ela também expõe `recommended_flow`, que orienta o ciclo compacto recomendado:
+
+1. consultar `GET /agent-api/agents/me/inbox-lite?agent_id=...`;
+2. reivindicar trabalho com `POST /agent-api/tasks/{id}/checkout`;
+3. carregar percepção com `GET /agent-api/tasks/{id}/heartbeat-context?include=execution_state,skills,apis`;
+4. registrar progresso via comentário;
+5. atualizar status quando concluir/bloquear;
+6. liberar checkout se parar sem concluir.
+
+Use essa rota quando um agente precisa descobrir a superfície HTTP disponível sem ler a documentação Markdown completa.
 
 #### `GET /agent-api/agents/me/inbox-lite`
 
