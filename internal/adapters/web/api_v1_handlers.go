@@ -80,6 +80,7 @@ func (s *Server) mountAPIV1(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/v1/webhooks", s.handleAPIV1Webhooks)
 	mux.HandleFunc("POST /api/v1/webhooks", s.handleAPIV1CreateWebhook)
 	mux.HandleFunc("GET /api/v1/webhooks/{id}/deliveries", s.handleAPIV1WebhookDeliveries)
+	mux.HandleFunc("GET /api/v1/usage", s.handleAPIV1Usage)
 	mux.HandleFunc("GET /api/v1/events", s.handleAPIV1Events)
 	mux.HandleFunc("GET /api/v1/activity", s.handleAPIV1Events)
 }

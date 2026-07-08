@@ -235,6 +235,34 @@ func (s *Server) handleAPIV1Run(w http.ResponseWriter, r *http.Request) {
 	s.apiData(w, run)
 }
 
+func (s *Server) handleAPIV1Usage(w http.ResponseWriter, r *http.Request) {
+	events, err := s.storage.Usage().List(r.Context())
+	if err != nil {
+		s.apiError(w, err)
+		return
+	}
+	out := make([]domain.UsageEvent, 0, len(events))
+	var input, output, cached int
+	var costMicros int64
+	for _, event := range events {
+		if r.URL.Query().Get("run_id") != "" && event.RunID != r.URL.Query().Get("run_id") {
+			continue
+		}
+		if r.URL.Query().Get("task_id") != "" && event.TaskID != r.URL.Query().Get("task_id") {
+			continue
+		}
+		if r.URL.Query().Get("agent_id") != "" && event.AgentID != r.URL.Query().Get("agent_id") {
+			continue
+		}
+		out = append(out, event)
+		input += event.InputTokens
+		output += event.OutputTokens
+		cached += event.CachedTokens
+		costMicros += event.CostMicros
+	}
+	s.apiList(w, out, map[string]any{"count": len(out), "input_tokens": input, "output_tokens": output, "cached_tokens": cached, "cost_micros": costMicros})
+}
+
 func (s *Server) handleAPIV1Skills(w http.ResponseWriter, r *http.Request) {
 	skills, err := s.skills.List(r.Context(), r.URL.Query().Get("project_id"))
 	if err != nil {
@@ -412,6 +440,7 @@ func apiV1Paths() map[string]any {
 		"GET /api/v1/tasks/{id}/children",
 		"GET /api/v1/runs",
 		"GET /api/v1/runs/{id}",
+		"GET /api/v1/usage",
 		"GET,POST /api/v1/skills",
 		"GET,PATCH,DELETE /api/v1/skills/{id}",
 		"GET,POST /api/v1/webhooks",

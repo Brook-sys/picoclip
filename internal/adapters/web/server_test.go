@@ -293,6 +293,50 @@ func TestAPIV1TaskFullIncludesWakeupsAndTaskWakeupsEndpoint(t *testing.T) {
 	}
 }
 
+func TestAPIV1UsageLedgerFiltersByRunTaskAndAgent(t *testing.T) {
+	storage := memory.NewStorage()
+	now := time.Now().UTC()
+	if err := storage.Usage().Create(t.Context(), domain.UsageEvent{ID: "usage_run_a", RunID: "run_a", TaskID: "task_a", AgentID: "agent_a", Provider: "noop", InputTokens: 12, OutputTokens: 8, CreatedAt: now}); err != nil {
+		t.Fatalf("create usage a: %v", err)
+	}
+	if err := storage.Usage().Create(t.Context(), domain.UsageEvent{ID: "usage_run_b", RunID: "run_b", TaskID: "task_b", AgentID: "agent_b", Provider: "noop", InputTokens: 5, OutputTokens: 3, CreatedAt: now.Add(time.Second)}); err != nil {
+		t.Fatalf("create usage b: %v", err)
+	}
+	ts := newTestServerWithStorage(t, storage, true)
+	defer ts.Close()
+
+	res, err := ts.Client().Get(ts.URL + "/api/v1/usage?run_id=run_a&task_id=task_a&agent_id=agent_a")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("usage status = %d, want 200", res.StatusCode)
+	}
+	var decoded struct {
+		Data []struct {
+			RunID        string `json:"run_id"`
+			TaskID       string `json:"task_id"`
+			AgentID      string `json:"agent_id"`
+			InputTokens  int    `json:"input_tokens"`
+			OutputTokens int    `json:"output_tokens"`
+		} `json:"data"`
+		Meta map[string]any `json:"meta"`
+	}
+	if err := json.NewDecoder(res.Body).Decode(&decoded); err != nil {
+		t.Fatal(err)
+	}
+	if len(decoded.Data) != 1 {
+		t.Fatalf("usage count = %d, want 1: %#v", len(decoded.Data), decoded.Data)
+	}
+	if decoded.Data[0].RunID != "run_a" || decoded.Data[0].TaskID != "task_a" || decoded.Data[0].AgentID != "agent_a" {
+		t.Fatalf("unexpected usage event: %#v", decoded.Data[0])
+	}
+	if decoded.Meta["input_tokens"] != float64(12) || decoded.Meta["output_tokens"] != float64(8) || decoded.Meta["cost_micros"] != float64(0) {
+		t.Fatalf("unexpected usage totals: %#v", decoded.Meta)
+	}
+}
+
 func TestAPIV1DiagnosticsRecoveryLivenessReturnsCompactSnapshot(t *testing.T) {
 	storage := memory.NewStorage()
 	now := time.Now().UTC()

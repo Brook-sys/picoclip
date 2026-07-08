@@ -97,6 +97,7 @@ Erros usam `error.code` estável, por exemplo `invalid_input`, `not_found`, `dri
 | `POST` | `/api/v1/tasks/{id}/delegate` | Cria subtarefa. |
 | `GET` | `/api/v1/runs` | Lista runs com filtros. |
 | `GET` | `/api/v1/runs/{id}` | Detalhe de run. |
+| `GET` | `/api/v1/usage` | Lista ledger compacto de UsageEvent com filtros por run, task ou agente. |
 | `GET` | `/api/v1/skills` | Lista skills. |
 | `POST` | `/api/v1/skills` | Cria skill. |
 | `GET` | `/api/v1/skills/{id}` | Detalhe de skill. |
@@ -140,6 +141,14 @@ Campos principais:
 | `agent_id` | Retorna apenas eventos do agente. |
 | `type` | Retorna apenas eventos do tipo informado. |
 | `limit` | Limita a busca inicial de eventos recentes. Padrão `100`, máximo `500`; valores inválidos retornam `400` com `error.code=invalid_input`. |
+
+`GET /api/v1/usage` retorna eventos persistidos do ledger de tokens em envelope v1. A rota aceita filtros combináveis `run_id`, `task_id` e `agent_id`; `meta` inclui `count`, `input_tokens`, `output_tokens`, `cached_tokens` e `cost_micros` somados para o resultado filtrado. Hoje `cost_micros` permanece `0` porque o PicoClip ainda não tem tabela de preços/modelos.
+
+Exemplo:
+
+```sh
+curl -s 'http://127.0.0.1:8088/api/v1/usage?agent_id=agt_123' | jq
+```
 
 ### Filtros comuns de tasks
 

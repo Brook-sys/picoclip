@@ -203,6 +203,12 @@ Important indexes cover common UI, Agent API and scheduler paths:
 - budgets by scope, workspace and agent;
 - outbox/webhook deliveries by due retry state.
 
+## Usage ledger
+
+`usage_events` is the durable token ledger. The runner writes one event per run when input/output token counters are present, using a deterministic `usage_<run_id>` ID so repeated finalization does not duplicate ledger rows. The event stores run/task/agent IDs, provider/model metadata, input/output/cached tokens, `cost_micros` and `created_at`.
+
+Current behavior is token-first: `cost_micros` is persisted and aggregated but remains `0` until PicoClip gains explicit pricing/model configuration. Consumers can query the compact v1 API (`GET /api/v1/usage`) by `run_id`, `task_id` or `agent_id`; repositories also expose list-by-task and sum-by-agent helpers for budgets and local diagnostics.
+
 ## Selective history cleanup
 
 PicoClip supports selective cleanup operations for local maintenance without factory reset:
