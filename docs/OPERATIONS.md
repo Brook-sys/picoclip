@@ -203,7 +203,7 @@ Passos:
    - `run.timeout`;
    - `run.recovered`;
    - `runtime.started`, `runtime.heartbeat`, `runtime.stalled`, `runtime.timeout` e `runtime.cancel_*` para entender liveness, stall e resultado de cancelamento do runtime.
-4. Confira se há retry wakeup pendente com `DueAt` futuro.
+4. Confira se há retry wakeup pendente com `DueAt` futuro. Depois de recovery de run órfão one-shot sem heartbeat de output, o esperado é ver `run.recovered` seguido de `retry.scheduled` com `reason=orphaned_run`; a task fica com `NeedsRun=false` até o wakeup vencer.
    - Para um snapshot compacto sem abrir detalhes completos, use:
      ```sh
      curl -s 'http://127.0.0.1:8088/api/v1/diagnostics/recovery-liveness?limit=10' | jq '.data.counts'

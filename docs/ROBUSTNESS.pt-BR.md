@@ -32,6 +32,8 @@ Fluxo simplificado atual:
 9. O runner finaliza run/task, bloqueia a task, agenda retry ou agenda o próximo ciclo contínuo.
 10. Passagens posteriores do reconciler reparam locks antigos, runs travados, runs órfãos e wakeups vencidos.
 
+Para runs órfãos one-shot sem heartbeat de output, o recovery fecha o run, destrava a task, persiste `run.recovered` e agenda um retry wakeup com backoff em vez de deixar a task imediatamente executável. Isso alinha recovery órfão com recovery de run travado e impede o dispatcher de burlar o backoff de retry.
+
 A regra de segurança principal é: uma task não deve ter mais de um checkout/run ativo ao mesmo tempo.
 
 ## Matriz de transições do ciclo de vida de tasks
@@ -143,9 +145,9 @@ classification
 reason
 ```
 
-Para recovery de timeout, `reason` é `run_timeout`, `retryable=true` e `classification=retryable`.
+Para recovery de timeout de run travado, `reason` é `run_timeout`, `retryable=true` e `classification=retryable`. Para recovery de run órfão one-shot causado por ausência de heartbeat de output, `reason` é `orphaned_run` com a mesma classificação retryable e payload de backoff.
 
-Antes de criar um retry de timeout, o reconciler verifica se já existe um retry wakeup pendente para o mesmo `previous_run_id`. Isso mantém recovery idempotente em sweeps repetidos e evita wakeups/eventos duplicados para o mesmo run com falha.
+Antes de criar um retry de recovery, o reconciler verifica se já existe um retry wakeup pendente para o mesmo `previous_run_id`. Isso mantém recovery idempotente em sweeps repetidos e evita wakeups/eventos duplicados para o mesmo run com falha.
 
 Essa metadata também é copiada para o evento de activity, para que humanos e futuras automações entendam por que o retry foi agendado. Eventos de timeout direto do runner também carregam `classification=retryable`, enquanto eventos de runtime indisponível carregam `classification=non_retryable` e bloqueiam a task em vez de criar loop de retry.
 

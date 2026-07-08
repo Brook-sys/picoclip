@@ -32,6 +32,8 @@ The current simplified execution flow is:
 9. The runner finalizes the run/task, blocks it, schedules retry, or schedules the next continuous cycle.
 10. Later reconciler passes repair stale locks, stalled runs, orphaned runs and due wakeups.
 
+For one-shot orphaned runs with no output heartbeat, recovery closes the run, unlocks the task, persists `run.recovered`, and schedules a retry wakeup with backoff instead of making the task immediately runnable. This keeps orphan recovery aligned with stalled-run recovery and prevents the dispatcher from bypassing retry backoff.
+
 The main safety rule is: a task should not have more than one active checkout/run at the same time.
 
 ## Task lifecycle transition matrix
@@ -143,9 +145,9 @@ classification
 reason
 ```
 
-For timeout recovery, `reason` is `run_timeout`, `retryable=true`, and `classification=retryable`.
+For stalled-run timeout recovery, `reason` is `run_timeout`, `retryable=true`, and `classification=retryable`. For one-shot orphaned-run recovery caused by a missing output heartbeat, `reason` is `orphaned_run` with the same retryable classification and backoff payload.
 
-Before creating a timeout retry, the reconciler checks whether a pending retry wakeup for the same `previous_run_id` already exists. This keeps recovery idempotent across repeated sweeps and prevents duplicate retry wakeups/events for the same failed run.
+Before creating a recovery retry, the reconciler checks whether a pending retry wakeup for the same `previous_run_id` already exists. This keeps recovery idempotent across repeated sweeps and prevents duplicate retry wakeups/events for the same failed run.
 
 This metadata is intentionally duplicated into the activity event so humans and future automation can understand why the retry was scheduled. Direct runner timeout events also carry `classification=retryable`, while runtime-unavailable events carry `classification=non_retryable` and block the task instead of creating a retry loop.
 

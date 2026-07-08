@@ -192,30 +192,8 @@ func (r *Reconciler) detectStalledRuns(ctx context.Context) int {
 			}
 		}
 
-		if requeued && !r.retryWakeupExists(ctx, run) {
-			delay := retryBackoff(run.Attempt)
-			payload := map[string]string{
-				"previous_run_id": run.ID,
-				"attempt":         strconv.Itoa(run.Attempt),
-				"backoff_seconds": strconv.Itoa(int(delay.Seconds())),
-				"retryable":       "true",
-				"classification":  "retryable",
-				"reason":          "run_timeout",
-			}
-			wakeup := domain.WakeupRequest{
-				ID:        r.idGen.NewID("wakeup"),
-				TaskID:    run.TaskID,
-				AgentID:   run.AgentID,
-				Reason:    domain.WakeupReasonRetry,
-				Status:    domain.WakeupStatusPending,
-				Priority:  5,
-				DueAt:     now.Add(delay),
-				Payload:   payload,
-				CreatedAt: now,
-				UpdatedAt: now,
-			}
-			_ = r.storage.Wakeups().Create(ctx, wakeup)
-			_ = r.storage.Events().Create(ctx, domain.Event{ID: r.idGen.NewID("evt"), Type: domain.EventRetryScheduled, TaskID: run.TaskID, AgentID: run.AgentID, RunID: run.ID, Message: "Retry scheduled after run timeout", Data: payload, CreatedAt: now})
+		if requeued {
+			r.scheduleRetryWakeup(ctx, run, now, "run_timeout", "Retry scheduled after run timeout")
 		}
 		count++
 	}
@@ -248,6 +226,35 @@ func (r *Reconciler) retryWakeupExists(ctx context.Context, run domain.Run) bool
 		}
 	}
 	return false
+}
+
+func (r *Reconciler) scheduleRetryWakeup(ctx context.Context, run domain.Run, now time.Time, reason, message string) {
+	if r.retryWakeupExists(ctx, run) {
+		return
+	}
+	delay := retryBackoff(run.Attempt)
+	payload := map[string]string{
+		"previous_run_id": run.ID,
+		"attempt":         strconv.Itoa(run.Attempt),
+		"backoff_seconds": strconv.Itoa(int(delay.Seconds())),
+		"retryable":       "true",
+		"classification":  "retryable",
+		"reason":          reason,
+	}
+	wakeup := domain.WakeupRequest{
+		ID:        r.idGen.NewID("wakeup"),
+		TaskID:    run.TaskID,
+		AgentID:   run.AgentID,
+		Reason:    domain.WakeupReasonRetry,
+		Status:    domain.WakeupStatusPending,
+		Priority:  5,
+		DueAt:     now.Add(delay),
+		Payload:   payload,
+		CreatedAt: now,
+		UpdatedAt: now,
+	}
+	_ = r.storage.Wakeups().Create(ctx, wakeup)
+	_ = r.storage.Events().Create(ctx, domain.Event{ID: r.idGen.NewID("evt"), Type: domain.EventRetryScheduled, TaskID: run.TaskID, AgentID: run.AgentID, RunID: run.ID, Message: message, Data: payload, CreatedAt: now})
 }
 
 func (r *Reconciler) recoverOrphanedRuns(ctx context.Context) int {
@@ -288,6 +295,7 @@ func (r *Reconciler) recoverOrphanedRuns(ctx context.Context) int {
 		}
 
 		task, err := r.storage.Tasks().Get(ctx, run.TaskID)
+		requeued := false
 		if err == nil && task.CheckoutRunID == run.ID {
 			task.CheckoutRunID = ""
 			task.CheckedOutByAgentID = ""
@@ -301,10 +309,14 @@ func (r *Reconciler) recoverOrphanedRuns(ctx context.Context) int {
 				task.UpdatedAt = now
 				_ = r.storage.Tasks().Update(ctx, task)
 			} else {
-				task.NeedsRun = true
+				task.NeedsRun = false
 				task.UpdatedAt = now
 				_ = r.storage.Tasks().Update(ctx, task)
+				requeued = true
 			}
+		}
+		if requeued {
+			r.scheduleRetryWakeup(ctx, run, now, "orphaned_run", "Retry scheduled after orphaned run recovery")
 		}
 		count++
 	}

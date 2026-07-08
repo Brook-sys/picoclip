@@ -376,3 +376,78 @@ func TestReconcilerRecoversRunningRunWithMissingTask(t *testing.T) {
 		t.Fatalf("expected canceler called for orphan run, got %#v", canceler.canceled)
 	}
 }
+
+func TestReconcilerOrphanedRunWaitsForRetryWakeupBeforeDispatch(t *testing.T) {
+	st := memory.NewStorage()
+	clock := fixedClock{t: time.Date(2026, 6, 25, 15, 20, 0, 0, time.UTC)}
+	idgen := &seqID{}
+	bus := noopBus{}
+	logger := testLogger{}
+
+	agent := domain.Agent{ID: "agt_orphan_retry", Name: "orphan retry", Type: "internal", Enabled: true, Capability: domain.CapabilityWorker, CreatedAt: clock.t, UpdatedAt: clock.t}
+	if err := st.Agents().Create(context.Background(), agent); err != nil {
+		t.Fatalf("create agent: %v", err)
+	}
+
+	svc := NewTaskService(st, clock, idgen, bus)
+	task, err := svc.Create(context.Background(), agent.ID, "orphan retry", "do")
+	if err != nil {
+		t.Fatalf("create task: %v", err)
+	}
+	locked, err := svc.Checkout(context.Background(), task.ID, agent.ID, "run_orphan_retry", nil)
+	if err != nil {
+		t.Fatalf("checkout: %v", err)
+	}
+	locked.Attempts = 2
+	locked.MaxAttempts = 5
+	if err := st.Tasks().Update(context.Background(), locked); err != nil {
+		t.Fatalf("update task attempts: %v", err)
+	}
+	run := domain.Run{ID: "run_orphan_retry", TaskID: task.ID, AgentID: agent.ID, Status: domain.RunStatusRunning, Attempt: 2, LastOutputAt: nil, StallTimeout: 3600, StartedAt: clock.t.Add(-3 * time.Minute)}
+	if err := st.Runs().Create(context.Background(), run); err != nil {
+		t.Fatalf("create run: %v", err)
+	}
+
+	reconciler := NewReconciler(st, clock, bus, idgen, logger)
+	reconciler.Reconcile(context.Background())
+
+	gotTask, err := st.Tasks().Get(context.Background(), task.ID)
+	if err != nil {
+		t.Fatalf("get task: %v", err)
+	}
+	if gotTask.CheckoutRunID != "" || gotTask.CheckedOutByAgentID != "" || gotTask.NeedsRun {
+		t.Fatalf("expected orphan recovery to unlock task and wait for retry wakeup, got run=%q agent=%q needs=%v", gotTask.CheckoutRunID, gotTask.CheckedOutByAgentID, gotTask.NeedsRun)
+	}
+	claimed, _, err := st.Tasks().ClaimNextRunnable(context.Background(), clock.t, 30*time.Minute)
+	if !errors.Is(err, domain.ErrNoPendingTasks) {
+		t.Fatalf("expected dispatcher not to bypass orphan retry backoff, claimed=%#v err=%v", claimed, err)
+	}
+
+	wakeups, _ := st.Wakeups().ListPending(context.Background(), clock.t.Add(time.Hour), 10)
+	if len(wakeups) != 1 || wakeups[0].Reason != domain.WakeupReasonRetry {
+		t.Fatalf("expected 1 retry wakeup, got %#v", wakeups)
+	}
+	if wakeups[0].Payload["previous_run_id"] != run.ID || wakeups[0].Payload["attempt"] != "2" || wakeups[0].Payload["backoff_seconds"] != "60" || wakeups[0].Payload["retryable"] != "true" || wakeups[0].Payload["classification"] != "retryable" || wakeups[0].Payload["reason"] != "orphaned_run" {
+		t.Fatalf("unexpected orphan retry payload: %#v", wakeups[0].Payload)
+	}
+
+	processed, err := NewWakeupService(st, fixedClock{t: wakeups[0].DueAt}, idgen).ProcessDue(context.Background(), 10)
+	if err != nil {
+		t.Fatalf("process wakeup: %v", err)
+	}
+	if processed != 1 {
+		t.Fatalf("processed wakeups=%d want 1", processed)
+	}
+	claimed, _, err = st.Tasks().ClaimNextRunnable(context.Background(), wakeups[0].DueAt, 30*time.Minute)
+	if err != nil {
+		t.Fatalf("expected task claimable after orphan retry wakeup due: %v", err)
+	}
+	if claimed.ID != task.ID {
+		t.Fatalf("claimed task=%s want %s", claimed.ID, task.ID)
+	}
+
+	events, _ := st.Events().ListByTask(context.Background(), task.ID)
+	if !hasEventType(events, domain.EventRunRecovered) || !hasEventType(events, domain.EventRetryScheduled) {
+		t.Fatalf("expected run recovered and retry scheduled events, got %#v", events)
+	}
+}
