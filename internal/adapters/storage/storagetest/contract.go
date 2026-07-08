@@ -15,6 +15,7 @@ func RunStorageContract(t *testing.T, factory StorageFactory) {
 	t.Helper()
 	t.Run("settings", func(t *testing.T) { testSettings(t, factory) })
 	t.Run("agents_tasks_runs_messages_events", func(t *testing.T) { testCoreFlow(t, factory) })
+	t.Run("selective_history_cleanup", func(t *testing.T) { testSelectiveHistoryCleanup(t, factory) })
 	t.Run("runtimes", func(t *testing.T) { testRuntimes(t, factory) })
 	t.Run("reset_and_restore", func(t *testing.T) { testResetAndRestore(t, factory) })
 }
@@ -185,6 +186,120 @@ func testCoreFlow(t *testing.T, factory StorageFactory) {
 	}
 	if _, err := storage.Webhooks().GetSubscription(ctx, subscription.ID); err != domain.ErrNotFound {
 		t.Fatalf("expected webhook subscription deleted, got %v", err)
+	}
+}
+
+func testSelectiveHistoryCleanup(t *testing.T, factory StorageFactory) {
+	ctx := context.Background()
+	storage := factory(t)
+	now := time.Now().UTC()
+	agent := domain.Agent{ID: "agt_cleanup", Name: "Cleanup Agent", Type: "noop", Enabled: true, CreatedAt: now, UpdatedAt: now}
+	keepTask := domain.Task{ID: "tsk_cleanup_keep", AgentID: agent.ID, Title: "Keep task", Prompt: "Keep me", Status: domain.TaskStatusTodo, NeedsRun: true, CreatedAt: now, UpdatedAt: now}
+	deleteTask := domain.Task{ID: "tsk_cleanup_delete", AgentID: agent.ID, Title: "Delete task", Prompt: "Remove me", Status: domain.TaskStatusTodo, CreatedAt: now, UpdatedAt: now}
+	if err := storage.Agents().Create(ctx, agent); err != nil {
+		t.Fatal(err)
+	}
+	if err := storage.Tasks().Create(ctx, keepTask); err != nil {
+		t.Fatal(err)
+	}
+	if err := storage.Tasks().Create(ctx, deleteTask); err != nil {
+		t.Fatal(err)
+	}
+	for _, run := range []domain.Run{
+		{ID: "run_cleanup_done", TaskID: keepTask.ID, AgentID: agent.ID, Status: domain.RunStatusSucceeded, StartedAt: now},
+		{ID: "run_cleanup_running", TaskID: keepTask.ID, AgentID: agent.ID, Status: domain.RunStatusRunning, StartedAt: now.Add(time.Second)},
+		{ID: "run_cleanup_delete", TaskID: deleteTask.ID, AgentID: agent.ID, Status: domain.RunStatusFailed, StartedAt: now},
+	} {
+		if err := storage.Runs().Create(ctx, run); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, event := range []domain.Event{
+		{ID: "evt_cleanup_keep", Type: domain.EventRunCompleted, TaskID: keepTask.ID, AgentID: agent.ID, RunID: "run_cleanup_done", Message: "done", CreatedAt: now},
+		{ID: "evt_cleanup_delete", Type: domain.EventRunFailed, TaskID: deleteTask.ID, AgentID: agent.ID, RunID: "run_cleanup_delete", Message: "failed", CreatedAt: now},
+	} {
+		if err := storage.Events().Create(ctx, event); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := storage.Messages().Create(ctx, domain.Message{ID: "msg_cleanup_delete", TaskID: deleteTask.ID, Role: domain.MessageRoleUser, Body: "remove", CreatedAt: now}); err != nil {
+		t.Fatal(err)
+	}
+	if err := storage.Usage().Create(ctx, domain.UsageEvent{ID: "usage_cleanup_keep", RunID: "run_cleanup_done", TaskID: keepTask.ID, AgentID: agent.ID, CreatedAt: now}); err != nil {
+		t.Fatal(err)
+	}
+	if err := storage.Usage().Create(ctx, domain.UsageEvent{ID: "usage_cleanup_delete", RunID: "run_cleanup_delete", TaskID: deleteTask.ID, AgentID: agent.ID, CreatedAt: now}); err != nil {
+		t.Fatal(err)
+	}
+
+	deletedRuns, err := storage.Runs().DeleteHistory(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if deletedRuns != 2 {
+		t.Fatalf("deleted run history = %d, want 2", deletedRuns)
+	}
+	if err := storage.Usage().DeleteHistory(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := storage.Tasks().Get(ctx, keepTask.ID); err != nil {
+		t.Fatalf("run cleanup deleted task: %v", err)
+	}
+	runs, err := storage.Runs().ListByTask(ctx, keepTask.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(runs) != 1 || runs[0].ID != "run_cleanup_running" {
+		t.Fatalf("run cleanup should keep only running run, got %#v", runs)
+	}
+	usage, err := storage.Usage().List(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(usage) != 0 {
+		t.Fatalf("expected empty usage history, got %#v", usage)
+	}
+
+	deletedEvents, err := storage.Events().DeleteAll(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if deletedEvents != 2 {
+		t.Fatalf("deleted activity events = %d, want 2", deletedEvents)
+	}
+	if _, err := storage.Tasks().Get(ctx, keepTask.ID); err != nil {
+		t.Fatalf("activity cleanup deleted task: %v", err)
+	}
+	recent, err := storage.Events().ListRecent(ctx, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(recent) != 0 {
+		t.Fatalf("expected empty activity history, got %#v", recent)
+	}
+
+	if err := storage.RunInTx(ctx, func(ctx context.Context) error {
+		for _, err := range []error{
+			storage.Messages().DeleteByTask(ctx, deleteTask.ID),
+			storage.Events().DeleteByTask(ctx, deleteTask.ID),
+			storage.Runs().DeleteByTask(ctx, deleteTask.ID),
+			storage.Usage().DeleteByTask(ctx, deleteTask.ID),
+			storage.Wakeups().DeleteByTask(ctx, deleteTask.ID),
+			storage.Tasks().Delete(ctx, deleteTask.ID),
+		} {
+			if err != nil {
+				return err
+			}
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := storage.Tasks().Get(ctx, deleteTask.ID); err != domain.ErrNotFound {
+		t.Fatalf("expected deleted task not found, got %v", err)
+	}
+	if _, err := storage.Tasks().Get(ctx, keepTask.ID); err != nil {
+		t.Fatalf("task delete removed unrelated task: %v", err)
 	}
 }
 

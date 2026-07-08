@@ -17,7 +17,8 @@ templ TaskTable(tasks []taskResponse, agents []domain.Agent, projects []domain.W
 	} else {
 		<div class="task-list">
 			for _, task := range tasks {
-				<a class={ "task-list-row", taskToneClass(task.Status) } href={ templ.URL("/tasks/" + task.ID) }>
+				<div class={ "task-list-row", taskToneClass(task.Status) }>
+					<a class="task-list-link" href={ templ.URL("/tasks/" + task.ID) } aria-label={ "Open " + taskDisplayTitle(task) }></a>
 					<span class="task-list-icon">@Icon(taskStatusIcon(task.Status), 15)</span>
 					<div class="task-list-main">
 						<div class="task-list-title-row">
@@ -38,9 +39,12 @@ templ TaskTable(tasks []taskResponse, agents []domain.Agent, projects []domain.W
 					</div>
 					<div class="task-list-action">
 						<span class={ "issue-list-status", statusClass(task.Status) }>{ string(task.Status) }</span>
-						<span class="pc-btn pc-btn-secondary">Open task</span>
+						<a class="pc-btn pc-btn-secondary task-open-btn" href={ templ.URL("/tasks/" + task.ID) }>Open task</a>
+						<form hx-post={ templ.URL("/tasks/" + task.ID + "/delete") } hx-target="body" hx-swap="outerHTML" data-success="Task deleted." onsubmit="return confirm('Delete this task and its messages, runs and activity?');">
+							<button class="pc-btn pc-btn-danger pc-btn-compact" type="submit">Delete task</button>
+						</form>
 					</div>
-				</a>
+				</div>
 			}
 		</div>
 	}

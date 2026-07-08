@@ -26,3 +26,14 @@ func (r messageRepository) ListByTask(ctx context.Context, taskID string) ([]dom
 	sort.Slice(messages, func(i, j int) bool { return messages[i].CreatedAt.Before(messages[j].CreatedAt) })
 	return messages, nil
 }
+
+func (r messageRepository) DeleteByTask(ctx context.Context, taskID string) error {
+	r.storage.mu.Lock()
+	defer r.storage.mu.Unlock()
+	for id, message := range r.storage.messages {
+		if message.TaskID == taskID {
+			delete(r.storage.messages, id)
+		}
+	}
+	return nil
+}

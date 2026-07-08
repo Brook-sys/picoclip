@@ -138,3 +138,9 @@ func scanWakeup(row scanner) (domain.WakeupRequest, error) {
 	w.Status = domain.WakeupStatus(statusStr)
 	return w, nil
 }
+
+func (r *WakeupRepository) DeleteByTask(ctx context.Context, taskID string) error {
+	q := getQueryer(ctx, r.db)
+	_, err := q.ExecContext(ctx, `DELETE FROM wakeups WHERE task_id = ?`, taskID)
+	return err
+}

@@ -2225,3 +2225,30 @@ pc-tag-multiselect { position: relative; display: flex; flex-wrap: wrap; align-i
   }
 }
 
+
+
+.history-cleanup-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 16px;
+  margin: 0 0 16px;
+  border: 1px solid color-mix(in srgb, var(--bad) 18%, var(--border));
+  border-radius: var(--radius-lg);
+  background: color-mix(in srgb, var(--bad-bg) 42%, var(--surface));
+}
+.history-cleanup-bar div { display: grid; gap: 3px; }
+.history-cleanup-bar strong { font-size: 14px; }
+.history-cleanup-bar small { color: var(--muted); }
+.pc-btn-compact { min-height: 32px; padding: 6px 10px; font-size: 12px; }
+.task-list-row { position: relative; }
+.task-list-link { position: absolute; inset: 0; z-index: 1; border-radius: inherit; }
+.task-list-icon, .task-list-main { pointer-events: none; position: relative; z-index: 2; }
+.task-list-action { position: relative; z-index: 3; }
+.task-list-action form { margin: 0; }
+.task-open-btn, .task-list-action form { position: relative; z-index: 4; }
+@media (max-width: 720px) {
+  .history-cleanup-bar { align-items: stretch; flex-direction: column; }
+  .history-cleanup-bar .pc-btn { width: 100%; }
+}

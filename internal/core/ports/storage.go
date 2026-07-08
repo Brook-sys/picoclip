@@ -85,6 +85,7 @@ type TaskRepository interface {
 	Get(ctx context.Context, id string) (domain.Task, error)
 	List(ctx context.Context, filter TaskFilter) ([]domain.Task, error)
 	Update(ctx context.Context, task domain.Task) error
+	Delete(ctx context.Context, id string) error
 	ClaimNextPending(ctx context.Context) (domain.Task, error)
 	ClaimNextRunnable(ctx context.Context, now time.Time, lockTTL time.Duration) (domain.Task, domain.Run, error)
 }
@@ -95,6 +96,8 @@ type RunRepository interface {
 	ListByTask(ctx context.Context, taskID string) ([]domain.Run, error)
 	ListRunning(ctx context.Context) ([]domain.Run, error)
 	Update(ctx context.Context, run domain.Run) error
+	DeleteByTask(ctx context.Context, taskID string) error
+	DeleteHistory(ctx context.Context) (int, error)
 }
 
 type WakeupRepository interface {
@@ -103,6 +106,7 @@ type WakeupRepository interface {
 	ListPending(ctx context.Context, now time.Time, limit int) ([]domain.WakeupRequest, error)
 	ListByTask(ctx context.Context, taskID string) ([]domain.WakeupRequest, error)
 	Update(ctx context.Context, wakeup domain.WakeupRequest) error
+	DeleteByTask(ctx context.Context, taskID string) error
 }
 
 type EventRepository interface {
@@ -113,11 +117,14 @@ type EventRepository interface {
 	MarkOutboxFailed(ctx context.Context, id string, message string, nextAttemptAt time.Time) error
 	ListByTask(ctx context.Context, taskID string) ([]domain.Event, error)
 	ListRecent(ctx context.Context, limit int) ([]domain.Event, error)
+	DeleteByTask(ctx context.Context, taskID string) error
+	DeleteAll(ctx context.Context) (int, error)
 }
 
 type MessageRepository interface {
 	Create(ctx context.Context, message domain.Message) error
 	ListByTask(ctx context.Context, taskID string) ([]domain.Message, error)
+	DeleteByTask(ctx context.Context, taskID string) error
 }
 
 type UsageRepository interface {
@@ -125,6 +132,8 @@ type UsageRepository interface {
 	List(ctx context.Context) ([]domain.UsageEvent, error)
 	ListByTask(ctx context.Context, taskID string) ([]domain.UsageEvent, error)
 	SumByAgent(ctx context.Context, agentID string) (input, output, cached int, costMicros int64, err error)
+	DeleteByTask(ctx context.Context, taskID string) error
+	DeleteHistory(ctx context.Context) error
 }
 
 type BudgetRepository interface {

@@ -10,6 +10,15 @@ templ ActivityPage(events []domain.Event, tasks map[string]taskResponse, agents 
 			@OverviewCard("Attention", fmt.Sprintf("%d", activityAttentionCount(events)), "Failed, canceled or blocked", "", "attention")
 			@OverviewCard("Completed", fmt.Sprintf("%d", activityCompletedCount(events)), "Finished successfully", "", "success")
 		}
+		<div class="history-cleanup-bar">
+			<div>
+				<strong>Activity history</strong>
+				<small>Clear timeline events without deleting tasks, agents, projects or settings.</small>
+			</div>
+			<form hx-post="/activity/history/delete" hx-target="body" hx-swap="outerHTML" data-success="Activity history cleared." onsubmit="return confirm('Clear activity history? Tasks and configuration will be kept.');">
+				<button class="pc-btn pc-btn-danger" type="submit">Clear activity history</button>
+			</form>
+		</div>
 		<section class="panel activity-panel">
 			<div class="activity-panel-header">
 				<div>

@@ -69,3 +69,14 @@ func (r wakeupRepository) Update(ctx context.Context, wakeup domain.WakeupReques
 	r.storage.wakeups[wakeup.ID] = wakeup
 	return nil
 }
+
+func (r wakeupRepository) DeleteByTask(ctx context.Context, taskID string) error {
+	r.storage.mu.Lock()
+	defer r.storage.mu.Unlock()
+	for id, wakeup := range r.storage.wakeups {
+		if wakeup.TaskID == taskID {
+			delete(r.storage.wakeups, id)
+		}
+	}
+	return nil
+}

@@ -203,6 +203,16 @@ Important indexes cover common UI, Agent API and scheduler paths:
 - budgets by scope, workspace and agent;
 - outbox/webhook deliveries by due retry state.
 
+## Selective history cleanup
+
+PicoClip supports selective cleanup operations for local maintenance without factory reset:
+
+- run history cleanup deletes non-running rows from `runs` and clears `usage_events`; it preserves tasks, agents, projects, settings and active `running` runs;
+- activity cleanup deletes rows from `events`; it preserves all core entities and configuration;
+- task deletion removes the selected task tree plus related messages, events, runs, usage entries and wakeups in a storage transaction, leaving unrelated tasks untouched.
+
+These operations are implemented through repository methods on `ports.Storage` so SQLite and memory storage share the same contract tests.
+
 ## Repository coverage
 
 SQLite implements the full `ports.Storage` surface through repository files in `internal/adapters/storage/sqlite/`.

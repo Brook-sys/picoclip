@@ -55,3 +55,21 @@ func (r usageRepository) SumByAgent(ctx context.Context, agentID string) (input,
 	}
 	return
 }
+
+func (r usageRepository) DeleteByTask(ctx context.Context, taskID string) error {
+	r.storage.mu.Lock()
+	defer r.storage.mu.Unlock()
+	for id, event := range r.storage.usage {
+		if event.TaskID == taskID {
+			delete(r.storage.usage, id)
+		}
+	}
+	return nil
+}
+
+func (r usageRepository) DeleteHistory(ctx context.Context) error {
+	r.storage.mu.Lock()
+	defer r.storage.mu.Unlock()
+	r.storage.usage = make(map[string]domain.UsageEvent)
+	return nil
+}

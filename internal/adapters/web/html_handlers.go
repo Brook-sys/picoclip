@@ -1,6 +1,7 @@
 package web
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"sort"
@@ -731,6 +732,68 @@ func (s *Server) handleWebTaskDetail(w http.ResponseWriter, r *http.Request) {
 	if err := TaskDetailPage(s.taskResponse(r, task), task, agents, projects, messages, runs, events, s.taskResponses(r, children)).Render(r.Context(), w); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
+}
+
+func (s *Server) handleWebDeleteRunsHistory(w http.ResponseWriter, r *http.Request) {
+	if _, err := s.storage.Runs().DeleteHistory(r.Context()); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if err := s.storage.Usage().DeleteHistory(r.Context()); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("HX-Trigger", `{"picoclip-toast":{"message":"Run history cleared.","type":"success"}}`)
+	s.handleWebRuns(w, r)
+}
+
+func (s *Server) handleWebDeleteActivityHistory(w http.ResponseWriter, r *http.Request) {
+	if _, err := s.storage.Events().DeleteAll(r.Context()); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("HX-Trigger", `{"picoclip-toast":{"message":"Activity history cleared.","type":"success"}}`)
+	s.handleWebActivity(w, r)
+}
+
+func (s *Server) handleWebDeleteTask(w http.ResponseWriter, r *http.Request) {
+	if err := s.deleteTaskTree(r.Context(), r.PathValue("id")); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	w.Header().Set("HX-Trigger", `{"picoclip-toast":{"message":"Task deleted.","type":"success"}}`)
+	s.handleWebTasks(w, r)
+}
+
+func (s *Server) deleteTaskTree(ctx context.Context, taskID string) error {
+	return s.storage.RunInTx(ctx, func(ctx context.Context) error {
+		return s.deleteTaskTreeInTx(ctx, taskID)
+	})
+}
+
+func (s *Server) deleteTaskTreeInTx(ctx context.Context, taskID string) error {
+	children, err := s.storage.Tasks().List(ctx, ports.TaskFilter{ParentID: taskID})
+	if err != nil {
+		return err
+	}
+	for _, child := range children {
+		if err := s.deleteTaskTreeInTx(ctx, child.ID); err != nil {
+			return err
+		}
+	}
+	for _, err := range []error{
+		s.storage.Messages().DeleteByTask(ctx, taskID),
+		s.storage.Events().DeleteByTask(ctx, taskID),
+		s.storage.Runs().DeleteByTask(ctx, taskID),
+		s.storage.Usage().DeleteByTask(ctx, taskID),
+		s.storage.Wakeups().DeleteByTask(ctx, taskID),
+		s.storage.Tasks().Delete(ctx, taskID),
+	} {
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (s *Server) handleWebSkills(w http.ResponseWriter, r *http.Request) {

@@ -150,3 +150,13 @@ func taskRunnable(task domain.Task) bool {
 	}
 	return true
 }
+
+func (r taskRepository) Delete(ctx context.Context, id string) error {
+	r.storage.mu.Lock()
+	defer r.storage.mu.Unlock()
+	if _, ok := r.storage.tasks[id]; !ok {
+		return domain.ErrNotFound
+	}
+	delete(r.storage.tasks, id)
+	return nil
+}

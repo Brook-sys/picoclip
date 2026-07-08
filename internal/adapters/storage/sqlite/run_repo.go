@@ -139,3 +139,22 @@ func scanRun(row scanner) (domain.Run, error) {
 	r.Status = domain.RunStatus(statusStr)
 	return r, nil
 }
+
+func (r *RunRepository) DeleteByTask(ctx context.Context, taskID string) error {
+	q := getQueryer(ctx, r.db)
+	_, err := q.ExecContext(ctx, `DELETE FROM runs WHERE task_id = ?`, taskID)
+	return err
+}
+
+func (r *RunRepository) DeleteHistory(ctx context.Context) (int, error) {
+	q := getQueryer(ctx, r.db)
+	res, err := q.ExecContext(ctx, `DELETE FROM runs WHERE status <> 'running'`)
+	if err != nil {
+		return 0, err
+	}
+	deleted, err := res.RowsAffected()
+	if err != nil {
+		return 0, err
+	}
+	return int(deleted), nil
+}

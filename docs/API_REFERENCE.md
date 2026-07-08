@@ -205,9 +205,11 @@ Estas rotas são a interface humana principal. Elas podem retornar HTML completo
 | `GET` | `/tasks/{id}` | Detalhe de task. |
 | `GET` | `/runs` | Lista runs. |
 | `GET` | `/runs/{id}` | Detalhe de run. |
+| `POST` | `/runs/history/delete` | Limpa histórico de runs finalizadas/falhas/canceladas e uso, preservando tasks e runs em execução. |
 | `GET` | `/skills` | Lista skills. |
 | `GET` | `/skills/{id}` | Detalhe de skill. |
 | `GET` | `/activity` | Timeline de atividade. |
+| `POST` | `/activity/history/delete` | Limpa eventos da timeline de atividade sem apagar tasks, agentes, projetos ou settings. |
 | `GET` | `/settings` | Configurações. |
 | `GET` | `/settings/adapters` | Aba de adapters/runtimes. |
 | `GET` | `/settings/webhooks/{id}` | Detalhe de webhook. |
@@ -226,6 +228,7 @@ Estas rotas são a interface humana principal. Elas podem retornar HTML completo
 | `POST` | `/agents/{id}/skills` | Atualiza skills atribuídas. |
 | `POST` | `/tasks` | Cria task. |
 | `POST` | `/tasks/{id}/cancel` | Cancela task. |
+| `POST` | `/tasks/{id}/delete` | Remove task e seu histórico associado (mensagens, eventos, runs, uso e wakeups), incluindo subtasks. |
 | `POST` | `/tasks/{id}/status` | Atualiza status. |
 | `POST` | `/tasks/{id}/wake` | Acorda/reagenda task. |
 | `POST` | `/tasks/{id}/pause` | Pausa task contínua. |
@@ -312,3 +315,8 @@ Ao adicionar, remover ou alterar qualquer rota:
 3. se afetar fluxo de agentes, atualize também `AGENTS.md` e/ou skills built-in;
 4. se afetar UI/HTMX, atualize `docs/DESIGN.md` quando houver padrão novo;
 5. rode validação proporcional (`go test ./...` ou `make check`).
+
+
+### Histórico e exclusão seletiva
+
+As ações destrutivas server-rendered/HTMX usam confirmação na UI. `POST /runs/history/delete` remove apenas runs que não estão `running` e o ledger de uso; tasks e configurações permanecem. `POST /activity/history/delete` remove eventos da timeline. `POST /tasks/{id}/delete` remove a task selecionada, subtasks e histórico associado, sem tocar em tasks não relacionadas.

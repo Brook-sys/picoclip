@@ -63,3 +63,9 @@ func scanMessage(row scanner) (domain.Message, error) {
 	m.Role = domain.MessageRole(roleStr)
 	return m, nil
 }
+
+func (r *MessageRepository) DeleteByTask(ctx context.Context, taskID string) error {
+	q := getQueryer(ctx, r.db)
+	_, err := q.ExecContext(ctx, `DELETE FROM messages WHERE task_id = ?`, taskID)
+	return err
+}

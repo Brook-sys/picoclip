@@ -59,3 +59,28 @@ func (r runRepository) Update(ctx context.Context, run domain.Run) error {
 	r.storage.runs[run.ID] = run
 	return nil
 }
+
+func (r runRepository) DeleteByTask(ctx context.Context, taskID string) error {
+	r.storage.mu.Lock()
+	defer r.storage.mu.Unlock()
+	for id, run := range r.storage.runs {
+		if run.TaskID == taskID {
+			delete(r.storage.runs, id)
+		}
+	}
+	return nil
+}
+
+func (r runRepository) DeleteHistory(ctx context.Context) (int, error) {
+	r.storage.mu.Lock()
+	defer r.storage.mu.Unlock()
+	deleted := 0
+	for id, run := range r.storage.runs {
+		if run.Status == domain.RunStatusRunning {
+			continue
+		}
+		delete(r.storage.runs, id)
+		deleted++
+	}
+	return deleted, nil
+}

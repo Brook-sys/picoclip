@@ -519,6 +519,10 @@ Antes de finalizar UI:
 - [ ] Dark theme continua legível?
 - [ ] Console do browser fica limpo?
 
+## History cleanup actions
+
+Runs and Activity pages expose compact danger bars for clearing history. These bars must explain exactly what is preserved, use `pc-btn-danger`, and require browser confirmation before posting. Task rows expose a direct `Delete task` action beside `Open task`; the row remains keyboard/link accessible while destructive controls stay separate from the row link.
+
 ## E2E e validação de UI
 
 Validação mínima ao alterar UI/Templ/CSS:

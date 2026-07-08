@@ -3,6 +3,7 @@ package web
 import (
 	"bytes"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -67,6 +68,27 @@ func postJSON(t *testing.T, client *http.Client, url string, payload any) map[st
 		t.Fatalf("decode %s: %v", url, err)
 	}
 	return decoded
+}
+
+func postForm(t *testing.T, client *http.Client, url string, body io.Reader) *http.Response {
+	t.Helper()
+	if body == nil {
+		body = strings.NewReader("")
+	}
+	res, err := client.Post(url, "application/x-www-form-urlencoded", body)
+	if err != nil {
+		t.Fatalf("post form %s: %v", url, err)
+	}
+	return res
+}
+
+func readBodyString(t *testing.T, body io.Reader) string {
+	t.Helper()
+	b, err := io.ReadAll(body)
+	if err != nil {
+		t.Fatalf("read body: %v", err)
+	}
+	return string(b)
 }
 
 func TestAgentTaskLifecycleAPI(t *testing.T) {
@@ -780,5 +802,79 @@ func TestTaskDetailUsesSSEDrivenPartialRefresh(t *testing.T) {
 	}
 	if got := sseRes.Header.Get("Content-Type"); !strings.Contains(got, "text/event-stream") {
 		t.Fatalf("task SSE content-type = %q, want text/event-stream", got)
+	}
+}
+
+func TestWebCleanupHistoryKeepsTasksAndTaskDeleteIsAccessible(t *testing.T) {
+	storage := memory.NewStorage()
+	ts := newTestServerWithStorage(t, storage, true)
+	defer ts.Close()
+
+	client := ts.Client()
+	agent := postJSON(t, client, ts.URL+"/api/agents", map[string]any{"name": "Cleanup Agent", "type": "noop"})
+	keep := postJSON(t, client, ts.URL+"/agent-api/tasks", map[string]any{"assignee_agent_id": agent["id"], "prompt": "keep task"})
+	remove := postJSON(t, client, ts.URL+"/agent-api/tasks", map[string]any{"assignee_agent_id": agent["id"], "prompt": "remove task"})
+	now := time.Now().UTC()
+	for _, run := range []domain.Run{
+		{ID: "run_web_done", TaskID: keep["id"].(string), AgentID: agent["id"].(string), Status: domain.RunStatusSucceeded, StartedAt: now},
+		{ID: "run_web_running", TaskID: keep["id"].(string), AgentID: agent["id"].(string), Status: domain.RunStatusRunning, StartedAt: now.Add(time.Second)},
+	} {
+		if err := storage.Runs().Create(t.Context(), run); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := storage.Events().Create(t.Context(), domain.Event{ID: "evt_web", Type: domain.EventRunCompleted, TaskID: keep["id"].(string), AgentID: agent["id"].(string), RunID: "run_web_done", Message: "done", CreatedAt: now}); err != nil {
+		t.Fatal(err)
+	}
+
+	tasksPage, err := client.Get(ts.URL + "/tasks")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tasksPage.Body.Close()
+	body := readBodyString(t, tasksPage.Body)
+	if !strings.Contains(body, `hx-post="/tasks/`+remove["id"].(string)+`/delete"`) || !strings.Contains(body, "Delete task") {
+		t.Fatalf("tasks menu does not expose quick delete action: %s", body)
+	}
+
+	res := postForm(t, client, ts.URL+"/runs/history/delete", nil)
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("delete runs status = %d", res.StatusCode)
+	}
+	if _, err := storage.Tasks().Get(t.Context(), keep["id"].(string)); err != nil {
+		t.Fatalf("run cleanup removed task: %v", err)
+	}
+	runs, err := storage.Runs().ListByTask(t.Context(), keep["id"].(string))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(runs) != 1 || runs[0].ID != "run_web_running" {
+		t.Fatalf("run cleanup should keep only running run, got %#v", runs)
+	}
+
+	res = postForm(t, client, ts.URL+"/activity/history/delete", nil)
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("delete activity status = %d", res.StatusCode)
+	}
+	if _, err := storage.Tasks().Get(t.Context(), keep["id"].(string)); err != nil {
+		t.Fatalf("activity cleanup removed task: %v", err)
+	}
+	events, err := storage.Events().ListRecent(t.Context(), 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(events) != 0 {
+		t.Fatalf("expected empty activity after cleanup, got %#v", events)
+	}
+
+	res = postForm(t, client, ts.URL+"/tasks/"+remove["id"].(string)+"/delete", nil)
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("delete task status = %d", res.StatusCode)
+	}
+	if _, err := storage.Tasks().Get(t.Context(), remove["id"].(string)); err != domain.ErrNotFound {
+		t.Fatalf("expected deleted task not found, got %v", err)
+	}
+	if _, err := storage.Tasks().Get(t.Context(), keep["id"].(string)); err != nil {
+		t.Fatalf("delete task removed unrelated task: %v", err)
 	}
 }

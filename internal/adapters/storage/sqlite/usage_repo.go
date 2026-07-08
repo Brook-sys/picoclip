@@ -80,3 +80,15 @@ func (r *UsageRepository) SumByAgent(ctx context.Context, agentID string) (input
 	}
 	return
 }
+
+func (r *UsageRepository) DeleteByTask(ctx context.Context, taskID string) error {
+	q := getQueryer(ctx, r.db)
+	_, err := q.ExecContext(ctx, `DELETE FROM usage_events WHERE task_id = ?`, taskID)
+	return err
+}
+
+func (r *UsageRepository) DeleteHistory(ctx context.Context) error {
+	q := getQueryer(ctx, r.db)
+	_, err := q.ExecContext(ctx, `DELETE FROM usage_events`)
+	return err
+}

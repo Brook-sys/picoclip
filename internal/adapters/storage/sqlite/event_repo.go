@@ -155,3 +155,22 @@ func scanEvent(row scanner) (domain.Event, error) {
 	}
 	return e, nil
 }
+
+func (r *EventRepository) DeleteByTask(ctx context.Context, taskID string) error {
+	q := getQueryer(ctx, r.db)
+	_, err := q.ExecContext(ctx, `DELETE FROM events WHERE task_id = ?`, taskID)
+	return err
+}
+
+func (r *EventRepository) DeleteAll(ctx context.Context) (int, error) {
+	q := getQueryer(ctx, r.db)
+	res, err := q.ExecContext(ctx, `DELETE FROM events`)
+	if err != nil {
+		return 0, err
+	}
+	deleted, err := res.RowsAffected()
+	if err != nil {
+		return 0, err
+	}
+	return int(deleted), nil
+}

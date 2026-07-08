@@ -57,3 +57,22 @@ func (r eventRepository) ListRecent(ctx context.Context, limit int) ([]domain.Ev
 	}
 	return events, nil
 }
+
+func (r eventRepository) DeleteByTask(ctx context.Context, taskID string) error {
+	r.storage.mu.Lock()
+	defer r.storage.mu.Unlock()
+	for id, event := range r.storage.events {
+		if event.TaskID == taskID {
+			delete(r.storage.events, id)
+		}
+	}
+	return nil
+}
+
+func (r eventRepository) DeleteAll(ctx context.Context) (int, error) {
+	r.storage.mu.Lock()
+	defer r.storage.mu.Unlock()
+	deleted := len(r.storage.events)
+	r.storage.events = make(map[string]domain.Event)
+	return deleted, nil
+}

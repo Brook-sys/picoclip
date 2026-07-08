@@ -24,6 +24,15 @@ templ RunsPage(runs []domain.Run, allRuns []domain.Run, tasks map[string]taskRes
 				@TabLink("Canceled", "/runs?status=canceled", activeStatus == "canceled")
 			}
 		</div>
+		<div class="history-cleanup-bar">
+			<div>
+				<strong>Run history</strong>
+				<small>Clear completed, failed and canceled runs while keeping tasks and active runs.</small>
+			</div>
+			<form hx-post="/runs/history/delete" hx-target="body" hx-swap="outerHTML" data-success="Run history cleared." onsubmit="return confirm('Clear completed run history? Tasks and running runs will be kept.');">
+				<button class="pc-btn pc-btn-danger" type="submit">Clear run history</button>
+			</form>
+		</div>
 		<section class="panel runs-panel">
 			<div class="runs-panel-header">
 				<div>

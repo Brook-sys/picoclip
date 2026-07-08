@@ -317,3 +317,19 @@ func scanTask(row scanner) (domain.Task, error) {
 	t.Mode = domain.TaskMode(modeStr)
 	return t, nil
 }
+
+func (r *TaskRepository) Delete(ctx context.Context, id string) error {
+	q := getQueryer(ctx, r.db)
+	res, err := q.ExecContext(ctx, `DELETE FROM tasks WHERE id = ?`, id)
+	if err != nil {
+		return err
+	}
+	rowsAffected, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rowsAffected == 0 {
+		return domain.ErrNotFound
+	}
+	return nil
+}

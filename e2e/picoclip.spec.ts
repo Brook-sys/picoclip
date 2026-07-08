@@ -139,6 +139,32 @@ test.describe('PicoClip smoke UI', () => {
     }
   });
 
+
+  test('history cleanup keeps tasks and exposes quick task delete', async ({ page, request }) => {
+    const agentResponse = await request.post('/api/agents', {
+      data: { name: `Cleanup Agent ${Date.now()}`, type: 'noop' },
+    });
+    expect(agentResponse.ok()).toBeTruthy();
+    const agent = await agentResponse.json();
+
+    const taskResponse = await request.post('/agent-api/tasks', {
+      data: { assignee_agent_id: agent.id, prompt: `cleanup task ${Date.now()}` },
+    });
+    expect(taskResponse.ok()).toBeTruthy();
+    const task = await taskResponse.json();
+
+    await page.goto('/tasks');
+    const row = page.locator('.task-list-row').filter({ hasText: task.prompt });
+    await expect(row.getByRole('button', { name: 'Delete task' })).toBeVisible();
+
+    await expect(row.getByRole('link', { name: 'Open task' })).toBeVisible();
+
+    await page.goto('/runs');
+    await expect(page.getByRole('button', { name: 'Clear run history' })).toBeVisible();
+    await page.goto('/activity');
+    await expect(page.getByRole('button', { name: 'Clear activity history' })).toBeVisible();
+  });
+
   test('diagnostics API exposes health checks', async ({ request }) => {
     const response = await request.get('/api/diagnostics');
     expect(response.ok()).toBeTruthy();
