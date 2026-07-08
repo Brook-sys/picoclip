@@ -60,13 +60,83 @@ templ DashboardPage(view DashboardView, agents []domain.Agent, projects []domain
 					<div class="panel dashboard-panel">
 						<div class="dashboard-panel-header">
 							<div>
-								<span class="eyebrow text-bad">Action Required</span>
+								<span class="eyebrow text-bad">Attention inbox</span>
 								<h2 class="text-bad">Needs Attention</h2>
-								<p>Tasks that are blocked or waiting for review.</p>
+								<p>Tasks and wakeups that require human intervention.</p>
 							</div>
-							@ButtonLink("View all", "/tasks?status=blocked", "secondary", "check-square")
+							@ButtonLink("View all blocked", "/tasks?status=blocked", "secondary", "check-square")
 						</div>
-						@TaskTable(view.NeedsAttention, agents, projects)
+						<div class="task-list">
+							for _, item := range view.NeedsAttention {
+								if item.Type == "task" {
+									<div class="task-list-row task-tone-attention">
+										<a class="task-list-link" href={ templ.URL("/tasks/" + item.Task.ID) } aria-label={ "Open " + taskDisplayTitle(item.Task) }></a>
+										<span class="task-list-icon">@Icon(taskStatusIcon(item.Task.Status), 15)</span>
+										<div class="task-list-main">
+											<div class="task-list-title-row">
+												<span class="task-type">Needs attention</span>
+												<strong>{ taskDisplayTitle(item.Task) }</strong>
+											</div>
+											if taskExcerpt(item.Task.Prompt) != "" {
+												<p class="task-list-excerpt">{ taskExcerpt(item.Task.Prompt) }</p>
+											}
+											<div class="task-list-meta-grid">
+												<div><span>Agent</span><strong>{ agentName(agents, item.Task.AgentID) }</strong></div>
+												<div><span>Project</span><strong>{ projectName(projects, item.Task.ProjectID) }</strong></div>
+												<div><span>Updated</span><strong>{ item.Task.UpdatedAt }</strong></div>
+											</div>
+										</div>
+										<div class="task-list-action">
+											<span class={ "issue-list-status", statusClass(item.Task.Status) }>{ string(item.Task.Status) }</span>
+											<a class="pc-btn pc-btn-secondary task-open-btn" href={ templ.URL("/tasks/" + item.Task.ID) }>Open task</a>
+											<form hx-post={ templ.URL("/tasks/" + item.Task.ID + "/delete") } hx-target="body" hx-swap="outerHTML" data-success="Task deleted." onsubmit="return confirm('Delete this task and its messages, runs and activity?');">
+												<button class="pc-btn pc-btn-danger pc-btn-compact" type="submit">Delete task</button>
+											</form>
+										</div>
+									</div>
+								} else if item.Type == "run" {
+									<div class="task-list-row task-tone-attention">
+										<a class="task-list-link" href={ templ.URL("/runs/" + item.Run.ID) } aria-label={ "Open Run " + item.Run.ID }></a>
+										<span class="task-list-icon">@Icon("alert-circle", 15)</span>
+										<div class="task-list-main">
+											<div class="task-list-title-row">
+												<span class="task-type">Failed run</span>
+												<strong>{ item.Task.Title }</strong>
+											</div>
+											<div class="task-list-meta-grid">
+												<div><span>Task</span><strong>{ item.Run.TaskID }</strong></div>
+												<div><span>Agent</span><strong>{ agentName(agents, item.Run.AgentID) }</strong></div>
+												<div><span>Error</span><strong class="text-danger">{ item.Run.Error }</strong></div>
+											</div>
+										</div>
+										<div class="task-list-action">
+											<span class="issue-list-status status-failed">failed</span>
+											<a class="pc-btn pc-btn-secondary task-open-btn" href={ templ.URL("/runs/" + item.Run.ID) }>Open run</a>
+										</div>
+									</div>
+								} else if item.Type == "wakeup" {
+									<div class="task-list-row task-tone-attention">
+										<a class="task-list-link" href={ templ.URL("/tasks/" + item.Wakeup.TaskID) } aria-label="Open task"></a>
+										<span class="task-list-icon">@Icon("bell", 15)</span>
+										<div class="task-list-main">
+											<div class="task-list-title-row">
+												<span class="task-type">Pending wakeup: { string(item.Wakeup.Reason) }</span>
+												<strong>{ item.Task.Title }</strong>
+											</div>
+											<div class="task-list-meta-grid">
+												<div><span>Task</span><strong>{ item.Wakeup.TaskID }</strong></div>
+												<div><span>Agent</span><strong>{ agentName(agents, item.Wakeup.AgentID) }</strong></div>
+												<div><span>Due</span><strong>{ item.Wakeup.DueAt.Format("Jan 02, 15:04") }</strong></div>
+											</div>
+										</div>
+										<div class="task-list-action">
+											<span class="issue-list-status status-pending">pending</span>
+											<a class="pc-btn pc-btn-secondary task-open-btn" href={ templ.URL("/tasks/" + item.Wakeup.TaskID) }>Open task</a>
+										</div>
+									</div>
+								}
+							}
+						</div>
 					</div>
 				}
 

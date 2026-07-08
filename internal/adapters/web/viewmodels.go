@@ -20,6 +20,13 @@ type QuestionForUser struct {
 	CreatedAt time.Time
 }
 
+type AttentionItem struct {
+	Type   string               // "task", "run", "wakeup"
+	Task   taskResponse         // Always populated (for context)
+	Run    domain.Run           // Populated if Type == "run"
+	Wakeup domain.WakeupRequest // Populated if Type == "wakeup"
+}
+
 type DashboardView struct {
 	Stats struct {
 		TotalProjects int
@@ -37,7 +44,7 @@ type DashboardView struct {
 		AgentsIdle    int
 		AgentsRunning int
 	}
-	NeedsAttention   []taskResponse
+	NeedsAttention   []AttentionItem
 	CurrentlyRunning []domain.Run
 	RecentActivity   []domain.Event
 	QuestionsForUser []QuestionForUser
@@ -87,12 +94,17 @@ func loadDashboardView(ctx context.Context, s *Server, r *http.Request) (Dashboa
 	for _, task := range allTasks {
 		view.QuestionsForUser = append(view.QuestionsForUser, questionsForTask(ctx, s, task)...)
 		switch task.Status {
-		case domain.TaskStatusBlocked:
-			view.Stats.BlockedTasks++
-			view.NeedsAttention = append(view.NeedsAttention, s.taskResponse(r, task))
+		case domain.TaskStatusBlocked, domain.TaskStatusInReview:
+			if task.Status == domain.TaskStatusBlocked {
+				view.Stats.BlockedTasks++
+			}
+			view.NeedsAttention = append(view.NeedsAttention, AttentionItem{
+				Type: "task",
+				Task: s.taskResponse(r, task),
+			})
 		case domain.TaskStatusDone:
 			view.Stats.DoneTasks++
-		case domain.TaskStatusTodo, domain.TaskStatusBacklog, domain.TaskStatusInProgress, domain.TaskStatusWaitingNextCycle, domain.TaskStatusInReview:
+		case domain.TaskStatusTodo, domain.TaskStatusBacklog, domain.TaskStatusInProgress, domain.TaskStatusWaitingNextCycle:
 			view.Stats.OpenTasks++
 		}
 	}
@@ -111,6 +123,26 @@ func loadDashboardView(ctx context.Context, s *Server, r *http.Request) (Dashboa
 			view.CurrentlyRunning = append(view.CurrentlyRunning, run)
 		} else if run.Status == domain.RunStatusFailed {
 			view.Stats.FailedRuns++
+			if run.StartedAt.After(time.Now().Add(-24 * time.Hour)) {
+				task, _ := s.tasks.Get(ctx, run.TaskID)
+				view.NeedsAttention = append(view.NeedsAttention, AttentionItem{
+					Type: "run",
+					Task: s.taskResponse(r, task),
+					Run:  run,
+				})
+			}
+		}
+	}
+
+	pendingWakeups, _ := s.storage.Wakeups().ListPending(ctx, time.Now().UTC().Add(365*24*time.Hour), 50)
+	for _, wakeup := range pendingWakeups {
+		if wakeup.TaskID != "" {
+			task, _ := s.tasks.Get(ctx, wakeup.TaskID)
+			view.NeedsAttention = append(view.NeedsAttention, AttentionItem{
+				Type:   "wakeup",
+				Task:   s.taskResponse(r, task),
+				Wakeup: wakeup,
+			})
 		}
 	}
 

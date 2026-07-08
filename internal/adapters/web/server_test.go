@@ -768,6 +768,43 @@ func readHTML(t *testing.T, client *http.Client, url string) string {
 	return buf.String()
 }
 
+func TestDashboardRendersOperationalAttentionInbox(t *testing.T) {
+	storage := memory.NewStorage()
+	now := time.Now().UTC()
+	if err := storage.Agents().Create(t.Context(), domain.Agent{ID: "agent_attention", Name: "Attention Agent", Type: "noop", Enabled: true, CreatedAt: now, UpdatedAt: now}); err != nil {
+		t.Fatalf("create agent: %v", err)
+	}
+	if err := storage.Tasks().Create(t.Context(), domain.Task{ID: "task_blocked", AgentID: "agent_attention", Title: "Blocked customer handoff", Prompt: "Needs a human decision", Status: domain.TaskStatusBlocked, CreatedAt: now.Add(-3 * time.Minute), UpdatedAt: now.Add(-2 * time.Minute)}); err != nil {
+		t.Fatalf("create blocked task: %v", err)
+	}
+	if err := storage.Tasks().Create(t.Context(), domain.Task{ID: "task_failed_run", AgentID: "agent_attention", Title: "Retry broken export", Prompt: "Export failed", Status: domain.TaskStatusTodo, NeedsRun: true, CheckoutRunID: "run_failed", CreatedAt: now.Add(-5 * time.Minute), UpdatedAt: now.Add(-4 * time.Minute)}); err != nil {
+		t.Fatalf("create failed task: %v", err)
+	}
+	if err := storage.Runs().Create(t.Context(), domain.Run{ID: "run_failed", TaskID: "task_failed_run", AgentID: "agent_attention", DriverType: "noop", Status: domain.RunStatusFailed, Error: "runtime failed", StartedAt: now.Add(-4 * time.Minute), FinishedAt: &now}); err != nil {
+		t.Fatalf("create failed run: %v", err)
+	}
+	if err := storage.Wakeups().Create(t.Context(), domain.WakeupRequest{ID: "wakeup_retry", AgentID: "agent_attention", TaskID: "task_failed_run", Reason: domain.WakeupReasonRetry, Status: domain.WakeupStatusPending, DueAt: now.Add(time.Minute), CreatedAt: now, UpdatedAt: now}); err != nil {
+		t.Fatalf("create wakeup: %v", err)
+	}
+
+	ts := newTestServerWithStorage(t, storage, true)
+	defer ts.Close()
+
+	html := readHTML(t, ts.Client(), ts.URL+"/")
+	for _, want := range []string{
+		"Attention inbox",
+		"Blocked customer handoff",
+		"/tasks/task_blocked",
+		"Retry broken export",
+		"/runs/run_failed",
+		"Pending wakeup: retry",
+	} {
+		if !strings.Contains(html, want) {
+			t.Fatalf("dashboard attention inbox missing %q in:\n%s", want, html)
+		}
+	}
+}
+
 func TestAgentNewHidesNoopAndShowsRuntimeWarningWhenDebugDisabled(t *testing.T) {
 	ts := newTestServerWithDebug(t, false)
 	defer ts.Close()
