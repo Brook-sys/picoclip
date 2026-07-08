@@ -199,6 +199,7 @@ func (r *Reconciler) detectStalledRuns(ctx context.Context) int {
 				"attempt":         strconv.Itoa(run.Attempt),
 				"backoff_seconds": strconv.Itoa(int(delay.Seconds())),
 				"retryable":       "true",
+				"classification":  "retryable",
 				"reason":          "run_timeout",
 			}
 			wakeup := domain.WakeupRequest{

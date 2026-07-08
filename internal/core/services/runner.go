@@ -51,6 +51,10 @@ func (r *Runner) emitRuntimeEvent(ctx context.Context, eventType domain.EventTyp
 	r.emitEvent(ctx, domain.Event{ID: r.idGen.NewID("evt"), Type: eventType, TaskID: task.ID, AgentID: agent.ID, RunID: run.ID, Message: message, Data: data, CreatedAt: now})
 }
 
+func retryClassificationData(classification, retryable, reason string) map[string]string {
+	return map[string]string{"classification": classification, "retryable": retryable, "reason": reason}
+}
+
 func (r *Runner) blockIfBudgetExceeded(ctx context.Context, task domain.Task, now time.Time) bool {
 	stopped, budget, usage, err := NewBudgetService(r.storage, r.clock, r.idGen).IsHardStopped(ctx, task.WorkspaceID, task.AgentID)
 	if err != nil {
@@ -155,8 +159,9 @@ func (r *Runner) Run(ctx context.Context, task domain.Task) {
 		adapter, ok := r.runtimes.Adapter(runtimeID)
 		if stateErr != nil || !state.Enabled || !ok || adapter.Resolve(ctx, state) != nil {
 			r.logger.Warn("runner.runtime_unavailable", "task_id", task.ID, "agent_id", agent.ID, "type", agent.Type)
-			r.emitEvent(ctx, domain.Event{ID: r.idGen.NewID("evt"), Type: domain.EventDriverMissing, TaskID: task.ID, AgentID: agent.ID, Message: "Runtime unavailable", CreatedAt: r.clock.Now()})
-			r.failTask(ctx, task, "runtime unavailable")
+			classification := retryClassificationData("non_retryable", "false", "runtime_unavailable")
+			r.emitEvent(ctx, domain.Event{ID: r.idGen.NewID("evt"), Type: domain.EventDriverMissing, TaskID: task.ID, AgentID: agent.ID, Message: "Runtime unavailable", Data: classification, CreatedAt: r.clock.Now()})
+			r.failTaskWithData(ctx, task, "runtime unavailable", classification)
 			return
 		}
 	}
@@ -243,11 +248,21 @@ func (r *Runner) Run(ctx context.Context, task domain.Task) {
 		run.TotalTokens = run.InputTokens + run.OutputTokens
 		r.logger.Warn("runner.run_failed", "task_id", task.ID, "run_id", run.ID, "runtime", agent.Type, "err", err)
 		_ = r.storage.Runs().Update(ctx, run)
-		r.emitEvent(ctx, domain.Event{ID: r.idGen.NewID("evt"), Type: domain.EventRunFailed, TaskID: task.ID, AgentID: agent.ID, RunID: run.ID, Message: err.Error(), CreatedAt: finishedAt})
+		classification := retryClassificationData("unknown", "unknown", "runtime_error")
 		if run.Status == domain.RunStatusTimeout {
-			r.emitRuntimeEvent(ctx, domain.EventRuntimeTimeout, task, agent, run, "Runtime execution timed out", map[string]string{"phase": "timeout_handled", "status": string(run.Status)}, finishedAt)
+			classification = retryClassificationData("retryable", "true", "runtime_timeout")
+		}
+		r.emitEvent(ctx, domain.Event{ID: r.idGen.NewID("evt"), Type: domain.EventRunFailed, TaskID: task.ID, AgentID: agent.ID, RunID: run.ID, Message: err.Error(), Data: classification, CreatedAt: finishedAt})
+		if run.Status == domain.RunStatusTimeout {
+			data := retryClassificationData("retryable", "true", "runtime_timeout")
+			data["phase"] = "timeout_handled"
+			data["status"] = string(run.Status)
+			r.emitRuntimeEvent(ctx, domain.EventRuntimeTimeout, task, agent, run, "Runtime execution timed out", data, finishedAt)
 		} else {
-			r.emitRuntimeEvent(ctx, domain.EventRuntimeCompleted, task, agent, run, "Runtime execution failed", map[string]string{"phase": "completed", "status": string(run.Status)}, finishedAt)
+			data := retryClassificationData("unknown", "unknown", "runtime_error")
+			data["phase"] = "completed"
+			data["status"] = string(run.Status)
+			r.emitRuntimeEvent(ctx, domain.EventRuntimeCompleted, task, agent, run, "Runtime execution failed", data, finishedAt)
 		}
 		if task.Mode == domain.TaskModeContinuous {
 			r.completeContinuousCycle(ctx, task, run, finishedAt)
@@ -337,6 +352,10 @@ func (r *Runner) completeContinuousCycle(ctx context.Context, task domain.Task, 
 }
 
 func (r *Runner) failTask(ctx context.Context, task domain.Task, message string) {
+	r.failTaskWithData(ctx, task, message, nil)
+}
+
+func (r *Runner) failTaskWithData(ctx context.Context, task domain.Task, message string, data map[string]string) {
 	now := r.clock.Now()
 	task.Status = domain.TaskStatusBlocked
 	task.NeedsRun = false
@@ -353,7 +372,7 @@ func (r *Runner) failTask(ctx context.Context, task domain.Task, message string)
 		if err := r.storage.Messages().Create(txCtx, domain.Message{ID: r.idGen.NewID("msg"), TaskID: task.ID, FromID: task.AgentID, Role: domain.MessageRoleSystem, Body: "Run failed: " + message, CreatedAt: now}); err != nil {
 			return err
 		}
-		ev := domain.Event{ID: r.idGen.NewID("evt"), Type: domain.EventTaskFailed, TaskID: task.ID, AgentID: task.AgentID, Message: message, CreatedAt: now}
+		ev := domain.Event{ID: r.idGen.NewID("evt"), Type: domain.EventTaskFailed, TaskID: task.ID, AgentID: task.AgentID, Message: message, Data: data, CreatedAt: now}
 		if err := r.storage.Events().Create(txCtx, ev); err != nil {
 			return err
 		}

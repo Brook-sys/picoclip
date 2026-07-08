@@ -91,7 +91,17 @@ attempt N -> capped at 300 seconds / 5 minutes
 
 A key safety property is that the task is **not** left immediately runnable while waiting for retry. The task stays `NeedsRun=false` until the wakeup is due and processed. This prevents the dispatcher from bypassing the backoff and re-running the task immediately.
 
-## Retry metadata
+## Retry classification and metadata
+
+PicoClip records a small retry classification on failure/retry events so humans and agents can distinguish transient failures from deterministic blockers.
+
+Current classification values:
+
+| Classification | Meaning | Current examples |
+| --- | --- | --- |
+| `retryable` | PicoClip may run the task again after backoff. | Direct runtime timeout (`runtime_timeout`) and stalled-run recovery (`run_timeout`). |
+| `non_retryable` | PicoClip should not retry automatically because the same configuration is expected to fail again. | Runtime unavailable (`runtime_unavailable`), surfaced through `driver.missing` and `task.failed`. |
+| `unknown` | A runtime returned an error that is not yet classified. | Generic runtime execution error (`runtime_error`). |
 
 Retry wakeups include structured payload data:
 
@@ -100,14 +110,15 @@ previous_run_id
 attempt
 backoff_seconds
 retryable
+classification
 reason
 ```
 
-For timeout recovery, `reason` is currently `run_timeout` and `retryable=true`.
+For timeout recovery, `reason` is `run_timeout`, `retryable=true`, and `classification=retryable`.
 
 Before creating a timeout retry, the reconciler checks whether a pending retry wakeup for the same `previous_run_id` already exists. This keeps recovery idempotent across repeated sweeps and prevents duplicate retry wakeups/events for the same failed run.
 
-This metadata is intentionally duplicated into the activity event so humans and future automation can understand why the retry was scheduled.
+This metadata is intentionally duplicated into the activity event so humans and future automation can understand why the retry was scheduled. Direct runner timeout events also carry `classification=retryable`, while runtime-unavailable events carry `classification=non_retryable` and block the task instead of creating a retry loop.
 
 ## Activity events used for diagnosis
 
@@ -125,9 +136,9 @@ Important robustness events include:
 | `runtime.stalled` | Reconciler detected missing output before the stall timeout. |
 | `runtime.cancel_requested` | PicoClip requested cancellation of a stalled runtime run. |
 | `runtime.cancel_succeeded` / `runtime.cancel_failed` | Runtime cancellation returned success or failure. |
-| `retry.scheduled` | PicoClip scheduled a retry and recorded why, when, and with what backoff. |
+| `retry.scheduled` | PicoClip scheduled a retry and recorded why, when, with what backoff, and the retry classification. |
 | `budget.blocked` | Execution was blocked by a budget constraint. |
-| `driver.missing` | Required runtime/driver was unavailable. |
+| `driver.missing` | Required runtime/driver was unavailable; payload marks this as `non_retryable`. |
 
 Runtime liveness event payloads are intentionally compact. They include stable fields such as `runtime_id`, `phase`, `status`, `pid`, `stdout_bytes`, `stderr_bytes`, `reason`, and cancellation `error` when relevant. Full output still lives on the run/output stream; persisted heartbeat events use byte counts so frequent output does not spam Activity with large payloads.
 
@@ -188,7 +199,7 @@ When changing recovery, retry, cancellation, scheduling, dispatcher, runner or r
 
 The system is stronger than before, but still experimental. Known gaps:
 
-- Retry classification is still basic. Timeout retries are treated as retryable, but deterministic errors are not yet fully separated into retryable vs non-retryable categories.
+- Retry classification is still basic. Timeouts and runtime-unavailable failures now carry explicit `retryable`/`non_retryable` metadata, but most generic runtime errors remain `unknown` until more deterministic categories are added.
 - There is no dedicated recovery dashboard for stale locks, retry queue, runtime health, or orphaned runs.
 - Runtime liveness now has structured run-level events for start, process start, output heartbeats, direct timeout handling, stalled detection and cancellation results, but aggregate diagnostics and UI-specific liveness summaries are still limited.
 - Windows process-tree cancellation still needs Job Object support for parity with Unix process-group cancellation.
@@ -198,7 +209,7 @@ The system is stronger than before, but still experimental. Known gaps:
 
 Recommended next work:
 
-1. Add explicit retry classification: `retryable`, `non_retryable`, and `unknown`.
+1. Expand retry classification beyond the current timeout/runtime-unavailable baseline to cover more deterministic runtime errors.
 2. Persist `retry.skipped` or `task.blocked` events when PicoClip intentionally refuses to retry.
 3. Expose the retry queue and recovery state in the UI/API.
 4. Add aggregate reliability counters: timeouts, recoveries, scheduled retries, skipped retries, exhausted attempts and currently locked tasks.

@@ -26,7 +26,7 @@ PicoClip é um motor local-first e leve de orquestração de agentes inspirado n
 - diagnostics, backup/restore, settings, runtimes e webhooks;
 - robustez inicial: checkout/locks, stale lock recovery, stalled run detection, retry wakeups com backoff e cancelamento por runtime.
 
-O projeto ainda é experimental e não é recomendado para produção. As principais lacunas são enforcement completo de permissões, classificação retryable/non-retryable, dashboard de recovery, streaming/telemetria de runtime mais estruturados, workspace isolation por run e maturidade operacional.
+O projeto ainda é experimental e não é recomendado para produção. As principais lacunas são enforcement completo de permissões, expansão da classificação retryable/non-retryable para mais erros determinísticos, dashboard de recovery, streaming/telemetria de runtime mais estruturados, workspace isolation por run e maturidade operacional.
 
 ## Filosofia preservada
 

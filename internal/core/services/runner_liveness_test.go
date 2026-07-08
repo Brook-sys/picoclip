@@ -121,7 +121,40 @@ func TestRunnerPersistsRuntimeTimeoutEvent(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	assertRuntimeEvent(t, events, domain.EventRuntimeTimeout, runs[0].ID, map[string]string{"runtime_id": "crush", "status": string(domain.RunStatusTimeout), "phase": "timeout_handled"})
+	assertRuntimeEvent(t, events, domain.EventRuntimeTimeout, runs[0].ID, map[string]string{"runtime_id": "crush", "status": string(domain.RunStatusTimeout), "phase": "timeout_handled", "retryable": "true", "reason": "runtime_timeout"})
+}
+
+func TestRunnerClassifiesRuntimeUnavailableAsNonRetryable(t *testing.T) {
+	ctx := context.Background()
+	st := memory.NewStorage()
+	clock := fixedClock{t: time.Date(2026, 7, 8, 3, 25, 0, 0, time.UTC)}
+	idgen := &seqID{}
+	runtimes := NewRuntimeManager(st, t.TempDir(), clock)
+	agent := domain.Agent{ID: "agent_missing_runtime", Name: "agent", Type: "crush", Enabled: true, CreatedAt: clock.t, UpdatedAt: clock.t}
+	if err := st.Agents().Create(ctx, agent); err != nil {
+		t.Fatal(err)
+	}
+	task := domain.Task{ID: "task_missing_runtime", AgentID: agent.ID, Title: "missing runtime", Prompt: "run", Status: domain.TaskStatusTodo, NeedsRun: true, CreatedAt: clock.t, UpdatedAt: clock.t}
+	if err := st.Tasks().Create(ctx, task); err != nil {
+		t.Fatal(err)
+	}
+
+	runner := NewRunner(st, clock, idgen, noopBus{}, runtimes, NoopMemoryProvider{}, testLogger{}, Config{TaskTimeout: time.Minute, MaxAttempts: 3})
+	runner.Run(ctx, task)
+
+	gotTask, err := st.Tasks().Get(ctx, task.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if gotTask.Status != domain.TaskStatusBlocked || gotTask.NeedsRun {
+		t.Fatalf("expected non-retryable failure to block task without retry, got status=%s needs_run=%v", gotTask.Status, gotTask.NeedsRun)
+	}
+	events, err := st.Events().ListByTask(ctx, task.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertEventData(t, events, domain.EventDriverMissing, "", map[string]string{"retryable": "false", "classification": "non_retryable", "reason": "runtime_unavailable"})
+	assertEventData(t, events, domain.EventTaskFailed, "", map[string]string{"retryable": "false", "classification": "non_retryable", "reason": "runtime_unavailable"})
 }
 
 func TestReconcilerPersistsRuntimeCancellationEventsForStalledRun(t *testing.T) {
@@ -156,6 +189,11 @@ func TestReconcilerPersistsRuntimeCancellationEventsForStalledRun(t *testing.T) 
 }
 
 func assertRuntimeEvent(t *testing.T, events []domain.Event, eventType domain.EventType, runID string, want map[string]string) {
+	t.Helper()
+	assertEventData(t, events, eventType, runID, want)
+}
+
+func assertEventData(t *testing.T, events []domain.Event, eventType domain.EventType, runID string, want map[string]string) {
 	t.Helper()
 	for _, event := range events {
 		if event.Type != eventType || event.RunID != runID {
