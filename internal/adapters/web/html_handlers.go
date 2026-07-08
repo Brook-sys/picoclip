@@ -834,6 +834,19 @@ func (s *Server) handleWebActivity(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	filterType := r.URL.Query().Get("type")
+	var filteredEvents []domain.Event
+	if filterType != "" {
+		for _, ev := range events {
+			// Fast filter logic for activity page
+			if string(ev.Type) == filterType || (len(filterType) > 2 && filterType[len(filterType)-2:] == ".*" && len(string(ev.Type)) >= len(filterType)-2 && string(ev.Type)[:len(filterType)-2] == filterType[:len(filterType)-2]) {
+				filteredEvents = append(filteredEvents, ev)
+			}
+		}
+	} else {
+		filteredEvents = events
+	}
+
 	tasks, _ := s.storage.Tasks().List(r.Context(), ports.TaskFilter{})
 	agents, _ := s.storage.Agents().List(r.Context())
 
@@ -847,7 +860,7 @@ func (s *Server) handleWebActivity(w http.ResponseWriter, r *http.Request) {
 		agentMap[a.ID] = a
 	}
 
-	if err := ActivityPage(events, taskMap, agentMap).Render(r.Context(), w); err != nil {
+	if err := ActivityPage(filteredEvents, filterType, taskMap, agentMap).Render(r.Context(), w); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
 }

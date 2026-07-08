@@ -3,7 +3,7 @@ package web
 import "fmt"
 import "picoclip/internal/core/domain"
 
-templ ActivityPage(events []domain.Event, tasks map[string]taskResponse, agents map[string]domain.Agent) {
+templ ActivityPage(events []domain.Event, filterType string, tasks map[string]taskResponse, agents map[string]domain.Agent) {
 	@PageShell("activity", "Activity", "Understand what happened, who did it, where it happened, and what needs attention.", nil) {
 		@OverviewGrid() {
 			@OverviewCard("Recent", fmt.Sprintf("%d", len(events)), "Latest system events", "", "")
@@ -27,6 +27,14 @@ templ ActivityPage(events []domain.Event, tasks map[string]taskResponse, agents 
 					<p>Prioritized by recency with context links for tasks, agents and runs.</p>
 				</div>
 				<span class="activity-live-pill">Live</span>
+			</div>
+			<div class="activity-filters" style="padding: 0 20px 16px 20px; display: flex; gap: 8px; align-items: center; border-bottom: 1px solid var(--border-color);">
+				<span style="font-size: 13px; color: var(--text-muted);">Filters:</span>
+				<a href="/activity" class={ "pc-badge", templ.KV("pc-badge-primary", filterType == "") }>All</a>
+				<a href="/activity?type=task.*" class={ "pc-badge", templ.KV("pc-badge-primary", filterType == "task.*") }>Tasks</a>
+				<a href="/activity?type=run.*" class={ "pc-badge", templ.KV("pc-badge-primary", filterType == "run.*") }>Runs</a>
+				<a href="/activity?type=run.failed" class={ "pc-badge", "pc-badge-danger", templ.KV("pc-badge-primary", filterType == "run.failed") }>Failed</a>
+				<a href="/activity?type=retry.scheduled" class={ "pc-badge", templ.KV("pc-badge-primary", filterType == "retry.scheduled") }>Retries</a>
 			</div>
 			<div id="activity-live">
 				@EventTimelineFull(events, tasks, agents)
