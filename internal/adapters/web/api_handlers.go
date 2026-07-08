@@ -194,6 +194,7 @@ func (s *Server) handleAgentDocs(w http.ResponseWriter, r *http.Request) {
 		"permissions": []string{"agents.create", "agents.delete", "tasks.create", "tasks.delegate", "tasks.cancel", "skills.manage", "system.view"},
 		"recommended_flow": []string{
 			"GET /agent-api/agents/me/inbox-lite?agent_id=... para achar tasks que precisam de atenção.",
+			"GET /agent-api/tasks/{id}/next-action para decidir checkout, wait, inspect_retry, block, release ou ask_human com payload compacto.",
 			"POST /agent-api/tasks/{id}/checkout para reivindicar trabalho antes de agir.",
 			"GET /agent-api/tasks/{id}/heartbeat-context?include=execution_state,skills,apis para carregar contexto compacto.",
 			"POST /agent-api/tasks/{id}/comments para registrar progresso, perguntas ou resultado parcial.",
@@ -211,6 +212,8 @@ func (s *Server) handleAgentDocs(w http.ResponseWriter, r *http.Request) {
 			{"method": "GET", "path": "/agent-api/issues/{id}", "description": "Alias Paperclip-like de detalhe de task."},
 			{"method": "GET", "path": "/agent-api/tasks/{id}/heartbeat-context?include=execution_state,skills,apis", "description": "Contexto compacto com allowlist include=prompt,execution_state,skills,apis; use para agir sem buscar detalhe completo."},
 			{"method": "GET", "path": "/agent-api/issues/{id}/heartbeat-context?include=execution_state,skills,apis", "description": "Alias Paperclip-like do heartbeat-context."},
+			{"method": "GET", "path": "/agent-api/tasks/{id}/next-action", "description": "Decisão operacional compacta: checkout, wait, inspect_retry, block, release ou ask_human, com motivo, riscos e links úteis."},
+			{"method": "GET", "path": "/agent-api/issues/{id}/next-action", "description": "Alias Paperclip-like do next-action."},
 			{"method": "GET", "path": "/agent-api/tasks/{id}/comments", "description": "Lista comentários/mensagens da task."},
 			{"method": "GET", "path": "/agent-api/issues/{id}/comments", "description": "Alias Paperclip-like de comentários."},
 			{"method": "POST", "path": "/agent-api/tasks", "description": "Cria task."},

@@ -177,6 +177,8 @@ Superfície para agentes lerem contexto, atualizarem tasks, comentarem, delegare
 | `GET` | `/agent-api/issues/{id}` | Alias de detalhe. |
 | `GET` | `/agent-api/tasks/{id}/heartbeat-context` | Contexto compacto para trabalhar em uma task, incluindo `execution_state` resumido de runs, locks, wakeups e eventos recentes. |
 | `GET` | `/agent-api/issues/{id}/heartbeat-context` | Alias de heartbeat context. |
+| `GET` | `/agent-api/tasks/{id}/next-action` | Recomendação compacta da próxima ação operacional para a task. |
+| `GET` | `/agent-api/issues/{id}/next-action` | Alias de next-action. |
 | `GET` | `/agent-api/tasks/{id}/comments` | Lista comentários/mensagens da task. |
 | `GET` | `/agent-api/issues/{id}/comments` | Alias de comments. |
 | `GET` | `/agent-api/projects` | Lista projetos. |
@@ -228,6 +230,49 @@ GET /agent-api/tasks/{id}/heartbeat-context?include=execution_state,skills
 Seções disponíveis: `prompt`, `execution_state`, `skills`, `apis`. A allowlist é estrita: qualquer seção desconhecida em `include` retorna `400 Bad Request` com a seção inválida em vez de aparecer em `meta.included`. A resposta inclui `meta.mode` (`default` ou `selective`) e `meta.included` para o agente saber qual forma recebeu; em modo seletivo, `meta.included` contém somente seções válidas realmente solicitadas.
 
 Use `/agent-api/tasks/{id}` somente quando o agente realmente precisar de mensagens/runs/eventos completos.
+
+`GET /agent-api/tasks/{id}/next-action` é a rota mais curta quando o agente precisa apenas decidir o próximo passo operacional. Ela retorna JSON direto, sem envelope v1, com `task_id`, `action`, `reason`, `risks`, `links` e `useful_links`.
+
+Ações atuais:
+
+| `action` | Quando usar |
+| --- | --- |
+| `checkout` | Task `todo` com `needs_run=true`, sem checkout ativo e runtime disponível. |
+| `wait` | Task já tem checkout/run ativo ou não está pronta para execução. |
+| `inspect_retry` | Há wakeup pendente de retry/schedule/comment ou runs recentes com falha/timeout. |
+| `block` | Tentativas máximas foram atingidas e a task precisa de triagem humana/operador. |
+| `inspect` | Task terminal (`done`/`cancelled`); apenas inspecionar ou abrir follow-up. |
+| `ask_human` | Runtime do agente atribuído não está disponível/configurado. |
+
+Exemplo:
+
+```sh
+curl -s 'http://127.0.0.1:8088/agent-api/tasks/{id}/next-action' | jq
+```
+
+Resposta compacta:
+
+```json
+{
+  "task_id": "tsk_123",
+  "action": "checkout",
+  "reason": "Task is runnable and ready for an agent checkout.",
+  "risks": [],
+  "links": {
+    "heartbeat_context": "/agent-api/tasks/tsk_123/heartbeat-context?include=execution_state,skills,apis",
+    "checkout": "/agent-api/tasks/tsk_123/checkout",
+    "comments": "/agent-api/tasks/tsk_123/comments",
+    "release": "/agent-api/tasks/tsk_123/release",
+    "wake": "/agent-api/tasks/tsk_123/wake"
+  },
+  "useful_links": [
+    "/agent-api/tasks/tsk_123/heartbeat-context?include=execution_state,skills,apis",
+    "/agent-api/tasks/tsk_123/checkout",
+    "/agent-api/tasks/tsk_123/comments"
+  ]
+}
+```
+
 > **Nota Operacional:** Para triagem e debug de tasks presas via Agent API, consulte a seção **Triagem Rápida via Agent API** no [Operations Runbook](OPERATIONS.md).
 
 ### Contratos JSON compactos da Agent API
@@ -245,11 +290,12 @@ Esta seção fixa o shape real dos endpoints compactos usados por agentes. Os ha
 `/agent-api/docs` é o ponto de descoberta dinâmico para agentes. A resposta lista os endpoints agent-facing atuais, incluindo aliases Paperclip-like `/agent-api/issues...`, `inbox-lite`, `heartbeat-context` e a allowlist `include=prompt,execution_state,skills,apis`. Ela também expõe `recommended_flow`, que orienta o ciclo compacto recomendado:
 
 1. consultar `GET /agent-api/agents/me/inbox-lite?agent_id=...`;
-2. reivindicar trabalho com `POST /agent-api/tasks/{id}/checkout`;
-3. carregar percepção com `GET /agent-api/tasks/{id}/heartbeat-context?include=execution_state,skills,apis`;
-4. registrar progresso via comentário;
-5. atualizar status quando concluir/bloquear;
-6. liberar checkout se parar sem concluir.
+2. consultar `GET /agent-api/tasks/{id}/next-action` para decidir se deve fazer checkout, aguardar, inspecionar retry, bloquear ou pedir intervenção humana;
+3. reivindicar trabalho com `POST /agent-api/tasks/{id}/checkout` quando `next-action.action="checkout"`;
+4. carregar percepção com `GET /agent-api/tasks/{id}/heartbeat-context?include=execution_state,skills,apis`;
+5. registrar progresso via comentário;
+6. atualizar status quando concluir/bloquear;
+7. liberar checkout se parar sem concluir.
 
 Use essa rota quando um agente precisa descobrir a superfície HTTP disponível sem ler a documentação Markdown completa.
 

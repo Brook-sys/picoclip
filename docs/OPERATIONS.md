@@ -24,11 +24,19 @@ PicoClip é local-first e experimental, mas deve ser operável com clareza. Em u
 Para agentes ou ferramentas diagnosticando o estado de tasks de forma rápida, não faça scrapping nem force requisições gigantes. Use as chamadas curtas abaixo. Substitua `http://127.0.0.1:8088` conforme necessidade e injete cabeçalho de auth se não for no mesmo host.
 
 ### 1. Uma task parece travada ou não inicia
-Recupere o **heartbeat-context** (compacto).
+Recupere primeiro a **next-action** para uma decisão compacta e, se precisar de detalhes, o **heartbeat-context**.
 ```bash
+curl -s "http://127.0.0.1:8088/agent-api/tasks/{id}/next-action" | jq
 curl -s "http://127.0.0.1:8088/agent-api/tasks/{id}/heartbeat-context?include=execution_state" | jq
 ```
 *O que buscar?*
+- `action="checkout"`: task pronta para reivindicação.
+- `action="wait"`: há checkout/run ativo ou a task ainda não está pronta.
+- `action="inspect_retry"`: há wakeup/retry ou histórico recente que merece inspeção antes de forçar execução.
+- `action="block"` ou `action="ask_human"`: limite operacional atingido ou runtime indisponível; registre evidência e envolva operador/humano.
+- `risks[]`: sinais compactos como `active_checkout`, `pending_wakeup`, `max_attempts_reached` ou `runtime_unavailable`.
+
+No heartbeat-context:
 - `execution_state.is_runnable`: se for `false`, o scheduler não vai alocá-la (pode não estar em status `ready`/`running` ou faltar `needs_run`).
 - `execution_state.locked`: se for `true` e `execution_state.lock_owner` apontar para um runner morto, a task está pendente de reconciliação (Reconciler reseta locks vencidos a cada intervalo).
 - `execution_state.next_wakeup`: se estiver no futuro, a task está aguardando (sleep, backoff de retry).

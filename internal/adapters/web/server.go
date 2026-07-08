@@ -1,6 +1,7 @@
 package web
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -65,6 +66,8 @@ func (s *Server) Mount(mux *http.ServeMux) {
 	mux.HandleFunc("GET /agent-api/issues/{id}", s.handleAgentTaskDetail)
 	mux.HandleFunc("GET /agent-api/tasks/{id}/heartbeat-context", s.handleAgentHeartbeatContext)
 	mux.HandleFunc("GET /agent-api/issues/{id}/heartbeat-context", s.handleAgentHeartbeatContext)
+	mux.HandleFunc("GET /agent-api/tasks/{id}/next-action", s.handleAgentNextAction)
+	mux.HandleFunc("GET /agent-api/issues/{id}/next-action", s.handleAgentNextAction)
 	mux.HandleFunc("GET /agent-api/tasks/{id}/comments", s.handleAgentTaskComments)
 	mux.HandleFunc("GET /agent-api/issues/{id}/comments", s.handleAgentTaskComments)
 	mux.HandleFunc("GET /agent-api/projects", s.handleGetProjects)
@@ -352,6 +355,80 @@ func (s *Server) compactInboxItem(r *http.Request, task domain.Task) map[string]
 	}
 }
 
+func (s *Server) handleAgentNextAction(w http.ResponseWriter, r *http.Request) {
+	task, err := s.tasks.Get(r.Context(), r.PathValue("id"))
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusNotFound)
+		return
+	}
+	s.jsonResponse(w, s.compactNextAction(r, task))
+}
+
+func (s *Server) compactNextAction(r *http.Request, task domain.Task) map[string]any {
+	action := "wait"
+	reason := "Task is not currently runnable."
+	risks := []string{}
+
+	wakeups, _ := s.storage.Wakeups().ListByTask(r.Context(), task.ID)
+	runs, _ := s.tasks.GetRuns(r.Context(), task.ID)
+	pendingWakeups := countPendingWakeups(wakeups)
+	failedRuns := countRunsWithStatus(runs, domain.RunStatusFailed, domain.RunStatusTimeout)
+
+	if !s.agentRuntimeAvailable(r.Context(), task.AgentID) {
+		action = "ask_human"
+		reason = "Assigned agent runtime is not available; operator setup is required before checkout."
+		risks = append(risks, "runtime_unavailable")
+	} else if task.Status == domain.TaskStatusDone || task.Status == domain.TaskStatusCancelled {
+		action = "inspect"
+		reason = "Task is terminal; inspect only unless a follow-up is needed."
+	} else if task.CheckoutRunID != "" || task.CheckedOutByAgentID != "" {
+		if currentAgentID := r.URL.Query().Get("agent_id"); currentAgentID != "" && currentAgentID == task.CheckedOutByAgentID {
+			action = "release"
+			reason = "Requesting agent owns the active checkout; release it if stopping without completion."
+			risks = append(risks, "own_active_checkout")
+		} else {
+			action = "wait"
+			reason = "Task already has an active checkout or run."
+			risks = append(risks, "active_checkout")
+		}
+	} else if task.MaxAttempts > 0 && task.Attempts >= task.MaxAttempts {
+		action = "block"
+		reason = "Task reached max attempts and needs human or operator triage."
+		risks = append(risks, "max_attempts_reached")
+	} else if task.NeedsRun && task.Status == domain.TaskStatusTodo {
+		action = "checkout"
+		reason = "Task is runnable and ready for an agent checkout."
+	} else if pendingWakeups > 0 {
+		action = "inspect_retry"
+		reason = "Task has pending wakeups; inspect due_at/reason before forcing execution."
+		risks = append(risks, "pending_wakeup")
+	} else if failedRuns > 0 {
+		action = "inspect_retry"
+		reason = "Recent failed or timed-out runs require retry triage."
+		risks = append(risks, "failed_runs")
+	}
+
+	baseTask := "/agent-api/tasks/" + task.ID
+	return map[string]any{
+		"task_id": task.ID,
+		"action":  action,
+		"reason":  reason,
+		"risks":   risks,
+		"links": map[string]string{
+			"heartbeat_context": baseTask + "/heartbeat-context?include=execution_state,skills,apis",
+			"checkout":          baseTask + "/checkout",
+			"comments":          baseTask + "/comments",
+			"release":           baseTask + "/release",
+			"wake":              baseTask + "/wake",
+		},
+		"useful_links": []string{
+			baseTask + "/heartbeat-context?include=execution_state,skills,apis",
+			baseTask + "/checkout",
+			baseTask + "/comments",
+		},
+	}
+}
+
 func (s *Server) handleAgentHeartbeatContext(w http.ResponseWriter, r *http.Request) {
 	task, err := s.tasks.Get(r.Context(), r.PathValue("id"))
 	if err != nil {
@@ -522,6 +599,14 @@ func (s *Server) compactExecutionState(r *http.Request, task domain.Task) map[st
 		}
 	}
 	return state
+}
+
+func (s *Server) agentRuntimeAvailable(ctx context.Context, agentID string) bool {
+	agent, err := s.agents.Get(ctx, agentID)
+	if err != nil {
+		return false
+	}
+	return s.validateAgentRuntime(ctx, agent.Type) == nil
 }
 
 func countPendingWakeups(wakeups []domain.WakeupRequest) int {

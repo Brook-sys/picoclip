@@ -120,6 +120,8 @@ func TestAgentDocsAdvertisesPaperclipLikeWorkflow(t *testing.T) {
 		"/agent-api/agents/me/inbox-lite?agent_id=...",
 		"/agent-api/tasks/{id}/heartbeat-context?include=execution_state,skills,apis",
 		"/agent-api/issues/{id}/heartbeat-context?include=execution_state,skills,apis",
+		"/agent-api/tasks/{id}/next-action",
+		"/agent-api/issues/{id}/next-action",
 		"/agent-api/issues/{id}/checkout",
 		"/agent-api/issues/{id}/comments",
 		"/agent-api/issues/{id}/release",
@@ -138,10 +140,197 @@ func TestAgentDocsAdvertisesPaperclipLikeWorkflow(t *testing.T) {
 	}
 
 	flow := strings.Join(docs.RecommendedFlow, " -> ")
-	for _, want := range []string{"inbox-lite", "checkout", "heartbeat-context", "comment", "status", "release"} {
+	for _, want := range []string{"inbox-lite", "next-action", "checkout", "heartbeat-context", "comment", "status", "release"} {
 		if !strings.Contains(flow, want) {
 			t.Fatalf("recommended flow %q missing %q", flow, want)
 		}
+	}
+}
+
+func TestAgentNextActionRecommendsCheckoutForRunnableTask(t *testing.T) {
+	storage := memory.NewStorage()
+	now := time.Now().UTC()
+	agent := domain.Agent{ID: "agent_next_action", Name: "Next Action Agent", Type: "noop", Enabled: true, Capability: domain.CapabilityWorker, CreatedAt: now, UpdatedAt: now}
+	task := domain.Task{ID: "task_next_action", AgentID: agent.ID, Title: "Decide what to do", Prompt: "Decide what to do", Status: domain.TaskStatusTodo, NeedsRun: true, CreatedAt: now, UpdatedAt: now}
+	if err := storage.Agents().Create(t.Context(), agent); err != nil {
+		t.Fatal(err)
+	}
+	if err := storage.Tasks().Create(t.Context(), task); err != nil {
+		t.Fatal(err)
+	}
+	ts := newTestServerWithStorage(t, storage, true)
+	defer ts.Close()
+
+	client := ts.Client()
+
+	res, err := client.Get(ts.URL + "/agent-api/tasks/" + task.ID + "/next-action")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("next-action status = %d, want 200", res.StatusCode)
+	}
+
+	var got struct {
+		TaskID      string   `json:"task_id"`
+		Action      string   `json:"action"`
+		Reason      string   `json:"reason"`
+		Risks       []string `json:"risks"`
+		UsefulLinks []string `json:"useful_links"`
+	}
+	if err := json.NewDecoder(res.Body).Decode(&got); err != nil {
+		t.Fatal(err)
+	}
+	if got.TaskID != task.ID {
+		t.Fatalf("task_id = %q, want %q", got.TaskID, task.ID)
+	}
+	if got.Action != "checkout" {
+		t.Fatalf("action = %q, want checkout", got.Action)
+	}
+	if !strings.Contains(got.Reason, "runnable") {
+		t.Fatalf("reason = %q, want runnable explanation", got.Reason)
+	}
+	if len(got.UsefulLinks) == 0 || !strings.Contains(strings.Join(got.UsefulLinks, " "), "/checkout") {
+		t.Fatalf("useful links should include checkout endpoint, got %#v", got.UsefulLinks)
+	}
+	if len(got.Risks) != 0 {
+		t.Fatalf("runnable task should not report risks, got %#v", got.Risks)
+	}
+}
+
+func TestAgentNextActionReportsOperationalBlockers(t *testing.T) {
+	cases := []struct {
+		name       string
+		task       domain.Task
+		runs       []domain.Run
+		wakeups    []domain.WakeupRequest
+		wantAction string
+		wantRisk   string
+	}{
+		{
+			name:       "active checkout waits",
+			task:       domain.Task{ID: "task_locked", Status: domain.TaskStatusInProgress, NeedsRun: false, CheckoutRunID: "run_locked", CheckedOutByAgentID: "agent_next_action"},
+			wantAction: "wait",
+			wantRisk:   "active_checkout",
+		},
+		{
+			name:       "max attempts blocks",
+			task:       domain.Task{ID: "task_max_attempts", Status: domain.TaskStatusTodo, NeedsRun: true, Attempts: 2, MaxAttempts: 2},
+			wantAction: "block",
+			wantRisk:   "max_attempts_reached",
+		},
+		{
+			name:       "future retry asks inspection",
+			task:       domain.Task{ID: "task_retry", Status: domain.TaskStatusWaitingNextCycle, NeedsRun: false},
+			wakeups:    []domain.WakeupRequest{{ID: "wakeup_retry", TaskID: "task_retry", AgentID: "agent_next_action", Reason: domain.WakeupReasonRetry, Status: domain.WakeupStatusPending, DueAt: time.Now().UTC().Add(time.Hour)}},
+			wantAction: "inspect_retry",
+			wantRisk:   "pending_wakeup",
+		},
+		{
+			name:       "runtime unavailable asks human",
+			task:       domain.Task{ID: "task_runtime", Status: domain.TaskStatusTodo, NeedsRun: true},
+			wantAction: "ask_human",
+			wantRisk:   "runtime_unavailable",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			storage := memory.NewStorage()
+			now := time.Now().UTC()
+			agentType := domain.AgentType("noop")
+			if tc.wantRisk == "runtime_unavailable" {
+				agentType = domain.AgentType("missing-runtime")
+			}
+			agent := domain.Agent{ID: "agent_next_action", Name: "Next Action Agent", Type: agentType, Enabled: true, Capability: domain.CapabilityWorker, CreatedAt: now, UpdatedAt: now}
+			task := tc.task
+			task.AgentID = agent.ID
+			task.Title = tc.name
+			task.Prompt = tc.name
+			task.CreatedAt = now
+			task.UpdatedAt = now
+			if err := storage.Agents().Create(t.Context(), agent); err != nil {
+				t.Fatal(err)
+			}
+			if err := storage.Tasks().Create(t.Context(), task); err != nil {
+				t.Fatal(err)
+			}
+			for _, run := range tc.runs {
+				if err := storage.Runs().Create(t.Context(), run); err != nil {
+					t.Fatal(err)
+				}
+			}
+			for _, wakeup := range tc.wakeups {
+				if err := storage.Wakeups().Create(t.Context(), wakeup); err != nil {
+					t.Fatal(err)
+				}
+			}
+			ts := newTestServerWithStorage(t, storage, true)
+			defer ts.Close()
+
+			res, err := ts.Client().Get(ts.URL + "/agent-api/tasks/" + task.ID + "/next-action")
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer res.Body.Close()
+			var got struct {
+				Action string   `json:"action"`
+				Risks  []string `json:"risks"`
+			}
+			if err := json.NewDecoder(res.Body).Decode(&got); err != nil {
+				t.Fatal(err)
+			}
+			if got.Action != tc.wantAction {
+				t.Fatalf("action = %q, want %q", got.Action, tc.wantAction)
+			}
+			if !containsString(got.Risks, tc.wantRisk) {
+				t.Fatalf("risks = %#v, want %q", got.Risks, tc.wantRisk)
+			}
+		})
+	}
+}
+
+func containsString(values []string, want string) bool {
+	for _, value := range values {
+		if value == want {
+			return true
+		}
+	}
+	return false
+}
+
+func TestAgentNextActionRecommendsReleaseForOwnActiveCheckout(t *testing.T) {
+	storage := memory.NewStorage()
+	now := time.Now().UTC()
+	agent := domain.Agent{ID: "agent_next_action", Name: "Next Action Agent", Type: "noop", Enabled: true, Capability: domain.CapabilityWorker, CreatedAt: now, UpdatedAt: now}
+	task := domain.Task{ID: "task_active_checkout", AgentID: agent.ID, Title: "Active checkout", Prompt: "Active checkout", Status: domain.TaskStatusInProgress, CheckoutRunID: "run_active", CheckedOutByAgentID: agent.ID, CreatedAt: now, UpdatedAt: now}
+	if err := storage.Agents().Create(t.Context(), agent); err != nil {
+		t.Fatal(err)
+	}
+	if err := storage.Tasks().Create(t.Context(), task); err != nil {
+		t.Fatal(err)
+	}
+	ts := newTestServerWithStorage(t, storage, true)
+	defer ts.Close()
+
+	res, err := ts.Client().Get(ts.URL + "/agent-api/tasks/" + task.ID + "/next-action?agent_id=" + agent.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer res.Body.Close()
+	var got struct {
+		Action string   `json:"action"`
+		Risks  []string `json:"risks"`
+	}
+	if err := json.NewDecoder(res.Body).Decode(&got); err != nil {
+		t.Fatal(err)
+	}
+	if got.Action != "release" {
+		t.Fatalf("action = %q, want release", got.Action)
+	}
+	if !containsString(got.Risks, "own_active_checkout") {
+		t.Fatalf("risks = %#v, want own_active_checkout", got.Risks)
 	}
 }
 
