@@ -475,13 +475,30 @@ func TestAPIV1DiagnosticsRecoveryLivenessReturnsCompactSnapshot(t *testing.T) {
 }
 
 func TestAgentInboxLiteAndHeartbeatContext(t *testing.T) {
-	ts := newTestServer(t)
+	storage := memory.NewStorage()
+	ts := newTestServerWithStorage(t, storage, true)
 	defer ts.Close()
 
 	client := ts.Client()
-	agent := postJSON(t, client, ts.URL+"/api/agents", map[string]any{"name": "Inbox Agent", "type": "noop"})
+	agent := postJSON(t, client, ts.URL+"/api/agents", map[string]any{"name": "Inbox Agent", "type": "noop", "capability": "coordinator"})
 	task := postJSON(t, client, ts.URL+"/agent-api/tasks", map[string]any{"from_agent_id": agent["id"], "assignee_agent_id": agent["id"], "title": "Inbox task", "prompt": "Do inbox work"})
 	_ = postJSON(t, client, ts.URL+"/agent-api/tasks/"+task["id"].(string)+"/comments", map[string]any{"from_id": agent["id"], "role": "user", "body": "Latest user comment"})
+	_ = postJSON(t, client, ts.URL+"/agent-api/tasks/"+task["id"].(string)+"/delegate", map[string]any{"from_agent_id": agent["id"], "to_agent_id": agent["id"], "title": "Open child", "prompt": "Child work"})
+
+	now := time.Now().UTC()
+	storedTask, err := storage.Tasks().Get(t.Context(), task["id"].(string))
+	if err != nil {
+		t.Fatal(err)
+	}
+	storedTask.CheckoutRunID = "run_inbox_failed"
+	storedTask.NeedsRun = true
+	storedTask.UpdatedAt = now
+	if err := storage.Tasks().Update(t.Context(), storedTask); err != nil {
+		t.Fatal(err)
+	}
+	if err := storage.Runs().Create(t.Context(), domain.Run{ID: "run_inbox_failed", TaskID: storedTask.ID, AgentID: agent["id"].(string), Status: domain.RunStatusFailed, StartedAt: now.Add(-2 * time.Minute)}); err != nil {
+		t.Fatal(err)
+	}
 
 	inboxRes, err := client.Get(ts.URL + "/agent-api/agents/me/inbox-lite?agent_id=" + agent["id"].(string))
 	if err != nil {
@@ -493,10 +510,21 @@ func TestAgentInboxLiteAndHeartbeatContext(t *testing.T) {
 	}
 	var inbox struct {
 		Inbox []struct {
-			TaskID    string `json:"task_id"`
-			Title     string `json:"title"`
-			Reason    string `json:"reason"`
-			Attention bool   `json:"attention"`
+			TaskID          string         `json:"task_id"`
+			Title           string         `json:"title"`
+			Status          string         `json:"status"`
+			Reason          string         `json:"reason"`
+			Attention       bool           `json:"attention"`
+			Severity        string         `json:"severity"`
+			LastActivityAt  string         `json:"last_activity_at"`
+			NeedsRun        bool           `json:"needs_run"`
+			CheckoutRunID   string         `json:"checkout_run_id"`
+			Counts          map[string]int `json:"counts"`
+			Messages        []any          `json:"messages"`
+			Runs            []any          `json:"runs"`
+			Wakeups         []any          `json:"wakeups"`
+			Children        []any          `json:"children"`
+			ExecutionEvents []any          `json:"execution_events"`
 		} `json:"inbox"`
 	}
 	if err := json.NewDecoder(inboxRes.Body).Decode(&inbox); err != nil {
@@ -507,6 +535,22 @@ func TestAgentInboxLiteAndHeartbeatContext(t *testing.T) {
 	}
 	if inbox.Inbox[0].Reason != "comment" || !inbox.Inbox[0].Attention {
 		t.Fatalf("inbox should mark recent comments as attention-worthy, got %+v", inbox.Inbox[0])
+	}
+	item := inbox.Inbox[0]
+	if item.Severity != "high" {
+		t.Fatalf("inbox severity = %q, want high for commented task with failed run", item.Severity)
+	}
+	if item.LastActivityAt == "" {
+		t.Fatalf("inbox should expose last_activity_at compactly: %+v", item)
+	}
+	if !item.NeedsRun || item.CheckoutRunID != "run_inbox_failed" {
+		t.Fatalf("inbox should expose execution signals, got needs_run=%v checkout_run_id=%q", item.NeedsRun, item.CheckoutRunID)
+	}
+	if item.Counts["pending_wakeups"] != 2 || item.Counts["failed_runs"] != 1 || item.Counts["open_children"] != 1 {
+		t.Fatalf("inbox counts = %#v, want pending_wakeups=2 and failed_runs/open_children=1", item.Counts)
+	}
+	if item.Messages != nil || item.Runs != nil || item.Wakeups != nil || item.Children != nil || item.ExecutionEvents != nil {
+		t.Fatalf("inbox-lite should not embed heavyweight arrays: %+v", item)
 	}
 
 	ctxRes, err := client.Get(ts.URL + "/agent-api/tasks/" + task["id"].(string) + "/heartbeat-context")

@@ -319,16 +319,36 @@ func (s *Server) handleAgentInboxLite(w http.ResponseWriter, r *http.Request) {
 		if task.Status == domain.TaskStatusDone || task.Status == domain.TaskStatusCancelled {
 			continue
 		}
-		reason := s.latestWakeReason(r, task.ID)
-		items = append(items, map[string]any{
-			"task_id":   task.ID,
-			"title":     task.Title,
-			"status":    task.Status,
-			"reason":    reason,
-			"attention": reason == string(domain.WakeupReasonComment),
-		})
+		items = append(items, s.compactInboxItem(r, task))
 	}
 	s.jsonResponse(w, map[string]any{"agent_id": agentID, "inbox": items})
+}
+
+func (s *Server) compactInboxItem(r *http.Request, task domain.Task) map[string]any {
+	reason := s.latestWakeReason(r, task.ID)
+	runs, _ := s.tasks.GetRuns(r.Context(), task.ID)
+	wakeups, _ := s.storage.Wakeups().ListByTask(r.Context(), task.ID)
+	children, _ := s.tasks.List(r.Context(), ports.TaskFilter{ParentID: task.ID})
+	failedRuns := countRunsWithStatus(runs, domain.RunStatusFailed, domain.RunStatusTimeout)
+	pendingWakeups := countPendingWakeups(wakeups)
+	openChildren := countOpenTasks(children)
+	attention := reason == string(domain.WakeupReasonComment) || failedRuns > 0 || pendingWakeups > 0 || task.NeedsRun
+	return map[string]any{
+		"task_id":          task.ID,
+		"title":            task.Title,
+		"status":           task.Status,
+		"reason":           reason,
+		"attention":        attention,
+		"severity":         inboxSeverity(task, reason, failedRuns, pendingWakeups),
+		"last_activity_at": compactTime(inboxLastActivityAt(task, runs, wakeups, children)),
+		"needs_run":        task.NeedsRun,
+		"checkout_run_id":  task.CheckoutRunID,
+		"counts": map[string]int{
+			"pending_wakeups": pendingWakeups,
+			"failed_runs":     failedRuns,
+			"open_children":   openChildren,
+		},
+	}
 }
 
 func (s *Server) handleAgentHeartbeatContext(w http.ResponseWriter, r *http.Request) {
@@ -511,6 +531,74 @@ func countPendingWakeups(wakeups []domain.WakeupRequest) int {
 		}
 	}
 	return count
+}
+
+func countRunsWithStatus(runs []domain.Run, statuses ...domain.RunStatus) int {
+	count := 0
+	for _, run := range runs {
+		for _, status := range statuses {
+			if run.Status == status {
+				count++
+				break
+			}
+		}
+	}
+	return count
+}
+
+func countOpenTasks(tasks []domain.Task) int {
+	count := 0
+	for _, task := range tasks {
+		if task.Status != domain.TaskStatusDone && task.Status != domain.TaskStatusCancelled {
+			count++
+		}
+	}
+	return count
+}
+
+func inboxSeverity(task domain.Task, reason string, failedRuns int, pendingWakeups int) string {
+	if failedRuns > 0 || task.Status == domain.TaskStatusBlocked || task.Status == domain.TaskStatusInProgress && task.CheckoutRunID != "" {
+		return "high"
+	}
+	if reason == string(domain.WakeupReasonComment) || pendingWakeups > 0 || task.NeedsRun {
+		return "medium"
+	}
+	return "low"
+}
+
+func inboxLastActivityAt(task domain.Task, runs []domain.Run, wakeups []domain.WakeupRequest, children []domain.Task) time.Time {
+	last := task.UpdatedAt
+	if last.IsZero() {
+		last = task.CreatedAt
+	}
+	for _, run := range runs {
+		if run.StartedAt.After(last) {
+			last = run.StartedAt
+		}
+		if run.FinishedAt != nil && run.FinishedAt.After(last) {
+			last = *run.FinishedAt
+		}
+		if run.LastOutputAt != nil && run.LastOutputAt.After(last) {
+			last = *run.LastOutputAt
+		}
+	}
+	for _, wakeup := range wakeups {
+		if wakeup.UpdatedAt.After(last) {
+			last = wakeup.UpdatedAt
+		}
+		if wakeup.CreatedAt.After(last) {
+			last = wakeup.CreatedAt
+		}
+	}
+	for _, child := range children {
+		if child.UpdatedAt.After(last) {
+			last = child.UpdatedAt
+		}
+		if child.CreatedAt.After(last) {
+			last = child.CreatedAt
+		}
+	}
+	return last
 }
 
 func compactText(text string, max int) string {

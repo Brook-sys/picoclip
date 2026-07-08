@@ -266,7 +266,16 @@ Resposta `200 OK`:
       "title": "Investigar timeout do runner",
       "status": "todo",
       "reason": "comment",
-      "attention": true
+      "attention": true,
+      "severity": "medium",
+      "last_activity_at": "2026-07-08T10:00:01Z",
+      "needs_run": true,
+      "checkout_run_id": "run_123",
+      "counts": {
+        "pending_wakeups": 1,
+        "failed_runs": 0,
+        "open_children": 0
+      }
     }
   ]
 }
@@ -282,7 +291,16 @@ Campos:
 | `inbox[].title` | string | Título atual da task. |
 | `inbox[].status` | string | Status atual da task. |
 | `inbox[].reason` | string | Razão do wakeup mais recente quando existir; hoje cai para `assignment` se não houver wakeups. |
-| `inbox[].attention` | boolean | `true` quando `reason == "comment"`; sinaliza comentário humano/operacional aguardando triagem. |
+| `inbox[].attention` | boolean | `true` quando há comentário recente, falha/timeout, wakeup pendente ou `needs_run=true`; sinaliza item que merece triagem. |
+| `inbox[].severity` | string | Sinal compacto de priorização: `high` para falha/timeout, bloqueio ou checkout ativo; `medium` para comentário, wakeup pendente ou item runnable; `low` para restante. |
+| `inbox[].last_activity_at` | string | Timestamp RFC3339 mais recente entre task, runs, wakeups e subtasks, sem embutir arrays completos. |
+| `inbox[].needs_run` | boolean | Espelha `Task.NeedsRun` para agentes detectarem itens runnable. |
+| `inbox[].checkout_run_id` | string | Run em checkout, quando existir; vazio se não houver lock/run ativa. |
+| `inbox[].counts.pending_wakeups` | number | Total de wakeups pendentes da task. |
+| `inbox[].counts.failed_runs` | number | Total compacto de runs `failed` ou `timeout` da task. |
+| `inbox[].counts.open_children` | number | Subtasks que ainda não estão `done` nem `cancelled`. |
+
+`inbox-lite` permanece propositalmente pequeno: não embute mensagens, runs, wakeups, eventos ou subtasks completos. Use `/agent-api/tasks/{id}` ou `heartbeat-context` quando esses detalhes forem necessários.
 
 Erros observáveis:
 
