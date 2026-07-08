@@ -211,6 +211,8 @@ Comentários com `role=user` em `/agent-api/tasks/{id}/comments`, `/agent-api/ta
 
 `GET /agent-api/agents/me/inbox-lite?agent_id=...` retorna cada task não terminal com `reason` e `attention`; comentários recentes aparecem como `reason="comment"` e `attention=true` para permitir triagem compacta. Use `heartbeat-context` para buscar o comentário completo quando necessário.
 
+Quando o reconciler processa um wakeup due associado a task, o PicoClip preserva o fluxo atual de acordar a task para o dispatcher e registra também o evento compacto `agent.heartbeat_wakeup`. Esse é o modo piloto de heartbeat/wakeup: o payload aponta `wakeup_id`, `wake_reason`, `engine_mode=pilot` e `context_route=/agent-api/tasks/{id}/heartbeat-context`, permitindo que agentes correlacionem a razão do wakeup com a rota compacta sem trocar o scheduler atual por uma engine completa de heartbeat.
+
 ### Contexto compacto para agentes
 
 `GET /agent-api/tasks/{id}/heartbeat-context` é a rota recomendada para agentes recuperarem percepção operacional antes de agir sem puxar o detalhe completo da task. Ela evita duplicar payloads grandes e retorna apenas campos resumidos:

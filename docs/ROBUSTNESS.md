@@ -124,6 +124,21 @@ A key safety property is that the task is **not** left immediately runnable whil
 
 Direct runner timeouts follow the same safety contract as reconciler-detected stalled runs: a one-shot runtime deadline stores `runtime.timeout`, creates a retry wakeup with `reason=runtime_timeout`, keeps the task non-runnable while the backoff is pending, and emits `retry.scheduled`. When the task has reached its attempt limit, the runner blocks it instead of scheduling another retry.
 
+## Heartbeat/wakeup pilot
+
+Wakeups remain the durable queue that makes tasks runnable, but processing a due task wakeup now also records a compact pilot signal for the future heartbeat engine. The reconciler processes wakeups before dispatch; for each due wakeup tied to a task, `WakeupService.ProcessDue` preserves the existing behavior (`todo`/`NeedsRun=true` when safe), marks the wakeup completed, and persists `agent.heartbeat_wakeup`.
+
+The pilot event is intentionally small and observable rather than a scheduler rewrite. Its payload includes:
+
+```text
+wakeup_id
+wake_reason
+engine_mode=pilot
+context_route=/agent-api/tasks/{id}/heartbeat-context
+```
+
+This lets agents and operators correlate why a task became runnable and which compact Agent API context should be used next, while the existing dispatcher/runner flow remains the execution fallback. The pilot does not yet create a separate heartbeat-run table, agent choice loop, or replacement dispatcher.
+
 ## Retry classification and metadata
 
 PicoClip records a small retry classification on failure/retry events so humans and agents can distinguish transient failures from deterministic blockers.
@@ -170,6 +185,7 @@ Important robustness events include:
 | `runtime.cancel_requested` | PicoClip requested cancellation of a stalled runtime run. |
 | `runtime.cancel_succeeded` / `runtime.cancel_failed` | Runtime cancellation returned success or failure. |
 | `retry.scheduled` | PicoClip scheduled a retry and recorded why, when, with what backoff, and the retry classification. |
+| `agent.heartbeat_wakeup` | A due task wakeup entered the heartbeat/wakeup pilot path; payload includes `wakeup_id`, `wake_reason`, `engine_mode=pilot` and the compact `heartbeat-context` route. |
 | `reconciler.failed` | A critical reconciler phase aborted; payload includes `phase` and a sanitized `error`. |
 | `budget.blocked` | Execution was blocked by a budget constraint. |
 | `driver.missing` | Required runtime/driver was unavailable; payload marks this as `non_retryable`. |

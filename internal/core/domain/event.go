@@ -31,6 +31,7 @@ const (
 	EventRuntimeCancelFailed    EventType = "runtime.cancel_failed"
 	EventReconcilerFailed       EventType = "reconciler.failed"
 	EventRetryScheduled         EventType = "retry.scheduled"
+	EventAgentHeartbeatWakeup   EventType = "agent.heartbeat_wakeup"
 	EventDriverMissing          EventType = "driver.missing"
 	EventTaskDelegated          EventType = "task.delegated"
 	EventMessageCreated         EventType = "message.created"

@@ -12,6 +12,7 @@ type WakeupService struct {
 	storage ports.Storage
 	clock   ports.Clock
 	idGen   ports.IDGenerator
+	bus     ports.EventBus
 }
 
 type CreateWakeupInput struct {
@@ -24,6 +25,10 @@ type CreateWakeupInput struct {
 
 func NewWakeupService(storage ports.Storage, clock ports.Clock, idGen ports.IDGenerator) *WakeupService {
 	return &WakeupService{storage: storage, clock: clock, idGen: idGen}
+}
+
+func NewWakeupServiceWithBus(storage ports.Storage, clock ports.Clock, idGen ports.IDGenerator, bus ports.EventBus) *WakeupService {
+	return &WakeupService{storage: storage, clock: clock, idGen: idGen, bus: bus}
 }
 
 func (s *WakeupService) Create(ctx context.Context, input CreateWakeupInput) (domain.WakeupRequest, error) {
@@ -74,6 +79,9 @@ func (s *WakeupService) ProcessDue(ctx context.Context, limit int) (int, error) 
 			if err := s.wakeTask(ctx, wakeup.TaskID); err != nil {
 				return processed, err
 			}
+			if err := s.recordHeartbeatPilotWakeup(ctx, wakeup); err != nil {
+				return processed, err
+			}
 		}
 		wakeup.Status = domain.WakeupStatusCompleted
 		wakeup.UpdatedAt = s.clock.Now()
@@ -102,4 +110,30 @@ func (s *WakeupService) wakeTask(ctx context.Context, taskID string) error {
 	task.NeedsRun = true
 	task.UpdatedAt = s.clock.Now()
 	return s.storage.Tasks().Update(ctx, task)
+}
+
+func (s *WakeupService) recordHeartbeatPilotWakeup(ctx context.Context, wakeup domain.WakeupRequest) error {
+	now := s.clock.Now()
+	event := domain.Event{
+		ID:      s.idGen.NewID("evt"),
+		Type:    domain.EventAgentHeartbeatWakeup,
+		TaskID:  wakeup.TaskID,
+		AgentID: wakeup.AgentID,
+		Message: "Wakeup due for agent heartbeat pilot",
+		Data: map[string]string{
+			"wakeup_id":     wakeup.ID,
+			"wake_reason":   string(wakeup.Reason),
+			"engine_mode":   "pilot",
+			"context_route": "/agent-api/tasks/{id}/heartbeat-context",
+		},
+		CreatedAt: now,
+	}
+	if err := s.storage.Events().Create(ctx, event); err != nil {
+		return err
+	}
+	if s.bus != nil {
+		_ = s.storage.Events().CreateOutbox(ctx, event)
+		_ = s.bus.Publish(ctx, event)
+	}
+	return nil
 }

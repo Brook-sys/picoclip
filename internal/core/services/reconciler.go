@@ -85,7 +85,7 @@ func (r *Reconciler) Reconcile(ctx context.Context) {
 		r.logger.Info("reconciler.stale_locks_recovered", "count", count)
 	}
 
-	processed, err := NewWakeupService(r.storage, r.clock, r.idGen).ProcessDue(ctx, 100)
+	processed, err := NewWakeupServiceWithBus(r.storage, r.clock, r.idGen, r.bus).ProcessDue(ctx, 100)
 	if err != nil {
 		r.logger.Warn("reconciler.wakeup_process_failed", "err", err)
 		r.emitFailureEvent(ctx, "wakeup_processing", err)

@@ -292,7 +292,8 @@ Current PicoClip:
 
 - scheduler periodically dispatches pending tasks;
 - runner executes one task;
-- wake task exists.
+- wake task exists;
+- a heartbeat/wakeup pilot records `agent.heartbeat_wakeup` when a due task wakeup is processed, including `wakeup_id`, `wake_reason`, `engine_mode=pilot` and the compact `heartbeat-context` route while preserving the current dispatcher/runner path.
 
 Paperclip target:
 
@@ -324,10 +325,11 @@ Execution flow:
 
 1. Event creates wakeup request.
 2. Scheduler reconciles running runs.
-3. Dispatcher picks due wakeup requests by priority.
-4. Runner starts heartbeat for agent.
-5. Agent sees compact inbox/context and checks out task.
-6. Runner records heartbeat outcome.
+3. **Current pilot:** due task wakeups wake the task for the existing dispatcher and persist `agent.heartbeat_wakeup` so agents/operators can correlate the wake reason with `/agent-api/tasks/{id}/heartbeat-context`.
+4. **Future full engine:** dispatcher picks due wakeup requests by priority.
+5. Runner starts heartbeat for agent.
+6. Agent sees compact inbox/context and checks out task.
+7. Runner records heartbeat outcome.
 
 Why this matters:
 
