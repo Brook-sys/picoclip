@@ -77,6 +77,16 @@ Veja [Robustez, Recovery e Aprendizado com Falhas](docs/ROBUSTNESS.pt-BR.md) par
 
 PicoClip é distribuído como um binário único. Ele não exige banco de dados externo nem serviços pesados em tempo de execução.
 
+### Primeiros 15 minutos para contribuidores e agentes
+
+Antes de alterar código, use a trilha curta de onboarding:
+
+1. Leia [AGENTS.md](AGENTS.md), [Mapa do Projeto](docs/PROJECT_MAP.md) e [Política de Documentação](docs/DOCUMENTATION_POLICY.md).
+2. Leia o guia da área da mudança: [Referência de API](docs/API_REFERENCE.md), [Robustez](docs/ROBUSTNESS.pt-BR.md), [Arquitetura de Storage](docs/STORAGE.md), [Design System](docs/DESIGN.md), [Runbook Operacional](docs/OPERATIONS.md) ou [Guia de Desenvolvimento](docs/DEVELOPMENT.md).
+3. Rode `git status --short` antes de editar e preserve artefatos locais/não rastreados.
+4. Para manutenção autônoma, siga [Ciclo Autônomo de Melhorias](docs/AUTONOMOUS_IMPROVEMENT.md) e o board Kanban `picoclip` antes de escolher um único card `ready`.
+5. Para mudanças de comportamento, use TDD e depois rode validação focada mais o gate canônico proporcional (`make check-docs`, `make test-go` ou `make check`).
+
 ### Opção 1: Rodar um binário pronto
 
 Baixe o binário mais recente na página de [GitHub Releases](https://github.com/Brook-sys/picoclip/releases), escolhendo o arquivo correto para sua plataforma.

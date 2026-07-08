@@ -61,6 +61,15 @@ Este diretório contém a documentação canônica do PicoClip. Use este índice
 5. Leia o documento da área que será modificada.
 6. Atualize documentação junto com qualquer mudança de comportamento.
 
+### Primeiros 15 minutos para agentes e contribuidores
+
+1. Comece por `../AGENTS.md`, [Project Map](PROJECT_MAP.md) e [Documentation Policy](DOCUMENTATION_POLICY.md).
+2. Escolha o documento da área: [API Reference](API_REFERENCE.md), [Robustness](ROBUSTNESS.md), [Storage Architecture](STORAGE.md), [Design System](DESIGN.md), [Operations Runbook](OPERATIONS.md) ou [Development Guide](DEVELOPMENT.md).
+3. Confira `git status --short` antes de editar e preserve artefatos locais/não rastreados.
+4. Para ciclos autônomos, consulte [Autonomous Improvement](AUTONOMOUS_IMPROVEMENT.md) e o board Kanban `picoclip` antes de escolher um único card `ready`.
+5. Leia código e testes relevantes, siga TDD para mudanças de comportamento e rode validação proporcional antes de commitar.
+6. Se a mudança alterar comportamento, API, UI, storage, robustez, operação ou comandos, atualize a documentação correspondente no mesmo ciclo.
+
 ## Regra de manutenção
 
 Sempre que um documento novo for criado em `docs/`, adicione-o a este índice. Sempre que um documento for renomeado, ajuste os links aqui, no README raiz e no `AGENTS.md` quando aplicável.

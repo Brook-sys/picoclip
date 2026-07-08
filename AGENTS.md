@@ -187,6 +187,19 @@ Melhorias recorrentes do PicoClip podem ser geridas pelo Hermes Kanban no board 
 - use o formato de relatório operacional de `docs/AUTONOMOUS_IMPROVEMENT.md` ao finalizar ciclos cron;
 - pause o cron autônomo durante execução manual no mesmo workspace e reative ao final.
 
+## Primeiros 15 minutos para agentes
+
+Use esta trilha curta antes de qualquer mudança. Ela reduz contexto inicial sem substituir os documentos canônicos.
+
+1. Leia este `AGENTS.md`, depois `docs/PROJECT_MAP.md` e `docs/DOCUMENTATION_POLICY.md`.
+2. Leia o documento da área que será alterada: `docs/API_REFERENCE.md`, `docs/ROBUSTNESS.md`, `docs/STORAGE.md`, `docs/DESIGN.md`, `docs/OPERATIONS.md` ou `docs/DEVELOPMENT.md`.
+3. Rode `git status --short` e preserve arquivos locais/não rastreados; neste ambiente, nunca adicione `graphify-out/`.
+4. Se estiver em melhoria autônoma, leia `docs/AUTONOMOUS_IMPROVEMENT.md`, consulte o Kanban `picoclip` e escolha no máximo um card `ready`.
+5. Antes de editar, leia os arquivos e testes relevantes. Para mudanças de comportamento, siga TDD: teste RED, implementação mínima, GREEN e refatoração pequena.
+6. Atualize documentação proporcional quando mudar API, UI, storage, runtime, robustez, comandos, operação ou onboarding.
+7. Valide com teste focado e com a validação canônica proporcional (`make check-docs`, `make test-go` ou `make check`) antes de commitar.
+8. Finalize reportando exatamente o que mudou, comandos reais de validação, commit/push, estado do servidor e pendências.
+
 ## Storage
 
 - SQLite é o padrão (`PICOCLIP_STORAGE=sqlite`).

@@ -77,6 +77,16 @@ See [Robustness, Recovery, and Failure Learning](docs/ROBUSTNESS.md) for the det
 
 PicoClip is distributed as a single binary. It does not require an external database or heavy runtime services.
 
+### First 15 minutes for contributors and agents
+
+Before changing code, use the short onboarding path:
+
+1. Read [AGENTS.md](AGENTS.md), [Project Map](docs/PROJECT_MAP.md), and [Documentation Policy](docs/DOCUMENTATION_POLICY.md).
+2. Read the area guide for the change: [API Reference](docs/API_REFERENCE.md), [Robustness](docs/ROBUSTNESS.md), [Storage Architecture](docs/STORAGE.md), [Design System](docs/DESIGN.md), [Operations Runbook](docs/OPERATIONS.md), or [Development Guide](docs/DEVELOPMENT.md).
+3. Run `git status --short` before editing and preserve local/untracked artifacts.
+4. For autonomous maintenance, follow [Autonomous Improvement](docs/AUTONOMOUS_IMPROVEMENT.md) and the `picoclip` Kanban board before choosing a single ready card.
+5. For behavior changes, use TDD, then run focused validation plus the proportional canonical gate (`make check-docs`, `make test-go`, or `make check`).
+
 ### Option 1: Run a prebuilt binary
 
 Download the latest binary from the [GitHub Releases](https://github.com/Brook-sys/picoclip/releases) page for your platform.
