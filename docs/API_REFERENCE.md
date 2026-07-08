@@ -221,6 +221,164 @@ Seções disponíveis: `prompt`, `execution_state`, `skills`, `apis`. A allowlis
 Use `/agent-api/tasks/{id}` somente quando o agente realmente precisar de mensagens/runs/eventos completos.
 > **Nota Operacional:** Para triagem e debug de tasks presas via Agent API, consulte a seção **Triagem Rápida via Agent API** no [Operations Runbook](OPERATIONS.md).
 
+### Contratos JSON compactos da Agent API
+
+Esta seção fixa o shape real dos endpoints compactos usados por agentes. Os handlers atuais retornam JSON direto, sem envelope `data/meta/error` da API v1; erros usam `http.Error` ou `writeTaskError`, portanto o corpo de erro é texto simples no estado atual.
+
+#### `GET /agent-api/agents/me/inbox-lite`
+
+Query params:
+
+| Campo | Obrigatório | Uso |
+| --- | --- | --- |
+| `agent_id` | Sim | ID do agente cuja inbox será resumida. `agent_id` é obrigatório e ausência retorna `400 Bad Request`. |
+
+Resposta `200 OK`:
+
+```json
+{
+  "agent_id": "agent_123",
+  "inbox": [
+    {
+      "task_id": "task_123",
+      "title": "Investigar timeout do runner",
+      "status": "todo",
+      "reason": "comment",
+      "attention": true
+    }
+  ]
+}
+```
+
+Campos:
+
+| Campo | Tipo | Observação |
+| --- | --- | --- |
+| `agent_id` | string | Ecoa o agente solicitado. |
+| `inbox[]` | array | Inclui tasks do agente que ainda não estão `done` nem `cancelled`. |
+| `inbox[].task_id` | string | ID da task. |
+| `inbox[].title` | string | Título atual da task. |
+| `inbox[].status` | string | Status atual da task. |
+| `inbox[].reason` | string | Razão do wakeup mais recente quando existir; hoje cai para `assignment` se não houver wakeups. |
+| `inbox[].attention` | boolean | `true` quando `reason == "comment"`; sinaliza comentário humano/operacional aguardando triagem. |
+
+Erros observáveis:
+
+| Status | Quando ocorre |
+| --- | --- |
+| `400 Bad Request` | `agent_id` ausente. |
+| `500 Internal Server Error` | Falha inesperada ao listar tasks. |
+
+#### `GET /agent-api/tasks/{id}/heartbeat-context`
+
+Alias: `GET /agent-api/issues/{id}/heartbeat-context`.
+
+Query params:
+
+| Campo | Obrigatório | Uso |
+| --- | --- | --- |
+| `include` | Não | Lista separada por vírgulas. `include` aceita apenas `prompt`, `execution_state`, `skills` e `apis`. Se omitido, todas as seções são incluídas. Qualquer seção desconhecida retorna `400 Bad Request`. |
+
+Resposta padrão `200 OK`:
+
+```json
+{
+  "task_id": "task_123",
+  "title": "Investigar timeout do runner",
+  "last_user_comment": "Veja o log mais recente.",
+  "status": "in_progress",
+  "checkout_run_id": "run_123",
+  "wake_reason": "comment",
+  "prompt": "Diagnosticar e corrigir...",
+  "execution_state": {
+    "needs_run": false,
+    "checked_out_by": "agent_123",
+    "checkout_run_id": "run_123",
+    "lock_expires_at": "2026-07-08T10:30:00Z",
+    "pending_wakeups": [
+      {"id": "wakeup_123", "reason": "comment", "due_at": "2026-07-08T10:00:00Z", "payload": {}}
+    ],
+    "recent_events": [
+      {"id": "event_123", "type": "run.output", "run_id": "run_123", "message": "stdout resumido", "created_at": "2026-07-08T10:00:01Z"}
+    ],
+    "counts": {
+      "runs": 1,
+      "wakeups": 1,
+      "pending_wakeups": 1,
+      "recent_events": 1,
+      "shown_wakeups": 1,
+      "shown_events": 1
+    },
+    "latest_run": {
+      "id": "run_123",
+      "status": "running",
+      "attempt": 1,
+      "driver_type": "crush",
+      "last_output_at": "2026-07-08T10:00:01Z",
+      "started_at": "2026-07-08T09:59:00Z",
+      "finished_at": "",
+      "tokens": {"input": 10, "output": 20, "total": 30}
+    }
+  },
+  "skills": [
+    {"id": "skill_123", "name": "debugging", "description": "..."}
+  ],
+  "apis": ["/agent-api/tasks", "/agent-api/projects", "/agent-api/skills"],
+  "meta": {"mode": "default", "included": ["prompt", "execution_state", "skills", "apis"]}
+}
+```
+
+Campos e limites reais:
+
+| Campo | Tipo | Observação |
+| --- | --- | --- |
+| `task_id`, `title`, `status`, `checkout_run_id` | string | Identidade e estado mínimo da task. |
+| `last_user_comment` | string | Último comentário/mensagem com `role=user`; vazio se não existir. |
+| `wake_reason` | string | Razão do wakeup mais recente ou `assignment` quando não há wakeups. |
+| `meta.mode` | string | `default` sem `include`; `selective` quando `include` é usado. |
+| `meta.included` | array | Seções realmente incluídas; no modo seletivo vem ordenado alfabeticamente. |
+| `prompt` | string | Só presente quando a seção `prompt` está incluída. |
+| `skills[]` | array | Skills habilitadas e aplicáveis ao agente da task, com `id`, `name` e `description`. |
+| `apis[]` | array | Rotas agent-facing úteis para continuar a navegação compacta. |
+| `execution_state.needs_run` | boolean | Espelha `Task.NeedsRun`. |
+| `execution_state.checked_out_by` | string | Agente que segura o lock atual, se houver. |
+| `execution_state.lock_expires_at` | string | Timestamp RFC3339 ou string vazia quando não há expiração. |
+| `execution_state.pending_wakeups` | array | Mostra até 3 wakeups pendentes, com `id`, `reason`, `due_at` e `payload`. |
+| `execution_state.recent_events` | array | Mostra até 5 eventos recentes; `message` é truncada para 180 caracteres mais `...`. |
+| `execution_state.counts` | object | Contadores totais e quantidade mostrada para runs, wakeups e eventos. |
+| `execution_state.latest_run` | object | Presente somente quando há ao menos uma run; inclui status, tentativa, runtime, timestamps e tokens. |
+
+Erros observáveis:
+
+| Status | Quando ocorre |
+| --- | --- |
+| `400 Bad Request` | `include` contém seção desconhecida. |
+| `404 Not Found` | Task inexistente. |
+
+#### Operações compactas de task/issue
+
+Os aliases `/agent-api/issues...` são equivalentes aos endpoints `/agent-api/tasks...` para detalhe, heartbeat-context, comentários, criação, checkout, release, update e wake. A exceção atual é que delegate/cancel só estão registrados em `/agent-api/tasks/{id}/delegate` e `/agent-api/tasks/{id}/cancel`.
+
+| Endpoint | Request JSON | Sucesso | Permissão exigida |
+| --- | --- | --- | --- |
+| `POST /agent-api/tasks` | `project_id`, `parent_id`, `agent_id`/`assignee_agent_id`, `from_agent_id`, `title`, `prompt` ou `message` | `200 OK` com task compacta; `prompt` cai para `message` quando vazio | `tasks:create` para `from_agent_id` |
+| `POST /agent-api/tasks/{id}/comments` | `from_id`, `to_id`, `role`, `body`, `reopen` | `200 OK` com mensagem criada; `role` padrão é `user`; `reopen=true` também chama wake | `tasks:update` para `from_id` |
+| `POST /agent-api/tasks/{id}/messages` | `from_id`, `to_id`, `role`, `body` | `200 OK` com mensagem criada; `role` padrão é `user` | `tasks:update` para `from_id` |
+| `POST /agent-api/tasks/{id}/checkout` | `agent_id`, `run_id`, `expected_statuses` | `200 OK` com task compacta em checkout; se `run_id` vazio, usa `run_{task_id}_auto` | `tasks:run` para `agent_id` |
+| `POST /agent-api/tasks/{id}/release` | `agent_id`, `comment` | `200 OK` com task compacta após liberar lock | `tasks:update` para `agent_id` |
+| `PATCH /agent-api/tasks/{id}` | `agent_id`, `status`, `comment` | `200 OK` com task compacta após transição de status | `tasks:update` para `agent_id` |
+| `POST /agent-api/tasks/{id}/wake` | `agent_id` | `200 OK` com task compacta após wake manual | `tasks:update` para `agent_id` |
+| `POST /agent-api/tasks/{id}/delegate` | Mesmo payload de criação/delegação usado pela API administrativa | `200 OK` com subtarefa criada | Sem enforcement dedicado adicional no handler atual além das regras de criação quando aplicável |
+| `POST /agent-api/tasks/{id}/cancel` | `agent_id`, `reason` | `200 OK` com task cancelada | `tasks:cancel`/regra do handler de cancelamento |
+
+Erros comuns destes endpoints:
+
+| Status | Quando ocorre |
+| --- | --- |
+| `400 Bad Request` | JSON inválido, payload inválido, status/transição inválida ou `include` inválido em heartbeat-context. |
+| `403 Forbidden` | Agente informado não possui a permissão exigida pelo handler. |
+| `404 Not Found` | Task/agente/recurso inexistente quando o serviço retorna `not found`. |
+| `409 Conflict` | Conflito de lifecycle/checkout, como status esperado incompatível, lock ativo por outro agente ou transição concorrente. |
 
 ## Páginas web e ações HTMX/server-rendered
 
