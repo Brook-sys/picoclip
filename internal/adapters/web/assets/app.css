@@ -1461,7 +1461,7 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monos
 .pc-btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 38px; padding: 9px 14px; border: 1px solid transparent; border-radius: var(--radius-md); font: inherit; font-size: 14px; font-weight: 750; line-height: 1; cursor: pointer; text-decoration: none; transition: background 0.12s ease, border-color 0.12s ease, color 0.12s ease, box-shadow 0.12s ease, transform 0.12s ease; }
 .pc-btn:hover { transform: var(--button-hover-transform); }
 .pc-btn:disabled, .pc-btn[disabled] { opacity: 0.55; cursor: not-allowed; transform: none; }
-.pc-btn:focus-visible, .pc-icon-btn:focus-visible, .pc-input:focus-visible, pc-tag-multiselect:focus-within { outline: none; border-color: var(--brand); box-shadow: var(--focus-ring); }
+.pc-btn:focus-visible, .pc-icon-btn:focus-visible, .pc-input:focus-visible, .pc-select:focus-visible, textarea.pc-input:focus-visible, pc-tag-multiselect:focus-within { outline: none; border-color: var(--brand); box-shadow: var(--focus-ring); }
 .pc-btn-primary { background: linear-gradient(135deg, var(--brand), var(--brand-strong)); color: var(--brand-ink); box-shadow: var(--button-shadow); }
 .pc-btn-primary:hover { filter: saturate(1.06) brightness(1.02); }
 .pc-btn-secondary { background: var(--surface-raised); color: var(--text); border-color: var(--border); box-shadow: var(--shadow-sm); }
@@ -1476,14 +1476,14 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monos
 .pc-field-label { color: var(--text); font-size: 13px; font-weight: 700; }
 .pc-field-message { margin: 0; color: var(--muted); font-size: 12px; }
 .pc-field-error { color: var(--bad); }
-.pc-input { width: 100%; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface-overlay); color: var(--text); padding: 10px 12px; font: inherit; font-size: 14px; box-shadow: var(--shadow-sm); transition: background 0.12s ease, border-color 0.12s ease, box-shadow 0.12s ease; }
+.pc-input { width: 100%; min-height: 40px; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface-overlay); color: var(--text); padding: 10px 12px; font: inherit; font-size: 14px; box-shadow: var(--shadow-sm); transition: background 0.12s ease, border-color 0.12s ease, box-shadow 0.12s ease; }
 .pc-input:hover { border-color: var(--border-strong); }
 .pc-input::placeholder { color: color-mix(in srgb, var(--muted) 70%, transparent); }
-textarea.pc-input { min-height: 84px; resize: vertical; }
+textarea.pc-input { min-height: 96px; line-height: 1.55; resize: vertical; }
 .pc-select-wrapper { position: relative; }
 .pc-select { appearance: none; padding-right: 36px; }
 .pc-select-icon { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); color: var(--muted); pointer-events: none; }
-pc-tag-multiselect { position: relative; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; min-height: 40px; padding: 6px 10px; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface); color: var(--text); box-shadow: var(--shadow-sm); cursor: text; }
+pc-tag-multiselect { position: relative; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; min-height: 40px; padding: 6px 10px; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface-overlay); color: var(--text); box-shadow: var(--shadow-sm); cursor: text; }
 .pc-multiselect-input { flex: 1; min-width: 120px; border: 0; outline: 0; background: transparent; color: inherit; font: inherit; font-size: 14px; padding: 3px 0; }
 .pc-multiselect-dropdown { position: absolute; top: calc(100% + 4px); left: 0; right: 0; z-index: 50; max-height: 220px; overflow: auto; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); box-shadow: 0 16px 40px var(--shadow); padding: 4px; }
 .pc-dropdown-item { padding: 8px 10px; border-radius: var(--radius-sm); font-size: 14px; cursor: pointer; }
@@ -1545,7 +1545,7 @@ pc-tag-multiselect { position: relative; display: flex; flex-wrap: wrap; align-i
 .pc-checkbox-row input { width: auto; }
 
 .inline-edit-form { display: block; width: 100%; }
-.inline-edit-input, .inline-edit-textarea { width: 100%; border-color: transparent; background: transparent; padding: 2px 4px; margin: -2px -4px; box-shadow: none; }
+.inline-edit-input, .inline-edit-textarea { width: 100%; font: inherit; border: 1px solid transparent; border-radius: var(--radius-sm); background: transparent; padding: 2px 4px; margin: -2px -4px; box-shadow: none; }
 .inline-edit-input:hover, .inline-edit-textarea:hover { background: var(--surface-soft); border-color: var(--border); }
 .inline-edit-input:focus, .inline-edit-textarea:focus { background: var(--surface); border-color: var(--info); box-shadow: 0 0 0 3px color-mix(in srgb, var(--info) 16%, transparent); }
 .inline-edit-textarea { min-height: 96px; resize: vertical; line-height: 1.6; }

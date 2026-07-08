@@ -39,6 +39,55 @@ func TestCanonicalActionAndBadgeHelpersReplaceLegacyProjectAndSkillMarkup(t *tes
 	}
 }
 
+func TestDesignSystemCSSDefinesCanonicalFormControls(t *testing.T) {
+	t.Parallel()
+
+	body, err := os.ReadFile("assets/app.css")
+	if err != nil {
+		t.Fatalf("read app.css: %v", err)
+	}
+	css := string(body)
+
+	for selector, wants := range map[string][]string{
+		".pc-input": {
+			"min-height: 40px;",
+			"background: var(--surface-overlay);",
+			"border: 1px solid var(--border);",
+			"box-shadow: var(--shadow-sm);",
+		},
+		"textarea.pc-input": {
+			"min-height: 96px;",
+			"line-height: 1.55;",
+			"resize: vertical;",
+		},
+		"\n.pc-select": {
+			"appearance: none;",
+			"padding-right: 36px;",
+		},
+		"pc-tag-multiselect": {
+			"background: var(--surface-overlay);",
+			"border: 1px solid var(--border);",
+			"box-shadow: var(--shadow-sm);",
+		},
+		".inline-edit-input, .inline-edit-textarea": {
+			"font: inherit;",
+			"border: 1px solid transparent;",
+			"border-radius: var(--radius-sm);",
+		},
+	} {
+		block := cssBlock(t, css, selector)
+		for _, want := range wants {
+			if !strings.Contains(block, want) {
+				t.Fatalf("%s must include %q to share canonical form-control styling; block was %q", selector, want, block)
+			}
+		}
+	}
+
+	if !strings.Contains(css, ".pc-input:focus-visible, .pc-select:focus-visible, textarea.pc-input:focus-visible, pc-tag-multiselect:focus-within") {
+		t.Fatalf("canonical form controls must share the same focus-visible selector")
+	}
+}
+
 func TestDesignSystemCSSDefinesDarkModeDepthAndContrastTokens(t *testing.T) {
 	t.Parallel()
 

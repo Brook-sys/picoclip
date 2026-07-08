@@ -178,6 +178,25 @@ A UI ainda convive com a classe legada `.button` e os helpers novos `.pc-btn*`. 
 - mudanças nos botões devem manter `TestDesignSystemCSSDefinesConsistentActionButtons` verde; o teste verifica declarações CSS por seletor/propriedade em vez de depender de strings longas de formatação;
 - quando migrarem uma página, adicionar/ajustar teste de regressão contra `class="button`.
 
+### Form-control identity
+
+Inputs, selects, textareas, editores inline e multiselects devem parecer parte do
+mesmo sistema de superfícies, inclusive em dark mode:
+
+- controles canônicos usam `.pc-input` com `--surface-overlay`, `--border`,
+  `--shadow-sm`, `min-height: 40px` e `font: inherit`;
+- textareas canônicos usam `textarea.pc-input`, `min-height: 96px`, `line-height:
+  1.55` e resize vertical;
+- selects devem usar `SelectField`/`.pc-select-wrapper`/`.pc-select` quando
+  possível, com `appearance: none` e ícone `chevron-down`;
+- `pc-tag-multiselect` compartilha a mesma superfície, borda, sombra e anel de
+  foco dos campos base;
+- campos inline (`InlineTextField`, `InlineTextareaField`) mantêm fundo
+  transparente em repouso, mas herdam fonte, borda e raio do sistema para hover e
+  foco previsíveis;
+- mudanças nesses controles devem manter
+  `TestDesignSystemCSSDefinesCanonicalFormControls` verde.
+
 ### Badge/status identity
 
 Badges, chips e indicadores de status aparecem em listas, detalhes e configurações. Para manter uma linguagem única:
