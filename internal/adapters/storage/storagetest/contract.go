@@ -141,6 +141,17 @@ func testCoreFlow(t *testing.T, factory StorageFactory) {
 	if len(messages) != 1 || messages[0].Body != msg.Body {
 		t.Fatalf("expected message, got %#v", messages)
 	}
+	wakeup := domain.WakeupRequest{ID: "wkp_contract", AgentID: agent.ID, TaskID: task.ID, Reason: domain.WakeupReasonComment, Status: domain.WakeupStatusPending, Priority: 3, DueAt: now, Payload: map[string]string{"message_id": msg.ID}, CreatedAt: now, UpdatedAt: now}
+	if err := storage.Wakeups().Create(ctx, wakeup); err != nil {
+		t.Fatal(err)
+	}
+	wakeups, err := storage.Wakeups().ListByTask(ctx, task.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(wakeups) != 1 || wakeups[0].Payload["message_id"] != msg.ID {
+		t.Fatalf("expected wakeup payload round-trip, got %#v", wakeups)
+	}
 	evt := domain.Event{ID: "evt_contract", Type: domain.EventRunCompleted, TaskID: task.ID, AgentID: agent.ID, RunID: run.ID, Message: "done", CreatedAt: now}
 	if err := storage.Events().Create(ctx, evt); err != nil {
 		t.Fatal(err)

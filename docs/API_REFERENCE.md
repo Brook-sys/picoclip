@@ -167,6 +167,18 @@ Superfície para agentes lerem contexto, atualizarem tasks, comentarem, delegare
 | `POST` | `/agent-api/tasks/{id}/delegate` | Delega/cria subtarefa. |
 | `POST` | `/agent-api/tasks/{id}/cancel` | Cancela task. |
 
+### Comentários, wakeups e inbox de agentes
+
+Comentários com `role=user` em `/agent-api/tasks/{id}/comments`, `/agent-api/tasks/{id}/messages` ou `/api/tasks/{id}/messages` são tratados como sinal operacional para o assignee da task:
+
+- se a task está `todo`, `backlog`, `blocked` ou `in_review`, o comentário agenda/acorda a task com `WakeupRequest.reason=comment`; tasks `blocked` e `in_review` voltam para `todo` e `NeedsRun=true`;
+- se a task está `in_progress`, o comentário cria/atualiza um wakeup pendente `reason=comment` para a inbox/heartbeat, mas não rouba o checkout ativo;
+- se a task está `done`, o comentário cria uma subtarefa de follow-up e não cria wakeup de comentário na task concluída;
+- se a task está `cancelled`, o comentário fica registrado, mas não acorda execução;
+- wakeups pendentes de comentário são deduplicados por task/assignee: um novo comentário atualiza o payload do wakeup pendente com `message_id`, `from_id` e `to_id` em vez de multiplicar itens de inbox.
+
+`GET /agent-api/agents/me/inbox-lite?agent_id=...` retorna cada task não terminal com `reason` e `attention`; comentários recentes aparecem como `reason="comment"` e `attention=true` para permitir triagem compacta. Use `heartbeat-context` para buscar o comentário completo quando necessário.
+
 ### Contexto compacto para agentes
 
 `GET /agent-api/tasks/{id}/heartbeat-context` é a rota recomendada para agentes recuperarem percepção operacional antes de agir sem puxar o detalhe completo da task. Ela evita duplicar payloads grandes e retorna apenas campos resumidos:

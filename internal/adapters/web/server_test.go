@@ -312,8 +312,10 @@ func TestAgentInboxLiteAndHeartbeatContext(t *testing.T) {
 	}
 	var inbox struct {
 		Inbox []struct {
-			TaskID string `json:"task_id"`
-			Title  string `json:"title"`
+			TaskID    string `json:"task_id"`
+			Title     string `json:"title"`
+			Reason    string `json:"reason"`
+			Attention bool   `json:"attention"`
 		} `json:"inbox"`
 	}
 	if err := json.NewDecoder(inboxRes.Body).Decode(&inbox); err != nil {
@@ -321,6 +323,9 @@ func TestAgentInboxLiteAndHeartbeatContext(t *testing.T) {
 	}
 	if len(inbox.Inbox) == 0 || inbox.Inbox[0].TaskID != task["id"].(string) {
 		t.Fatalf("unexpected inbox: %+v", inbox)
+	}
+	if inbox.Inbox[0].Reason != "comment" || !inbox.Inbox[0].Attention {
+		t.Fatalf("inbox should mark recent comments as attention-worthy, got %+v", inbox.Inbox[0])
 	}
 
 	ctxRes, err := client.Get(ts.URL + "/agent-api/tasks/" + task["id"].(string) + "/heartbeat-context")

@@ -100,3 +100,44 @@ func TestWakeupServiceProcessDueWakesTask(t *testing.T) {
 		t.Fatalf("wakeup status=%s want completed", wakeup.Status)
 	}
 }
+
+func TestTaskServiceUserCommentCreatesSinglePendingCommentWakeup(t *testing.T) {
+	st := memory.NewStorage()
+	clock := fixedClock{t: time.Date(2026, 7, 8, 9, 0, 0, 0, time.UTC)}
+	idgen := &seqID{}
+	bus := noopBus{}
+	taskSvc := NewTaskService(st, clock, idgen, bus)
+
+	agent := domain.Agent{ID: "agt_comment", Name: "comment", Type: "internal", Enabled: true, Capability: domain.CapabilityWorker, CreatedAt: clock.t, UpdatedAt: clock.t}
+	if err := st.Agents().Create(context.Background(), agent); err != nil {
+		t.Fatalf("create agent: %v", err)
+	}
+
+	task, err := taskSvc.Create(context.Background(), agent.ID, "comment wake", "do")
+	if err != nil {
+		t.Fatalf("create task: %v", err)
+	}
+	if _, err := taskSvc.AddMessage(context.Background(), task.ID, "human", "", domain.MessageRoleUser, "First update"); err != nil {
+		t.Fatalf("add first comment: %v", err)
+	}
+	if _, err := taskSvc.AddMessage(context.Background(), task.ID, "human", "", domain.MessageRoleUser, "Second update"); err != nil {
+		t.Fatalf("add second comment: %v", err)
+	}
+
+	wakeups, err := st.Wakeups().ListByTask(context.Background(), task.ID)
+	if err != nil {
+		t.Fatalf("list wakeups: %v", err)
+	}
+	commentWakeups := 0
+	for _, wakeup := range wakeups {
+		if wakeup.Reason == domain.WakeupReasonComment && wakeup.Status == domain.WakeupStatusPending {
+			commentWakeups++
+			if wakeup.Payload["message_id"] == "" {
+				t.Fatalf("comment wakeup should point at latest message: %#v", wakeup)
+			}
+		}
+	}
+	if commentWakeups != 1 {
+		t.Fatalf("pending comment wakeups=%d want 1; wakeups=%#v", commentWakeups, wakeups)
+	}
+}

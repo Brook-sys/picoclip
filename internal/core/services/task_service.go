@@ -203,11 +203,41 @@ func (s *TaskService) AddMessage(ctx context.Context, taskID, fromID, toID strin
 		return domain.Message{}, err
 	}
 	if role == domain.MessageRoleUser {
-		if task, err := s.storage.Tasks().Get(ctx, taskID); err == nil {
-			_, _ = NewWakeupService(s.storage, s.clock, s.idGen).Create(ctx, CreateWakeupInput{AgentID: task.AgentID, TaskID: task.ID, Reason: domain.WakeupReasonComment, Priority: task.Priority})
-		}
+		_ = s.scheduleCommentWakeup(ctx, taskID, message)
 	}
 	return message, nil
+}
+
+func (s *TaskService) scheduleCommentWakeup(ctx context.Context, taskID string, message domain.Message) error {
+	task, err := s.storage.Tasks().Get(ctx, taskID)
+	if err != nil {
+		return err
+	}
+	if task.Status == domain.TaskStatusDone || task.Status == domain.TaskStatusCancelled {
+		return nil
+	}
+	payload := map[string]string{"message_id": message.ID}
+	if message.FromID != "" {
+		payload["from_id"] = message.FromID
+	}
+	if message.ToID != "" {
+		payload["to_id"] = message.ToID
+	}
+	wakeups, err := s.storage.Wakeups().ListByTask(ctx, task.ID)
+	if err != nil {
+		return err
+	}
+	for _, wakeup := range wakeups {
+		if wakeup.AgentID == task.AgentID && wakeup.Reason == domain.WakeupReasonComment && wakeup.Status == domain.WakeupStatusPending {
+			wakeup.Payload = payload
+			wakeup.Priority = task.Priority
+			wakeup.DueAt = s.clock.Now()
+			wakeup.UpdatedAt = s.clock.Now()
+			return s.storage.Wakeups().Update(ctx, wakeup)
+		}
+	}
+	_, err = NewWakeupService(s.storage, s.clock, s.idGen).Create(ctx, CreateWakeupInput{AgentID: task.AgentID, TaskID: task.ID, Reason: domain.WakeupReasonComment, Priority: task.Priority, Payload: payload})
+	return err
 }
 
 func (s *TaskService) Delegate(ctx context.Context, parentID, fromAgentID, toAgentID, prompt string) (domain.Task, error) {

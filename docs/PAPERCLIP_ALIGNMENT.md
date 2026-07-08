@@ -348,8 +348,10 @@ Low-token variant:
 Current PicoClip:
 
 - agents can list tasks;
+- `GET /agent-api/agents/me/inbox-lite` returns compact task items with wake `reason` and an `attention` boolean;
+- comment wakeups now surface as `reason="comment"` and `attention=true`;
 - dashboard shows some task/run information;
-- no rich inbox classification.
+- no rich inbox classification beyond the compact Agent API signal.
 
 Paperclip target:
 
@@ -384,7 +386,8 @@ Token-saving design:
 Current PicoClip:
 
 - `Message` has role and task id.
-- User comment can reopen or create follow-up.
+- User comment can reopen active/blocked/review work, creates/updates a deduplicated pending `WakeupRequest.reason=comment`, and creates a follow-up child task when the original task is done.
+- Comment wakeups carry compact payload metadata such as `message_id`, `from_id` and `to_id` for inbox/heartbeat triage.
 - Timeline is chronological.
 
 Paperclip target:
@@ -401,9 +404,10 @@ Recommended improvements:
    - `Presentation` or `Kind`: comment/status_update/system_event/delegation/review
    - soft-delete fields eventually.
 2. Add unread/seen model for agents/humans if needed later.
-3. Add comment-driven wakeup requests:
-   - human comment on active task wakes assignee;
-   - comment on done task creates follow-up child, as already started.
+3. Continue hardening comment-driven wakeup requests:
+   - human comment on active task wakes assignee through a deduplicated pending `WakeupRequest.reason=comment`;
+   - comment on done task creates follow-up child, as already started;
+   - future work can add per-agent unread/seen state and richer comment kinds.
 4. Keep messages concise in prompt:
    - include latest user comment;
    - include last N comments by relevance, not entire thread.

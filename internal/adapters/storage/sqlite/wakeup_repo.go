@@ -136,6 +136,9 @@ func scanWakeup(row scanner) (domain.WakeupRequest, error) {
 	}
 	w.Reason = domain.WakeupReason(reasonStr)
 	w.Status = domain.WakeupStatus(statusStr)
+	if payloadJSON != "" && payloadJSON != "{}" {
+		_ = json.Unmarshal([]byte(payloadJSON), &w.Payload)
+	}
 	return w, nil
 }
 

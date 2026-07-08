@@ -319,11 +319,13 @@ func (s *Server) handleAgentInboxLite(w http.ResponseWriter, r *http.Request) {
 		if task.Status == domain.TaskStatusDone || task.Status == domain.TaskStatusCancelled {
 			continue
 		}
+		reason := s.latestWakeReason(r, task.ID)
 		items = append(items, map[string]any{
-			"task_id": task.ID,
-			"title":   task.Title,
-			"status":  task.Status,
-			"reason":  s.latestWakeReason(r, task.ID),
+			"task_id":   task.ID,
+			"title":     task.Title,
+			"status":    task.Status,
+			"reason":    reason,
+			"attention": reason == string(domain.WakeupReasonComment),
 		})
 	}
 	s.jsonResponse(w, map[string]any{"agent_id": agentID, "inbox": items})
