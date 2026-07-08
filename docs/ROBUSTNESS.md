@@ -34,6 +34,35 @@ The current simplified execution flow is:
 
 The main safety rule is: a task should not have more than one active checkout/run at the same time.
 
+## Task lifecycle transition matrix
+
+`TaskLifecycle` owns the visible task status state machine. `CanTransition` uses the same matrix exposed by `TransitionMatrix`, and `Apply` also enforces required comments and status side effects. Self-transitions are allowed as idempotent no-ops for callers that already hold the current state.
+
+Current allowed cross-status transitions:
+
+| From | To |
+| --- | --- |
+| `backlog` | `todo`, `cancelled` |
+| `todo` | `backlog`, `in_progress`, `waiting_next_cycle`, `blocked`, `cancelled` |
+| `in_progress` | `todo`, `in_review`, `blocked`, `done`, `cancelled` |
+| `waiting_next_cycle` | `todo`, `cancelled` |
+| `in_review` | `todo`, `in_progress`, `done`, `blocked`, `cancelled` |
+| `blocked` | `todo`, `in_progress`, `cancelled` |
+| `done` | `todo` |
+| `cancelled` | `todo` |
+
+Status side effects are part of the contract:
+
+- `todo` marks the task runnable with `NeedsRun=true`, clears terminal timestamps and releases checkout/lock metadata;
+- `backlog`, `blocked`, `in_review`, `waiting_next_cycle`, `done` and `cancelled` mark `NeedsRun=false`;
+- `in_progress` sets `StartedAt` if this is the first start and clears terminal timestamps;
+- `waiting_next_cycle` sets `FinishedAt` when missing and releases checkout/lock metadata without waking the task;
+- `done` sets `FinishedAt` and `CompletedAt`, releases checkout/lock metadata and requires a comment;
+- `cancelled` sets `FinishedAt` and `CancelledAt`, releases checkout/lock metadata and requires a comment/reason;
+- `blocked` releases checkout/lock metadata and requires a comment.
+
+Direct service paths may add extra effects around this lifecycle contract. For example, `TaskService.Cancel` persists `CancelReason`, closes the active run as `canceled`, emits `task.canceled` and asks the runtime adapter to cancel when possible. `Checkout` is the atomic execution-claim path that moves runnable work into `in_progress` while assigning lock/run ownership.
+
 ## Dispatcher concurrency safety
 
 The dispatcher uses a bounded semaphore to respect `maxConcurrentRuns`.

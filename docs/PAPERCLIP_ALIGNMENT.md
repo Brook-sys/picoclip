@@ -213,14 +213,14 @@ Current PicoClip:
 - `NeedsRun` controls scheduler eligibility.
 - `UpdateStatus` handles done/blocked/cancelled side effects.
 - Comments on done task create follow-up child task.
+- `TaskLifecycle` now has an explicit transition matrix for `backlog`, `todo`, `in_progress`, `waiting_next_cycle`, `in_review`, `blocked`, `done` and `cancelled`, with tests covering the matrix, invalid edges and key side effects.
 
 Gaps:
 
-- No explicit transition matrix in code.
 - `NeedsRun` can become a hidden second lifecycle if not formalized.
 - `in_review` is present but not deeply used.
 - `backlog` semantics are underused.
-- Status side effects are implemented procedurally, not as documented transition rules.
+- Status side effects are centralized in `TaskLifecycle`, but some service-level paths still add procedural effects around it, such as cancellation of the active run and runtime adapter.
 
 Recommended improvements:
 

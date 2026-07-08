@@ -34,6 +34,35 @@ Fluxo simplificado atual:
 
 A regra de segurança principal é: uma task não deve ter mais de um checkout/run ativo ao mesmo tempo.
 
+## Matriz de transições do ciclo de vida de tasks
+
+`TaskLifecycle` é dono da máquina de estados visível de uma task. `CanTransition` usa a mesma matriz exposta por `TransitionMatrix`, e `Apply` também aplica comentários obrigatórios e efeitos colaterais de status. Transições para o próprio status são permitidas como no-ops idempotentes para callers que já possuem o estado atual.
+
+Transições atuais permitidas entre status diferentes:
+
+| De | Para |
+| --- | --- |
+| `backlog` | `todo`, `cancelled` |
+| `todo` | `backlog`, `in_progress`, `waiting_next_cycle`, `blocked`, `cancelled` |
+| `in_progress` | `todo`, `in_review`, `blocked`, `done`, `cancelled` |
+| `waiting_next_cycle` | `todo`, `cancelled` |
+| `in_review` | `todo`, `in_progress`, `done`, `blocked`, `cancelled` |
+| `blocked` | `todo`, `in_progress`, `cancelled` |
+| `done` | `todo` |
+| `cancelled` | `todo` |
+
+Efeitos colaterais de status fazem parte do contrato:
+
+- `todo` deixa a task executável com `NeedsRun=true`, limpa timestamps terminais e libera metadata de checkout/lock;
+- `backlog`, `blocked`, `in_review`, `waiting_next_cycle`, `done` e `cancelled` definem `NeedsRun=false`;
+- `in_progress` define `StartedAt` quando é a primeira execução e limpa timestamps terminais;
+- `waiting_next_cycle` define `FinishedAt` quando ausente e libera checkout/lock sem acordar a task;
+- `done` define `FinishedAt` e `CompletedAt`, libera checkout/lock e exige comentário;
+- `cancelled` define `FinishedAt` e `CancelledAt`, libera checkout/lock e exige comentário/motivo;
+- `blocked` libera checkout/lock e exige comentário.
+
+Caminhos diretos de serviço podem adicionar efeitos em volta deste contrato de lifecycle. Por exemplo, `TaskService.Cancel` persiste `CancelReason`, fecha o run ativo como `canceled`, emite `task.canceled` e pede cancelamento ao runtime adapter quando possível. `Checkout` é o caminho atômico de claim de execução que move trabalho executável para `in_progress` enquanto atribui ownership de lock/run.
+
 ## Segurança de concorrência do dispatcher
 
 O dispatcher usa um semáforo limitado para respeitar `maxConcurrentRuns`.

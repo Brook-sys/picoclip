@@ -8,33 +8,101 @@ import (
 	"picoclip/internal/core/domain"
 )
 
-func TestTaskLifecycleCanTransition(t *testing.T) {
+func TestTaskLifecycleTransitionMatrixMatchesFormalContract(t *testing.T) {
+	lifecycle := NewTaskLifecycle()
+	want := map[domain.TaskStatus][]domain.TaskStatus{
+		domain.TaskStatusBacklog: {
+			domain.TaskStatusTodo,
+			domain.TaskStatusCancelled,
+		},
+		domain.TaskStatusTodo: {
+			domain.TaskStatusBacklog,
+			domain.TaskStatusInProgress,
+			domain.TaskStatusWaitingNextCycle,
+			domain.TaskStatusBlocked,
+			domain.TaskStatusCancelled,
+		},
+		domain.TaskStatusInProgress: {
+			domain.TaskStatusTodo,
+			domain.TaskStatusInReview,
+			domain.TaskStatusBlocked,
+			domain.TaskStatusDone,
+			domain.TaskStatusCancelled,
+		},
+		domain.TaskStatusWaitingNextCycle: {
+			domain.TaskStatusTodo,
+			domain.TaskStatusCancelled,
+		},
+		domain.TaskStatusInReview: {
+			domain.TaskStatusTodo,
+			domain.TaskStatusInProgress,
+			domain.TaskStatusDone,
+			domain.TaskStatusBlocked,
+			domain.TaskStatusCancelled,
+		},
+		domain.TaskStatusBlocked: {
+			domain.TaskStatusTodo,
+			domain.TaskStatusInProgress,
+			domain.TaskStatusCancelled,
+		},
+		domain.TaskStatusDone: {
+			domain.TaskStatusTodo,
+		},
+		domain.TaskStatusCancelled: {
+			domain.TaskStatusTodo,
+		},
+	}
+
+	got := lifecycle.TransitionMatrix()
+	if len(got) != len(want) {
+		t.Fatalf("TransitionMatrix has %d states, want %d: %#v", len(got), len(want), got)
+	}
+	for from, wantAllowed := range want {
+		gotAllowed, ok := got[from]
+		if !ok {
+			t.Fatalf("TransitionMatrix missing state %s", from)
+		}
+		if len(gotAllowed) != len(wantAllowed) {
+			t.Fatalf("TransitionMatrix[%s] = %v, want %v", from, gotAllowed, wantAllowed)
+		}
+		for i, to := range wantAllowed {
+			if gotAllowed[i] != to {
+				t.Fatalf("TransitionMatrix[%s][%d] = %s, want %s", from, i, gotAllowed[i], to)
+			}
+			if !lifecycle.CanTransition(from, to) {
+				t.Fatalf("CanTransition(%s, %s) = false, want true from matrix", from, to)
+			}
+		}
+	}
+}
+
+func TestTaskLifecycleTransitionMatrixIsImmutableSnapshot(t *testing.T) {
+	lifecycle := NewTaskLifecycle()
+	matrix := lifecycle.TransitionMatrix()
+	matrix[domain.TaskStatusBacklog][0] = domain.TaskStatusDone
+
+	if lifecycle.CanTransition(domain.TaskStatusBacklog, domain.TaskStatusDone) {
+		t.Fatal("mutating TransitionMatrix snapshot changed lifecycle rules")
+	}
+}
+
+func TestTaskLifecycleCanTransitionRejectsInvalidEdges(t *testing.T) {
 	lifecycle := NewTaskLifecycle()
 	cases := []struct {
 		name string
 		from domain.TaskStatus
 		to   domain.TaskStatus
-		want bool
 	}{
-		{"backlog to todo", domain.TaskStatusBacklog, domain.TaskStatusTodo, true},
-		{"todo to in progress", domain.TaskStatusTodo, domain.TaskStatusInProgress, true},
-		{"in progress to review", domain.TaskStatusInProgress, domain.TaskStatusInReview, true},
-		{"review to done", domain.TaskStatusInReview, domain.TaskStatusDone, true},
-		{"blocked to todo", domain.TaskStatusBlocked, domain.TaskStatusTodo, true},
-		{"done to todo", domain.TaskStatusDone, domain.TaskStatusTodo, true},
-		{"cancelled to todo", domain.TaskStatusCancelled, domain.TaskStatusTodo, true},
-		{"waiting next cycle to todo", domain.TaskStatusWaitingNextCycle, domain.TaskStatusTodo, true},
-		{"waiting next cycle to cancelled", domain.TaskStatusWaitingNextCycle, domain.TaskStatusCancelled, true},
-		{"backlog to done", domain.TaskStatusBacklog, domain.TaskStatusDone, false},
-		{"todo to done", domain.TaskStatusTodo, domain.TaskStatusDone, false},
-		{"done to in progress", domain.TaskStatusDone, domain.TaskStatusInProgress, false},
-		{"waiting next cycle to done", domain.TaskStatusWaitingNextCycle, domain.TaskStatusDone, false},
+		{"backlog to done", domain.TaskStatusBacklog, domain.TaskStatusDone},
+		{"todo to done", domain.TaskStatusTodo, domain.TaskStatusDone},
+		{"done to in progress", domain.TaskStatusDone, domain.TaskStatusInProgress},
+		{"waiting next cycle to done", domain.TaskStatusWaitingNextCycle, domain.TaskStatusDone},
 	}
 
 	for _, tt := range cases {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := lifecycle.CanTransition(tt.from, tt.to); got != tt.want {
-				t.Fatalf("CanTransition(%s, %s) = %v, want %v", tt.from, tt.to, got, tt.want)
+			if lifecycle.CanTransition(tt.from, tt.to) {
+				t.Fatalf("CanTransition(%s, %s) = true, want false", tt.from, tt.to)
 			}
 		})
 	}

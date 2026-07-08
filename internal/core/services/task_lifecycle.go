@@ -119,6 +119,14 @@ func (l TaskLifecycle) Apply(task domain.Task, transition TaskTransition) (domai
 	return task, nil
 }
 
+func (l TaskLifecycle) TransitionMatrix() map[domain.TaskStatus][]domain.TaskStatus {
+	matrix := make(map[domain.TaskStatus][]domain.TaskStatus, len(taskTransitionMatrix))
+	for from, allowed := range taskTransitionMatrix {
+		matrix[from] = append([]domain.TaskStatus(nil), allowed...)
+	}
+	return matrix
+}
+
 func (l TaskLifecycle) CanTransition(from, to domain.TaskStatus) bool {
 	if from == to {
 		return true
