@@ -8,6 +8,7 @@ import (
 
 	"picoclip/internal/adapters/storage/memory"
 	"picoclip/internal/core/domain"
+	"picoclip/internal/core/ports"
 )
 
 type testLogger struct{}
@@ -16,6 +17,73 @@ func (testLogger) Debug(msg string, args ...any) {}
 func (testLogger) Info(msg string, args ...any)  {}
 func (testLogger) Warn(msg string, args ...any)  {}
 func (testLogger) Error(msg string, args ...any) {}
+
+type failingWakeupStorage struct {
+	ports.Storage
+	err error
+}
+
+func (s failingWakeupStorage) Wakeups() ports.WakeupRepository {
+	return failingWakeupRepository{err: s.err}
+}
+
+type failingWakeupRepository struct {
+	err error
+}
+
+func (r failingWakeupRepository) Create(ctx context.Context, wakeup domain.WakeupRequest) error {
+	return r.err
+}
+
+func (r failingWakeupRepository) Get(ctx context.Context, id string) (domain.WakeupRequest, error) {
+	return domain.WakeupRequest{}, r.err
+}
+
+func (r failingWakeupRepository) ListPending(ctx context.Context, now time.Time, limit int) ([]domain.WakeupRequest, error) {
+	return nil, r.err
+}
+
+func (r failingWakeupRepository) ListByTask(ctx context.Context, taskID string) ([]domain.WakeupRequest, error) {
+	return nil, r.err
+}
+
+func (r failingWakeupRepository) Update(ctx context.Context, wakeup domain.WakeupRequest) error {
+	return r.err
+}
+
+func (r failingWakeupRepository) DeleteByTask(ctx context.Context, taskID string) error {
+	return r.err
+}
+
+func TestReconcilerPersistsDiagnosticEventWhenWakeupPhaseFails(t *testing.T) {
+	base := memory.NewStorage()
+	clock := fixedClock{t: time.Date(2026, 7, 8, 14, 10, 0, 0, time.UTC)}
+	idgen := &seqID{}
+	reconciler := NewReconciler(failingWakeupStorage{Storage: base, err: errors.New("database temporarily locked: token=SECRET-123")}, clock, noopBus{}, idgen, testLogger{})
+
+	reconciler.Reconcile(context.Background())
+
+	events, err := base.Events().ListRecent(context.Background(), 10)
+	if err != nil {
+		t.Fatalf("list events: %v", err)
+	}
+	if len(events) != 1 {
+		t.Fatalf("expected one diagnostic event, got %#v", events)
+	}
+	event := events[0]
+	if event.Type != domain.EventReconcilerFailed {
+		t.Fatalf("event type=%s want %s", event.Type, domain.EventReconcilerFailed)
+	}
+	if event.Message != "Reconciler failed during wakeup processing" {
+		t.Fatalf("unexpected message: %q", event.Message)
+	}
+	if event.CreatedAt != clock.t {
+		t.Fatalf("created_at=%s want %s", event.CreatedAt, clock.t)
+	}
+	if event.Data["phase"] != "wakeup_processing" || event.Data["error"] != "database temporarily locked: token=[redacted]" {
+		t.Fatalf("unexpected diagnostic data: %#v", event.Data)
+	}
+}
 
 func TestReconcilerRecoversStaleLocksBeforeDispatchCycle(t *testing.T) {
 	st := memory.NewStorage()

@@ -202,7 +202,8 @@ Passos:
    - `retry.scheduled`;
    - `run.timeout`;
    - `run.recovered`;
-   - `runtime.started`, `runtime.heartbeat`, `runtime.stalled`, `runtime.timeout` e `runtime.cancel_*` para entender liveness, stall e resultado de cancelamento do runtime.
+   - `runtime.started`, `runtime.heartbeat`, `runtime.stalled`, `runtime.timeout` e `runtime.cancel_*` para entender liveness, stall e resultado de cancelamento do runtime;
+   - `reconciler.failed` para falhas internas persistidas quando o reconciler abortou uma fase crítica como stale-lock sweep ou processamento de wakeups.
 4. Confira se há retry wakeup pendente com `DueAt` futuro. Depois de recovery de run órfão one-shot sem heartbeat de output, o esperado é ver `run.recovered` seguido de `retry.scheduled` com `reason=orphaned_run`; a task fica com `NeedsRun=false` até o wakeup vencer.
    - Para um snapshot compacto sem abrir detalhes completos, use:
      ```sh
@@ -229,6 +230,31 @@ Possíveis causas:
 | Lock antigo | checkout/run antigo | Deixar reconciler recuperar ou investigar storage. |
 | Continuous task pausada | `waiting_next_cycle`/pause | Retomar pela UI. |
 | Sem capacidade de dispatcher | muitos runs ativos | Aguardar runs ou investigar travamento. |
+
+## Runbook: falha persistida do reconciler
+
+Sintomas:
+
+- Activity mostra evento `reconciler.failed`;
+- locks vencidos, wakeups ou retries parecem não avançar;
+- logs incluem `reconciler.stale_lock_sweep_failed` ou `reconciler.wakeup_process_failed`.
+
+Passos:
+
+1. Abra Activity ou filtre eventos recentes e localize `reconciler.failed`.
+2. Confira o payload do evento:
+   - `phase=stale_lock_sweep` indica falha ao recuperar locks vencidos;
+   - `phase=wakeup_processing` indica falha ao processar wakeups/retries due;
+   - `error` é sanitizado e não deve conter tokens/secrets, mas deve preservar a causa operacional.
+3. Confira diagnostics e storage:
+
+   ```sh
+   curl -s http://127.0.0.1:8088/api/diagnostics
+   curl -s 'http://127.0.0.1:8088/api/v1/diagnostics/recovery-liveness?limit=10' | jq '.data.counts'
+   ```
+
+4. Se o erro indicar SQLite ocupado/corrompido, leia [Storage Architecture](STORAGE.md) antes de resetar ou restaurar dados.
+5. Depois de corrigir a causa, aguarde o próximo ciclo do scheduler ou reinicie localmente e confirme que novos eventos `reconciler.failed` pararam de aparecer.
 
 ## Runbook: run travado ou sem output
 

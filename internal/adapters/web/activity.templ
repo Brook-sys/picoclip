@@ -96,7 +96,7 @@ func activityAttentionCount(events []domain.Event) int {
 	count := 0
 	for _, event := range events {
 		switch event.Type {
-		case domain.EventTaskFailed, domain.EventRunFailed, domain.EventTaskCanceled, domain.EventRunCanceled, domain.EventRunTimeout, domain.EventBudgetBlocked, domain.EventDriverMissing:
+		case domain.EventTaskFailed, domain.EventRunFailed, domain.EventTaskCanceled, domain.EventRunCanceled, domain.EventRunTimeout, domain.EventBudgetBlocked, domain.EventDriverMissing, domain.EventReconcilerFailed:
 			count++
 		}
 	}
@@ -152,6 +152,8 @@ func activityTypeLabel(event domain.Event) string {
 		return "Budget blocked"
 	case domain.EventDriverMissing:
 		return "Runtime missing"
+	case domain.EventReconcilerFailed:
+		return "Reconciler failed"
 	default:
 		return string(event.Type)
 	}
@@ -250,6 +252,12 @@ func friendlyEventMessage(event domain.Event, tasks map[string]taskResponse, age
 		return "User created a new agent: " + agentName + "."
 	case domain.EventBudgetBlocked:
 		return "Execution of task " + taskName + " was blocked by a budget limit."
+	case domain.EventReconcilerFailed:
+		phase := event.Data["phase"]
+		if phase != "" {
+			return "PicoClip detected a reconciler failure during " + phase + "."
+		}
+		return "PicoClip detected a reconciler failure."
 	default:
 		return event.Message
 	}

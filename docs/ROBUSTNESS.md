@@ -168,10 +168,13 @@ Important robustness events include:
 | `runtime.cancel_requested` | PicoClip requested cancellation of a stalled runtime run. |
 | `runtime.cancel_succeeded` / `runtime.cancel_failed` | Runtime cancellation returned success or failure. |
 | `retry.scheduled` | PicoClip scheduled a retry and recorded why, when, with what backoff, and the retry classification. |
+| `reconciler.failed` | A critical reconciler phase aborted; payload includes `phase` and a sanitized `error`. |
 | `budget.blocked` | Execution was blocked by a budget constraint. |
 | `driver.missing` | Required runtime/driver was unavailable; payload marks this as `non_retryable`. |
 
 Runtime liveness event payloads are intentionally compact. They include stable fields such as `runtime_id`, `phase`, `status`, `pid`, `stdout_bytes`, `stderr_bytes`, `reason`, and cancellation `error` when relevant. Full output still lives on the run/output stream; persisted heartbeat events use byte counts so frequent output does not spam Activity with large payloads.
+
+Reconciler failure events are intentionally taskless system events. When stale-lock sweep or due-wakeup processing returns an error, the reconciler logs the failure, persists `reconciler.failed`, and aborts that sweep instead of continuing from a partially unreliable state. The event payload stores the failing `phase` and a sanitized error string with token/secret/password/API-key-like values redacted.
 
 The Activity page turns these into human-readable messages. For example, a retry event is presented as PicoClip learning from a timeout and scheduling retry after a specific number of seconds.
 

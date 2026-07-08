@@ -29,6 +29,7 @@ const (
 	EventRuntimeCancelRequested EventType = "runtime.cancel_requested"
 	EventRuntimeCancelSucceeded EventType = "runtime.cancel_succeeded"
 	EventRuntimeCancelFailed    EventType = "runtime.cancel_failed"
+	EventReconcilerFailed       EventType = "reconciler.failed"
 	EventRetryScheduled         EventType = "retry.scheduled"
 	EventDriverMissing          EventType = "driver.missing"
 	EventTaskDelegated          EventType = "task.delegated"

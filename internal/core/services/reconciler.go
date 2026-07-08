@@ -2,7 +2,9 @@ package services
 
 import (
 	"context"
+	"regexp"
 	"strconv"
+	"strings"
 	"time"
 
 	"picoclip/internal/core/domain"
@@ -42,6 +44,30 @@ func (r *Reconciler) emitRuntimeEvent(ctx context.Context, eventType domain.Even
 	_ = r.storage.Events().Create(ctx, domain.Event{ID: r.idGen.NewID("evt"), Type: eventType, TaskID: run.TaskID, AgentID: run.AgentID, RunID: run.ID, Message: message, Data: data, CreatedAt: now})
 }
 
+var secretLikeErrorPattern = regexp.MustCompile(`(?i)(token|secret|password|api[_-]?key|authorization)=([^\s,;]+)`)
+
+func sanitizeDiagnosticError(err error) string {
+	if err == nil {
+		return ""
+	}
+	msg := strings.TrimSpace(err.Error())
+	if msg == "" {
+		return "unknown error"
+	}
+	return secretLikeErrorPattern.ReplaceAllString(msg, "$1=[redacted]")
+}
+
+func (r *Reconciler) emitFailureEvent(ctx context.Context, phase string, err error) {
+	message := "Reconciler failed during " + strings.ReplaceAll(phase, "_", " ")
+	_ = r.storage.Events().Create(ctx, domain.Event{
+		ID:        r.idGen.NewID("evt"),
+		Type:      domain.EventReconcilerFailed,
+		Message:   message,
+		Data:      map[string]string{"phase": phase, "error": sanitizeDiagnosticError(err)},
+		CreatedAt: r.clock.Now(),
+	})
+}
+
 func (r *Reconciler) Reconcile(ctx context.Context) {
 	dueContinuous := r.activateDueContinuousTasks(ctx)
 	if dueContinuous > 0 {
@@ -52,6 +78,7 @@ func (r *Reconciler) Reconcile(ctx context.Context) {
 	count, err := recovery.SweepStaleLocks(ctx)
 	if err != nil {
 		r.logger.Warn("reconciler.stale_lock_sweep_failed", "err", err)
+		r.emitFailureEvent(ctx, "stale_lock_sweep", err)
 		return
 	}
 	if count > 0 {
@@ -61,6 +88,7 @@ func (r *Reconciler) Reconcile(ctx context.Context) {
 	processed, err := NewWakeupService(r.storage, r.clock, r.idGen).ProcessDue(ctx, 100)
 	if err != nil {
 		r.logger.Warn("reconciler.wakeup_process_failed", "err", err)
+		r.emitFailureEvent(ctx, "wakeup_processing", err)
 		return
 	}
 	if processed > 0 {
