@@ -90,6 +90,7 @@ Com servidor local em `8088`:
 
 ```sh
 curl -s http://127.0.0.1:8088/api/diagnostics
+curl -s 'http://127.0.0.1:8088/api/v1/diagnostics/recovery-liveness?limit=10'
 curl -s http://127.0.0.1:8088/api/runtimes
 curl -s 'http://127.0.0.1:8088/api/tasks'
 ```
@@ -132,6 +133,7 @@ Use este checklist quando o sistema parecer instável ou antes de uma sessão lo
 
    ```sh
    curl -s http://127.0.0.1:8088/api/diagnostics
+   curl -s 'http://127.0.0.1:8088/api/v1/diagnostics/recovery-liveness?limit=10'
    ```
 
 4. Confirme runtimes:
@@ -202,6 +204,11 @@ Passos:
    - `run.recovered`;
    - `runtime.started`, `runtime.heartbeat`, `runtime.stalled`, `runtime.timeout` e `runtime.cancel_*` para entender liveness, stall e resultado de cancelamento do runtime.
 4. Confira se há retry wakeup pendente com `DueAt` futuro.
+   - Para um snapshot compacto sem abrir detalhes completos, use:
+     ```sh
+     curl -s 'http://127.0.0.1:8088/api/v1/diagnostics/recovery-liveness?limit=10' | jq '.data.counts'
+     ```
+     Conte `pending_retry_wakeups`, `expired_locks`, `timeout_runs`, `runtime_stalled_events`, `run_recovered_events` e `retry_scheduled_events` para decidir se é espera normal, retry/backoff ou recuperação pendente.
 5. Confira se `MaxAttempts` foi atingido.
 6. Confira runtime/agent:
 

@@ -293,6 +293,89 @@ func TestAPIV1TaskFullIncludesWakeupsAndTaskWakeupsEndpoint(t *testing.T) {
 	}
 }
 
+func TestAPIV1DiagnosticsRecoveryLivenessReturnsCompactSnapshot(t *testing.T) {
+	storage := memory.NewStorage()
+	now := time.Now().UTC()
+	expiredAt := now.Add(-time.Minute)
+	future := now.Add(10 * time.Minute)
+	if err := storage.Tasks().Create(t.Context(), domain.Task{
+		ID:                  "task_expired_lock",
+		AgentID:             "agent_1",
+		Title:               "Expired lock",
+		Status:              domain.TaskStatusInProgress,
+		NeedsRun:            false,
+		CheckoutRunID:       "run_expired_lock",
+		CheckedOutByAgentID: "agent_1",
+		LockExpiresAt:       &expiredAt,
+		CreatedAt:           now,
+		UpdatedAt:           now,
+	}); err != nil {
+		t.Fatalf("create task: %v", err)
+	}
+	if err := storage.Runs().Create(t.Context(), domain.Run{ID: "run_running", TaskID: "task_expired_lock", AgentID: "agent_1", Status: domain.RunStatusRunning, StartedAt: now.Add(-5 * time.Minute), LastOutputAt: &expiredAt, StallTimeout: 30}); err != nil {
+		t.Fatalf("create running run: %v", err)
+	}
+	if err := storage.Tasks().Create(t.Context(), domain.Task{ID: "task_timeout", AgentID: "agent_1", Title: "Timeout", Status: domain.TaskStatusTodo, CreatedAt: now, UpdatedAt: now}); err != nil {
+		t.Fatalf("create timeout task: %v", err)
+	}
+	if err := storage.Runs().Create(t.Context(), domain.Run{ID: "run_timeout", TaskID: "task_timeout", AgentID: "agent_1", Status: domain.RunStatusTimeout, StartedAt: now.Add(-6 * time.Minute), FinishedAt: &now}); err != nil {
+		t.Fatalf("create timeout run: %v", err)
+	}
+	if err := storage.Tasks().Create(t.Context(), domain.Task{ID: "task_retry", AgentID: "agent_1", Title: "Retry", Status: domain.TaskStatusTodo, CreatedAt: now, UpdatedAt: now}); err != nil {
+		t.Fatalf("create retry task: %v", err)
+	}
+	for _, event := range []domain.Event{
+		{ID: "evt_stalled", Type: domain.EventRuntimeStalled, TaskID: "task_expired_lock", RunID: "run_running", Message: "runtime stalled", CreatedAt: now.Add(-4 * time.Minute)},
+		{ID: "evt_recovered", Type: domain.EventRunRecovered, TaskID: "task_recovered", RunID: "run_recovered", Message: "run recovered", CreatedAt: now.Add(-3 * time.Minute)},
+		{ID: "evt_retry", Type: domain.EventRetryScheduled, TaskID: "task_retry", Message: "retry scheduled", CreatedAt: now.Add(-2 * time.Minute)},
+	} {
+		if err := storage.Events().Create(t.Context(), event); err != nil {
+			t.Fatalf("create event %s: %v", event.ID, err)
+		}
+	}
+	if err := storage.Wakeups().Create(t.Context(), domain.WakeupRequest{ID: "wakeup_retry", AgentID: "agent_1", TaskID: "task_retry", Reason: domain.WakeupReasonRetry, Status: domain.WakeupStatusPending, DueAt: future, CreatedAt: now, UpdatedAt: now}); err != nil {
+		t.Fatalf("create wakeup: %v", err)
+	}
+
+	ts := newTestServerWithStorage(t, storage, true)
+	defer ts.Close()
+
+	res, err := ts.Client().Get(ts.URL + "/api/v1/diagnostics/recovery-liveness?limit=2")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want 200", res.StatusCode)
+	}
+	var decoded struct {
+		Data struct {
+			Counts map[string]int `json:"counts"`
+			Items  []struct {
+				Kind   string `json:"kind"`
+				TaskID string `json:"task_id"`
+				RunID  string `json:"run_id,omitempty"`
+			} `json:"items"`
+		} `json:"data"`
+		Meta map[string]any `json:"meta"`
+	}
+	if err := json.NewDecoder(res.Body).Decode(&decoded); err != nil {
+		t.Fatal(err)
+	}
+	if decoded.Data.Counts["runtime_stalled_events"] != 1 || decoded.Data.Counts["run_recovered_events"] != 1 || decoded.Data.Counts["retry_scheduled_events"] != 1 {
+		t.Fatalf("event counts = %#v, want stalled/recovered/retry = 1", decoded.Data.Counts)
+	}
+	if decoded.Data.Counts["timeout_runs"] != 1 || decoded.Data.Counts["pending_retry_wakeups"] != 1 || decoded.Data.Counts["expired_locks"] != 1 {
+		t.Fatalf("state counts = %#v, want timeout/retry/expired_lock = 1", decoded.Data.Counts)
+	}
+	if len(decoded.Data.Items) != 2 {
+		t.Fatalf("items len = %d, want limit 2", len(decoded.Data.Items))
+	}
+	if decoded.Meta["limit"] != float64(2) {
+		t.Fatalf("limit meta = %v, want 2", decoded.Meta["limit"])
+	}
+}
+
 func TestAgentInboxLiteAndHeartbeatContext(t *testing.T) {
 	ts := newTestServer(t)
 	defer ts.Close()

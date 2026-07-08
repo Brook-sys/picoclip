@@ -391,6 +391,7 @@ func apiV1Paths() map[string]any {
 		"GET /api/v1/health",
 		"GET /api/v1/version",
 		"GET /api/v1/capabilities",
+		"GET /api/v1/diagnostics/recovery-liveness",
 		"GET /api/v1/dashboard",
 		"GET,POST /api/v1/projects",
 		"GET /api/v1/projects/{id}",

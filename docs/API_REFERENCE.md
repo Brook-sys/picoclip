@@ -64,6 +64,7 @@ Erros usam `error.code` estável, por exemplo `invalid_input`, `not_found`, `dri
 | `GET` | `/api/v1/health` | Health check simples. |
 | `GET` | `/api/v1/version` | Versão da API e runtime Go. |
 | `GET` | `/api/v1/openapi.json` | Índice OpenAPI simples das rotas v1. |
+| `GET` | `/api/v1/diagnostics/recovery-liveness` | Snapshot compacto de recovery/liveness para agentes e operadores. |
 | `GET` | `/api/v1/dashboard` | Snapshot consolidado de dashboard. |
 | `GET` | `/api/v1/projects` | Lista projetos. |
 | `POST` | `/api/v1/projects` | Cria projeto. |
@@ -110,6 +111,26 @@ Erros usam `error.code` estável, por exemplo `invalid_input`, `not_found`, `dri
 | `GET` | `/api/v1/activity` | Alias de eventos recentes. |
 
 ### Filtros comuns de API v1
+
+`GET /api/v1/diagnostics/recovery-liveness` retorna um envelope com `data.counts` e `data.items` para triagem token-efficient de recovery/liveness. Ele agrega eventos recentes (`runtime.stalled`, `run.recovered`, `retry.scheduled`), runs em `timeout`, wakeups pendentes de retry e locks expirados. O parâmetro `limit` controla a lista compacta de itens retornados (padrão `20`, máximo `100`); contadores continuam representando o snapshot agregado. A rota não inclui env vars, secrets ou payloads grandes.
+
+Exemplo:
+
+```sh
+curl -s 'http://127.0.0.1:8088/api/v1/diagnostics/recovery-liveness?limit=10' | jq
+```
+
+Campos principais:
+
+| Campo | Uso |
+| --- | --- |
+| `data.counts.runtime_stalled_events` | Eventos recentes de stall de runtime. |
+| `data.counts.run_recovered_events` | Eventos recentes de recovery de runs. |
+| `data.counts.retry_scheduled_events` | Eventos recentes de retry agendado. |
+| `data.counts.timeout_runs` | Runs em status `timeout` encontradas no snapshot. |
+| `data.counts.pending_retry_wakeups` | Wakeups pendentes com `reason=retry`. |
+| `data.counts.expired_locks` | Tasks com checkout/lock cujo `lock_expires_at` já passou. |
+| `data.items[]` | Lista limitada de sinais compactos com `kind`, IDs e timestamps. |
 
 `GET /api/v1/events` aceita filtros por `task_id`, `agent_id`, `type` e `limit`.
 

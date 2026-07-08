@@ -35,6 +35,7 @@ func (s *Server) mountAPIV1(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/v1/openapi.json", s.handleAPIV1OpenAPI)
 	mux.HandleFunc("GET /api/v1/capabilities", s.handleAPIV1Capabilities)
 	mux.HandleFunc("GET /api/v1/permission-presets", s.handleAPIV1PermissionPresets)
+	mux.HandleFunc("GET /api/v1/diagnostics/recovery-liveness", s.handleAPIV1DiagnosticsRecoveryLiveness)
 	mux.HandleFunc("GET /api/v1/dashboard", s.handleAPIV1Dashboard)
 	mux.HandleFunc("GET /api/v1/projects", s.handleAPIV1Projects)
 	mux.HandleFunc("POST /api/v1/projects", s.handleAPIV1CreateProject)
@@ -101,6 +102,20 @@ func (s *Server) handleAPIV1Capabilities(w http.ResponseWriter, r *http.Request)
 
 func (s *Server) handleAPIV1PermissionPresets(w http.ResponseWriter, r *http.Request) {
 	s.apiData(w, services.PermissionPresets())
+}
+
+func (s *Server) handleAPIV1DiagnosticsRecoveryLiveness(w http.ResponseWriter, r *http.Request) {
+	limit, err := parseAPILimit(r, 20, 100)
+	if err != nil {
+		s.apiError(w, err)
+		return
+	}
+	report, err := s.diagnostics.RecoveryLiveness(r.Context(), limit)
+	if err != nil {
+		s.apiError(w, err)
+		return
+	}
+	s.apiList(w, report, map[string]any{"limit": limit, "count": len(report.Items)})
 }
 
 func (s *Server) handleAPIV1Dashboard(w http.ResponseWriter, r *http.Request) {
