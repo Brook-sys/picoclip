@@ -195,16 +195,22 @@ func assertRuntimeEvent(t *testing.T, events []domain.Event, eventType domain.Ev
 
 func assertEventData(t *testing.T, events []domain.Event, eventType domain.EventType, runID string, want map[string]string) {
 	t.Helper()
+	var candidates []domain.Event
 	for _, event := range events {
 		if event.Type != eventType || event.RunID != runID {
 			continue
 		}
+		candidates = append(candidates, event)
+		matched := true
 		for key, value := range want {
 			if event.Data[key] != value {
-				t.Fatalf("event %s data[%s]=%q want %q in %#v", event.Type, key, event.Data[key], value, event)
+				matched = false
+				break
 			}
 		}
-		return
+		if matched {
+			return
+		}
 	}
-	t.Fatalf("expected event %s for run %s, got %#v", eventType, runID, events)
+	t.Fatalf("expected event %s for run %s with data %#v, candidates=%#v events=%#v", eventType, runID, want, candidates, events)
 }

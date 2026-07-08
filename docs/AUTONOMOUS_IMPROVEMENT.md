@@ -303,6 +303,35 @@ O comentário de bloqueio deve incluir:
 - arquivos afetados;
 - próximo passo recomendado.
 
+## Triagem de sessão cron aberta e workspace sujo
+
+Quando a auditoria pré-run indicar uma sessão cron sem `ended_at` ou alterações já presentes antes da rodada, trate isso como trabalho operacional próprio antes de escolher outro card.
+
+Procedimento seguro:
+
+1. Não altere os mesmos arquivos até entender a origem do diff.
+2. Registre a anomalia no relatório final e, se ainda não houver cobertura no Kanban, crie ou use um card específico de investigação.
+3. Consulte o histórico com:
+
+   ```sh
+   hermes sessions list
+   hermes cron status
+   git status --short
+   git diff --stat
+   ```
+
+4. Diferencie três casos:
+   - **diff válido e pequeno**: valide, documente quando necessário, commit/push e conclua o card operacional;
+   - **resíduo inseguro**: bloqueie o card com o arquivo afetado e o comando observado, sem apagar trabalho;
+   - **artefatos locais não rastreados**: preserve e exclua do staging, citando no relatório.
+5. Não tente reparar diretamente sessões antigas durante a rodada. Correções no scheduler/cron devem virar card específico ou intervenção humana.
+
+Se o checkout local estiver em uma branch diferente do alvo canônico, mas a política da rodada exigir publicação em `origin/main`, use push explícito para o alvo validado:
+
+```sh
+git push origin HEAD:main
+```
+
 ## Coordenação com cron de 30 minutos
 
 Existe um job Hermes para o ciclo autônomo:
