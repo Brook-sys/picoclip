@@ -19,7 +19,37 @@ PicoClip é local-first e experimental, mas deve ser operável com clareza. Em u
 - Há wakeups pendentes ou retries agendados?
 - Há eventos de falha/recovery suficientes para explicar o comportamento?
 - É seguro exportar, restaurar ou resetar dados?
+## Triagem Rápida via Agent API
 
+Para agentes ou ferramentas diagnosticando o estado de tasks de forma rápida, não faça scrapping nem force requisições gigantes. Use as chamadas curtas abaixo. Substitua `http://127.0.0.1:8088` conforme necessidade e injete cabeçalho de auth se não for no mesmo host.
+
+### 1. Uma task parece travada ou não inicia
+Recupere o **heartbeat-context** (compacto).
+```bash
+curl -s "http://127.0.0.1:8088/agent-api/tasks/{id}/heartbeat-context?include=execution_state" | jq
+```
+*O que buscar?*
+- `execution_state.is_runnable`: se for `false`, o scheduler não vai alocá-la (pode não estar em status `ready`/`running` ou faltar `needs_run`).
+- `execution_state.locked`: se for `true` e `execution_state.lock_owner` apontar para um runner morto, a task está pendente de reconciliação (Reconciler reseta locks vencidos a cada intervalo).
+- `execution_state.next_wakeup`: se estiver no futuro, a task está aguardando (sleep, backoff de retry).
+- `execution_state.recent_events`: verifique se há erros recentes indicando runtime falho (ex: `Crush falhou`) ou budget excedido (ex: `max_runs_reached`).
+
+### 2. A task foi bloqueada por tentativas sucessivas (Retry Storm)
+Se o scheduler interromper uma task repetidamente e ela estiver marcada com erro permanente ou esgotou limites, analise suas runs passadas.
+```bash
+curl -s "http://127.0.0.1:8088/agent-api/tasks/{id}/runs" | jq '.runs | map(select(.status == "failed")) | length'
+```
+Se `failed` dominar as últimas runs, o runtime associado pode não ter as *capabilities* necessárias, estar offline (ex: token de LLM inválido), ou faltar dependências de ambiente. A task provavelmente passará por backoff.
+
+### 3. Verificar o runtime atual configurado e se o agente tem permissões
+Se a task tentar agir e falhar com erros de permissão ou runtime indisponível:
+```bash
+curl -s "http://127.0.0.1:8088/agent-api/tasks/{id}/heartbeat-context?include=skills" | jq '.agent_snapshot.capabilities'
+curl -s "http://127.0.0.1:8088/agent-api/agents/me" | jq
+```
+Isso ajuda o agente diagnosticador a ver os limites que o agente de operação da task possui. Se a task precisar executar código local e não tiver runtime associado a `capabilities=["operator"]`, ela falhará na validação do dispatcher.
+
+## Comandos rápidos
 ## Comandos rápidos
 
 ### Rodar localmente

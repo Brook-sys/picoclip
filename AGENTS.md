@@ -14,6 +14,8 @@ Antes de alterar código, leia:
    - `docs/OPERATIONS.md` para runbooks, diagnostics, incidentes locais, backup/restore e troubleshooting operacional.
    - `docs/ROBUSTNESS.md` para scheduler, dispatcher, runner, reconciler, locks, retry e cancelamento.
    - `docs/STORAGE.md` para SQLite, migrations, repositories e restore.
+   > **Dica:** Se precisar triar uma task que parece presa usando *Agent API* em vez da UI, veja a seção **Triagem Rápida via Agent API** em `docs/OPERATIONS.md`.
+
    - `docs/DESIGN.md` para UI, Templ, HTMX e padrões visuais.
    - `docs/AUTONOMOUS_IMPROVEMENT.md` para o ciclo Hermes Kanban/cron de melhoria contínua.
    - `docs/ROADMAP.md` e `docs/CURRENT_STATE.md` para contexto de produto.
