@@ -256,3 +256,17 @@ func cssBlock(t *testing.T, css, selector string) string {
 	}
 	return css[blockStart : blockStart+end]
 }
+
+func TestDesignSystemCSSDefinesLoadingAndErrorStates(t *testing.T) {
+	t.Parallel()
+
+	body, err := os.ReadFile("assets/app.css")
+	if err != nil {
+		t.Fatalf("read app.css: %v", err)
+	}
+	css := string(body)
+
+	for _, selector := range []string{".pc-loading-state", ".pc-spinner", ".pc-loading-message", ".pc-error-state", ".pc-error-icon", ".pc-error-title", ".pc-error-message", ".pc-error-detail", ".pc-error-actions"} {
+		_ = cssBlock(t, css, selector)
+	}
+}

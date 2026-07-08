@@ -225,6 +225,31 @@ templ EmptyState(title string, message string, iconName string) {
 	</div>
 }
 
+templ LoadingState(message string) {
+	<div class="pc-loading-state">
+		<div class="pc-spinner"></div>
+		if message != "" {
+			<p class="pc-loading-message">{ message }</p>
+		}
+	</div>
+}
+
+templ ErrorState(title string, message string, errorDetail string) {
+	<div class="pc-error-state">
+		<div class="pc-error-icon">
+			@Icon("alert-circle", 32)
+		</div>
+		<strong class="pc-error-title">{ title }</strong>
+		<p class="pc-error-message">{ message }</p>
+		if errorDetail != "" {
+			<pre class="pc-error-detail"><code>{ errorDetail }</code></pre>
+		}
+		<div class="pc-error-actions">
+			{ children... }
+		</div>
+	</div>
+}
+
 templ OverviewGrid() {
 	<section class="pc-overview-grid">
 		{ children... }
