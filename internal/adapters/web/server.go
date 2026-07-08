@@ -209,6 +209,15 @@ func (s *Server) handleCreateAgent(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleGetTasks(w http.ResponseWriter, r *http.Request) {
 	status, statuses := parseTaskStatusFilter(r.URL.Query().Get("status"))
 	filter := ports.TaskFilter{AgentID: r.URL.Query().Get("agent_id"), ParentID: r.URL.Query().Get("parent_id"), WorkspaceID: r.URL.Query().Get("project_id"), Status: status, Statuses: statuses}
+	if isAgentAPIRequest(r) {
+		agentID := r.URL.Query().Get("agent_id")
+		if agentID != "" {
+			if err := s.auth.RequireAgentPermission(r.Context(), agentID, domain.PermissionTasksRead); err != nil {
+				writeAgentAPIError(w, err)
+				return
+			}
+		}
+	}
 	tasks, err := s.tasks.List(r.Context(), filter)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -313,6 +322,10 @@ func (s *Server) handleAgentInboxLite(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "agent_id required", http.StatusBadRequest)
 		return
 	}
+	if err := s.auth.RequireAgentPermission(r.Context(), agentID, domain.PermissionTasksRead); err != nil {
+		writeAgentAPIError(w, err)
+		return
+	}
 	tasks, err := s.tasks.List(r.Context(), ports.TaskFilter{AgentID: agentID})
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -360,6 +373,13 @@ func (s *Server) handleAgentNextAction(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusNotFound)
 		return
+	}
+	agentID := r.URL.Query().Get("agent_id")
+	if agentID != "" {
+		if err := s.auth.RequireAgentPermission(r.Context(), agentID, domain.PermissionTasksRead); err != nil {
+			writeAgentAPIError(w, err)
+			return
+		}
 	}
 	s.jsonResponse(w, s.compactNextAction(r, task))
 }
@@ -434,6 +454,13 @@ func (s *Server) handleAgentHeartbeatContext(w http.ResponseWriter, r *http.Requ
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusNotFound)
 		return
+	}
+	agentID := r.URL.Query().Get("agent_id")
+	if agentID != "" {
+		if err := s.auth.RequireAgentPermission(r.Context(), agentID, domain.PermissionTasksRead); err != nil {
+			writeAgentAPIError(w, err)
+			return
+		}
 	}
 	include, unknown := parseIncludeSet(r.URL.Query().Get("include"))
 	if len(unknown) > 0 {
@@ -776,6 +803,13 @@ func (s *Server) handleAgentTaskDetail(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusNotFound)
 		return
 	}
+	agentID := r.URL.Query().Get("agent_id")
+	if agentID != "" {
+		if err := s.auth.RequireAgentPermission(r.Context(), agentID, domain.PermissionTasksRead); err != nil {
+			writeAgentAPIError(w, err)
+			return
+		}
+	}
 	messages, _ := s.tasks.GetMessages(r.Context(), task.ID)
 	runs, _ := s.tasks.GetRuns(r.Context(), task.ID)
 	events, _ := s.storage.Events().ListByTask(r.Context(), task.ID)
@@ -788,6 +822,13 @@ func (s *Server) handleAgentTaskComments(w http.ResponseWriter, r *http.Request)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
+	}
+	agentID := r.URL.Query().Get("agent_id")
+	if agentID != "" {
+		if err := s.auth.RequireAgentPermission(r.Context(), agentID, domain.PermissionTasksRead); err != nil {
+			writeAgentAPIError(w, err)
+			return
+		}
 	}
 	s.jsonResponse(w, messages)
 }

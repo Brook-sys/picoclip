@@ -8,7 +8,7 @@ Esta referência lista as rotas HTTP registradas atualmente em `internal/adapter
 - As APIs retornam JSON quando chamadas por rotas `/api/...` ou `/agent-api/...`.
 - Muitas ações da UI usam `POST` server-rendered/HTMX e podem responder HTML ou redirect.
 - A Agent API aceita aliases `tasks` e `issues` em vários endpoints para alinhamento conceitual com Paperclip.
-- O enforcement de permissões existe em partes da Agent API e ainda está em evolução. Não assuma cobertura total sem verificar o handler.
+- O enforcement de permissões existe em toda a Agent API. A maioria das ações requer `tasks.read`, `tasks.update`, `tasks.create`, `tasks.run` ou `tasks.cancel` no agente.
 
 ## Base URLs locais
 

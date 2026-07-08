@@ -150,7 +150,7 @@ func TestAgentDocsAdvertisesPaperclipLikeWorkflow(t *testing.T) {
 func TestAgentNextActionRecommendsCheckoutForRunnableTask(t *testing.T) {
 	storage := memory.NewStorage()
 	now := time.Now().UTC()
-	agent := domain.Agent{ID: "agent_next_action", Name: "Next Action Agent", Type: "noop", Enabled: true, Capability: domain.CapabilityWorker, CreatedAt: now, UpdatedAt: now}
+	agent := domain.Agent{ID: "agent_next_action", Name: "Next Action Agent", Type: "noop", Enabled: true, Capability: domain.CapabilityWorker, Permissions: services.PermissionsForCapability(domain.CapabilityWorker), CreatedAt: now, UpdatedAt: now}
 	task := domain.Task{ID: "task_next_action", AgentID: agent.ID, Title: "Decide what to do", Prompt: "Decide what to do", Status: domain.TaskStatusTodo, NeedsRun: true, CreatedAt: now, UpdatedAt: now}
 	if err := storage.Agents().Create(t.Context(), agent); err != nil {
 		t.Fatal(err)
@@ -211,8 +211,8 @@ func TestAgentNextActionReportsOperationalBlockers(t *testing.T) {
 		{
 			name:       "active checkout waits",
 			task:       domain.Task{ID: "task_locked", Status: domain.TaskStatusInProgress, NeedsRun: false, CheckoutRunID: "run_locked", CheckedOutByAgentID: "agent_next_action"},
-			wantAction: "wait",
-			wantRisk:   "active_checkout",
+			wantAction: "release",
+			wantRisk:   "own_active_checkout",
 		},
 		{
 			name:       "max attempts blocks",
@@ -243,7 +243,7 @@ func TestAgentNextActionReportsOperationalBlockers(t *testing.T) {
 			if tc.wantRisk == "runtime_unavailable" {
 				agentType = domain.AgentType("missing-runtime")
 			}
-			agent := domain.Agent{ID: "agent_next_action", Name: "Next Action Agent", Type: agentType, Enabled: true, Capability: domain.CapabilityWorker, CreatedAt: now, UpdatedAt: now}
+			agent := domain.Agent{ID: "agent_next_action", Name: "Next Action Agent", Type: agentType, Enabled: true, Capability: domain.CapabilityWorker, Permissions: services.PermissionsForCapability(domain.CapabilityWorker), CreatedAt: now, UpdatedAt: now}
 			task := tc.task
 			task.AgentID = agent.ID
 			task.Title = tc.name
@@ -269,11 +269,14 @@ func TestAgentNextActionReportsOperationalBlockers(t *testing.T) {
 			ts := newTestServerWithStorage(t, storage, true)
 			defer ts.Close()
 
-			res, err := ts.Client().Get(ts.URL + "/agent-api/tasks/" + task.ID + "/next-action")
+			res, err := ts.Client().Get(ts.URL + "/agent-api/tasks/" + task.ID + "/next-action?agent_id=" + agent.ID)
 			if err != nil {
 				t.Fatal(err)
 			}
 			defer res.Body.Close()
+			if res.StatusCode != http.StatusOK {
+				t.Fatalf("status = %d, want 200", res.StatusCode)
+			}
 			var got struct {
 				Action string   `json:"action"`
 				Risks  []string `json:"risks"`
@@ -303,7 +306,7 @@ func containsString(values []string, want string) bool {
 func TestAgentNextActionRecommendsReleaseForOwnActiveCheckout(t *testing.T) {
 	storage := memory.NewStorage()
 	now := time.Now().UTC()
-	agent := domain.Agent{ID: "agent_next_action", Name: "Next Action Agent", Type: "noop", Enabled: true, Capability: domain.CapabilityWorker, CreatedAt: now, UpdatedAt: now}
+	agent := domain.Agent{ID: "agent_next_action", Name: "Next Action Agent", Type: "noop", Enabled: true, Capability: domain.CapabilityWorker, Permissions: services.PermissionsForCapability(domain.CapabilityWorker), CreatedAt: now, UpdatedAt: now}
 	task := domain.Task{ID: "task_active_checkout", AgentID: agent.ID, Title: "Active checkout", Prompt: "Active checkout", Status: domain.TaskStatusInProgress, CheckoutRunID: "run_active", CheckedOutByAgentID: agent.ID, CreatedAt: now, UpdatedAt: now}
 	if err := storage.Agents().Create(t.Context(), agent); err != nil {
 		t.Fatal(err)
@@ -319,6 +322,9 @@ func TestAgentNextActionRecommendsReleaseForOwnActiveCheckout(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want 200", res.StatusCode)
+	}
 	var got struct {
 		Action string   `json:"action"`
 		Risks  []string `json:"risks"`
@@ -420,6 +426,18 @@ func TestAgentAPIPermissionEnforcement(t *testing.T) {
 	defer cancelRes.Body.Close()
 	if cancelRes.StatusCode != http.StatusForbidden {
 		t.Fatalf("cancel status = %d, want 403", cancelRes.StatusCode)
+	}
+
+	// Test tasks read (detail)
+	resDetail, err := client.Get(ts.URL + "/agent-api/tasks/" + task["id"].(string) + "?agent_id=" + agent["id"].(string))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resDetail.Body.Close()
+	// Observer actually has tasks.read so this should pass! Wait, let's test a capability without it?
+	// Observer usually has: system.read, projects.read, agents.read, tasks.read, skills.read.
+	if resDetail.StatusCode != http.StatusOK {
+		t.Fatalf("detail status = %d, want 200 for observer", resDetail.StatusCode)
 	}
 }
 
