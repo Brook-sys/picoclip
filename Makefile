@@ -9,7 +9,7 @@ DEV_BIN := $(TMP_DIR)/$(APP)
 AIR := ./bin/air
 TEMPL := ./bin/templ
 
-.PHONY: help tools templ-generate build build-dev run dev seed test test-go test-coverage test-e2e test-e2e-headed vet fmt lint check clean kill-8088
+.PHONY: help tools templ-generate build build-dev run dev seed test test-go test-coverage test-e2e test-e2e-headed vet fmt lint check check-docs clean kill-8088
 
 help:
 	@printf '%s\n' \
@@ -24,6 +24,7 @@ help:
 	  '  make test-go        Run Go tests' \
 	  '  make test-coverage  Run Go tests with coverage report' \
 	  '  make test-e2e       Run Playwright E2E tests' \
+	  '  make check-docs     Validate Markdown links and anchors' \
 	  '  make check          Run full validation' \
 	  '  make kill-8088      Kill process bound to port 8088'
 
@@ -45,6 +46,9 @@ vet:
 	go vet ./...
 
 lint: vet
+
+check-docs:
+	python3 scripts/check_markdown_links.py .
 
 build:
 	go build -o $(APP) cmd/picoclip/main.go
@@ -76,7 +80,7 @@ test-e2e-headed:
 
 test: test-go
 
-check: templ-generate fmt test-go vet build test-e2e
+check: check-docs templ-generate fmt test-go vet build test-e2e
 
 kill-8088:
 	-fuser -k 8088/tcp

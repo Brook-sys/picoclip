@@ -112,6 +112,7 @@ make seed
 make test-go
 make test-e2e
 make test-e2e-headed
+make check-docs
 make vet
 make fmt
 make build
@@ -179,6 +180,19 @@ Notas:
 - rode geração antes de build/check quando templates mudarem;
 - evite editar manualmente arquivos gerados, exceto se o projeto estiver temporariamente sem `.templ` correspondente e isso for explicitamente decidido.
 
+### Validação de documentação
+
+Para validar links Markdown locais, incluindo fragmentos de âncora como
+`docs/DOCUMENTATION_POLICY.md#matriz-de-validação-mínima-por-tipo-de-mudança`, rode:
+
+```sh
+make check-docs
+```
+
+O comando usa `scripts/check_markdown_links.py`, sem dependências externas, e cobre
+`README.md`, `README.pt-BR.md`, `AGENTS.md` e `docs/*.md`. Ele também roda como a
+primeira etapa de `make check`.
+
 ## Build e validação
 
 Validação rápida Go:
@@ -204,12 +218,13 @@ make check
 
 `make check` roda:
 
-1. `templ generate`;
-2. `gofmt -w cmd internal`;
-3. `go test ./...`;
-4. `go vet ./...`;
-5. `go build -o picoclip cmd/picoclip/main.go`;
-6. Playwright E2E.
+1. `make check-docs`;
+2. `templ generate`;
+3. `gofmt -w cmd internal`;
+4. `go test ./...`;
+5. `go vet ./...`;
+6. `go build -o picoclip cmd/picoclip/main.go`;
+7. Playwright E2E.
 
 Use `make check` antes de considerar uma mudança relevante concluída, especialmente se ela toca UI, APIs, scheduler, storage, runtimes ou documentação com comandos. Para escolher o mínimo proporcional por tipo de mudança, consulte a matriz em [Documentation Policy](DOCUMENTATION_POLICY.md#matriz-de-validação-mínima-por-tipo-de-mudança).
 

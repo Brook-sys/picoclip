@@ -158,29 +158,13 @@ Agentes não devem:
 Antes de finalizar mudanças grandes de documentação, rode pelo menos:
 
 ```sh
-python3 - <<'PY'
-from pathlib import Path
-import re
-files = [Path('README.md'), Path('README.pt-BR.md'), Path('AGENTS.md'), *Path('docs').glob('*.md')]
-missing = []
-for f in files:
-    if not f.exists():
-        continue
-    text = f.read_text(errors='ignore')
-    for m in re.finditer(r'\]\(([^)]+)\)', text):
-        link = m.group(1).strip()
-        if link.startswith(('http://', 'https://', 'mailto:')):
-            continue
-        path = link.split('#', 1)[0]
-        if not path:
-            continue
-        target = (f.parent / path).resolve()
-        if not target.exists():
-            missing.append((str(f), link, str(target)))
-print('missing=', missing)
-raise SystemExit(1 if missing else 0)
-PY
+make check-docs
 ```
+
+Esse alvo valida links Markdown locais em `README.md`, `README.pt-BR.md`,
+`AGENTS.md` e `docs/*.md`, incluindo fragmentos de âncora como
+`#matriz-de-validação-mínima-por-tipo-de-mudança` contra headings reais. O script
+usa apenas Python standard library e também roda no começo de `make check`.
 
 Se a mudança tocar comandos, build, templates ou testes, rode também a validação canônica:
 
