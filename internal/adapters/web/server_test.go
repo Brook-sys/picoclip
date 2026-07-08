@@ -219,6 +219,7 @@ func TestAgentAPIPermissionEnforcement(t *testing.T) {
 	if res.StatusCode != http.StatusForbidden {
 		t.Fatalf("checkout status = %d, want 403", res.StatusCode)
 	}
+	assertAgentAPIError(t, res, "forbidden", "permission tasks.run required")
 
 	cancelBody, _ := json.Marshal(map[string]any{"agent_id": agent["id"], "reason": "test"})
 	cancelReq, _ := http.NewRequest(http.MethodPost, ts.URL+"/api/tasks/"+task["id"].(string)+"/cancel", bytes.NewReader(cancelBody))
@@ -230,6 +231,79 @@ func TestAgentAPIPermissionEnforcement(t *testing.T) {
 	defer cancelRes.Body.Close()
 	if cancelRes.StatusCode != http.StatusForbidden {
 		t.Fatalf("cancel status = %d, want 403", cancelRes.StatusCode)
+	}
+}
+
+func TestAgentAPICriticalTaskOperationsReturnStructuredErrors(t *testing.T) {
+	ts := newTestServer(t)
+	defer ts.Close()
+
+	client := ts.Client()
+	agent := postJSON(t, client, ts.URL+"/api/agents", map[string]any{"name": "Operator", "type": "noop", "capability": "operator"})
+	task := postJSON(t, client, ts.URL+"/api/tasks", map[string]any{"agent_id": agent["id"], "title": "Structured errors", "prompt": "Do"})
+	taskID := task["id"].(string)
+	agentID := agent["id"].(string)
+
+	cases := []struct {
+		name   string
+		method string
+		path   string
+		body   string
+		status int
+		code   string
+		hint   string
+	}{
+		{name: "checkout invalid json", method: http.MethodPost, path: "/agent-api/tasks/" + taskID + "/checkout", body: `{`, status: http.StatusBadRequest, code: "invalid_input", hint: "Fix request JSON and retry."},
+		{name: "release missing agent", method: http.MethodPost, path: "/agent-api/tasks/" + taskID + "/release", body: `{}`, status: http.StatusBadRequest, code: "invalid_input", hint: "Provide a valid agent_id with the required permission."},
+		{name: "patch invalid status", method: http.MethodPatch, path: "/agent-api/tasks/" + taskID, body: `{"agent_id":"` + agentID + `","status":"not-a-status"}`, status: http.StatusBadRequest, code: "invalid_input", hint: "Check the task state, payload, and allowed transition before retrying."},
+		{name: "wake missing task", method: http.MethodPost, path: "/agent-api/issues/missing/wake", body: `{"agent_id":"` + agentID + `"}`, status: http.StatusNotFound, code: "not_found", hint: "Verify the resource id before retrying."},
+		{name: "delegate missing assignee", method: http.MethodPost, path: "/agent-api/tasks/" + taskID + "/delegate", body: `{"from_agent_id":"` + agentID + `","prompt":"delegate"}`, status: http.StatusBadRequest, code: "invalid_input", hint: "Provide a valid agent_id with the required permission."},
+		{name: "cancel invalid json", method: http.MethodPost, path: "/agent-api/tasks/" + taskID + "/cancel", body: `{`, status: http.StatusBadRequest, code: "invalid_input", hint: "Fix request JSON and retry."},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			req, err := http.NewRequest(tc.method, ts.URL+tc.path, strings.NewReader(tc.body))
+			if err != nil {
+				t.Fatal(err)
+			}
+			req.Header.Set("Content-Type", "application/json")
+			res, err := client.Do(req)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer res.Body.Close()
+			if res.StatusCode != tc.status {
+				t.Fatalf("status = %d, want %d", res.StatusCode, tc.status)
+			}
+			assertAgentAPIError(t, res, tc.code, tc.hint)
+		})
+	}
+}
+
+func assertAgentAPIError(t *testing.T, res *http.Response, wantCode string, wantHint string) {
+	t.Helper()
+	if got := res.Header.Get("Content-Type"); !strings.Contains(got, "application/json") {
+		t.Fatalf("Content-Type = %q, want application/json", got)
+	}
+	var decoded struct {
+		Error struct {
+			Code    string `json:"code"`
+			Message string `json:"message"`
+			Hint    string `json:"hint"`
+		} `json:"error"`
+	}
+	if err := json.NewDecoder(res.Body).Decode(&decoded); err != nil {
+		t.Fatalf("decode structured error: %v", err)
+	}
+	if decoded.Error.Code != wantCode {
+		t.Fatalf("error.code = %q, want %q (decoded=%+v)", decoded.Error.Code, wantCode, decoded.Error)
+	}
+	if decoded.Error.Message == "" {
+		t.Fatalf("error.message should not be empty: %+v", decoded.Error)
+	}
+	if decoded.Error.Hint != wantHint {
+		t.Fatalf("error.hint = %q, want %q", decoded.Error.Hint, wantHint)
 	}
 }
 

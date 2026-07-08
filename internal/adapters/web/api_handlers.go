@@ -2,6 +2,7 @@ package web
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 
 	"picoclip/internal/core/domain"
@@ -53,15 +54,28 @@ func (s *Server) handleCancelTask(w http.ResponseWriter, r *http.Request) {
 		AgentID string `json:"agent_id"`
 		Reason  string `json:"reason"`
 	}
-	_ = json.NewDecoder(r.Body).Decode(&req)
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		if isAgentAPIRequest(r) {
+			writeAgentAPIError(w, fmt.Errorf("%w: invalid JSON: %v", domain.ErrInvalidInput, err))
+			return
+		}
+	}
 	if isAgentAPIRequest(r) || req.AgentID != "" {
 		if err := s.auth.RequireAgentPermission(r.Context(), req.AgentID, domain.PermissionTasksCancel); err != nil {
+			if isAgentAPIRequest(r) {
+				writeAgentAPIError(w, err)
+				return
+			}
 			writeTaskError(w, err)
 			return
 		}
 	}
 	task, err := s.tasks.Cancel(r.Context(), r.PathValue("id"), req.Reason)
 	if err != nil {
+		if isAgentAPIRequest(r) {
+			writeAgentAPIError(w, err)
+			return
+		}
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}

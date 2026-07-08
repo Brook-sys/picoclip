@@ -232,7 +232,13 @@ Use `/agent-api/tasks/{id}` somente quando o agente realmente precisar de mensag
 
 ### Contratos JSON compactos da Agent API
 
-Esta seção fixa o shape real dos endpoints compactos usados por agentes. Os handlers atuais retornam JSON direto, sem envelope `data/meta/error` da API v1; erros usam `http.Error` ou `writeTaskError`, portanto o corpo de erro é texto simples no estado atual.
+Esta seção fixa o shape real dos endpoints compactos usados por agentes. Os handlers atuais retornam JSON direto em sucesso, sem envelope `data/meta/error` da API v1. Para as operações críticas de task/issue (`checkout`, `release`, `PATCH status`, `wake`, `delegate` e `cancel`), erros da Agent API usam envelope JSON estruturado:
+
+```json
+{"error":{"code":"invalid_input","message":"invalid input: agent_id is required","hint":"Provide a valid agent_id with the required permission."}}
+```
+
+`error.code` é estável para automação (`invalid_input`, `forbidden`, `not_found` ou `conflict`), `message` preserva o erro humano e `hint` traz uma orientação curta para retry/triagem. Endpoints legados ou compartilhados com a API administrativa ainda podem retornar erro em texto simples até serem migrados em fatias futuras.
 
 #### `GET /agent-api/docs`
 
@@ -413,12 +419,30 @@ Os aliases `/agent-api/issues...` são equivalentes aos endpoints `/agent-api/ta
 
 Erros comuns destes endpoints:
 
-| Status | Quando ocorre |
-| --- | --- |
-| `400 Bad Request` | JSON inválido, payload inválido, status/transição inválida ou `include` inválido em heartbeat-context. |
-| `403 Forbidden` | Agente informado não possui a permissão exigida pelo handler. |
-| `404 Not Found` | Task/agente/recurso inexistente quando o serviço retorna `not found`. |
-| `409 Conflict` | Conflito de lifecycle/checkout, como status esperado incompatível, lock ativo por outro agente ou transição concorrente. |
+| Status | `error.code` | Quando ocorre |
+| --- | --- | --- |
+| `400 Bad Request` | `invalid_input` | JSON inválido, payload inválido, status/transição inválida ou `include` inválido em heartbeat-context. |
+| `403 Forbidden` | `forbidden` | Agente informado não possui a permissão exigida pelo handler. |
+| `404 Not Found` | `not_found` | Task/agente/recurso inexistente quando o serviço retorna `not found`. |
+| `409 Conflict` | `conflict` | Lock/checkout ou transição conflita com o estado atual da task. |
+
+Exemplo de erro estruturado em checkout sem permissão:
+
+```sh
+curl -s -X POST http://127.0.0.1:8088/agent-api/tasks/task_123/checkout \
+  -H 'Content-Type: application/json' \
+  -d '{"agent_id":"agent_observer"}' | jq
+```
+
+```json
+{
+  "error": {
+    "code": "forbidden",
+    "message": "forbidden: permission tasks.run required",
+    "hint": "permission tasks.run required"
+  }
+}
+```
 
 ## Páginas web e ações HTMX/server-rendered
 

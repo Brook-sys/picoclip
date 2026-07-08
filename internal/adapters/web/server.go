@@ -3,6 +3,7 @@ package web
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"sort"
 	"strings"
@@ -748,11 +749,11 @@ func (s *Server) handleAgentCheckoutTask(w http.ResponseWriter, r *http.Request)
 		ExpectedStatuses []string `json:"expected_statuses"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		writeAgentAPIError(w, fmt.Errorf("%w: invalid JSON: %v", domain.ErrInvalidInput, err))
 		return
 	}
 	if err := s.auth.RequireAgentPermission(r.Context(), req.AgentID, domain.PermissionTasksRun); err != nil {
-		writeTaskError(w, err)
+		writeAgentAPIError(w, err)
 		return
 	}
 	if req.RunID == "" {
@@ -760,7 +761,7 @@ func (s *Server) handleAgentCheckoutTask(w http.ResponseWriter, r *http.Request)
 	}
 	task, err := s.tasks.Checkout(r.Context(), r.PathValue("id"), req.AgentID, req.RunID, parseTaskStatuses(req.ExpectedStatuses))
 	if err != nil {
-		writeTaskError(w, err)
+		writeAgentAPIError(w, err)
 		return
 	}
 	s.jsonResponse(w, s.taskResponse(r, task))
@@ -771,14 +772,17 @@ func (s *Server) handleAgentReleaseTask(w http.ResponseWriter, r *http.Request) 
 		AgentID string `json:"agent_id"`
 		Comment string `json:"comment"`
 	}
-	_ = json.NewDecoder(r.Body).Decode(&req)
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeAgentAPIError(w, fmt.Errorf("%w: invalid JSON: %v", domain.ErrInvalidInput, err))
+		return
+	}
 	if err := s.auth.RequireAgentPermission(r.Context(), req.AgentID, domain.PermissionTasksUpdate); err != nil {
-		writeTaskError(w, err)
+		writeAgentAPIError(w, err)
 		return
 	}
 	task, err := s.tasks.Release(r.Context(), r.PathValue("id"), req.AgentID, req.Comment)
 	if err != nil {
-		writeTaskError(w, err)
+		writeAgentAPIError(w, err)
 		return
 	}
 	s.jsonResponse(w, s.taskResponse(r, task))
@@ -791,16 +795,16 @@ func (s *Server) handleAgentUpdateTask(w http.ResponseWriter, r *http.Request) {
 		AgentID string            `json:"agent_id"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		writeAgentAPIError(w, fmt.Errorf("%w: invalid JSON: %v", domain.ErrInvalidInput, err))
 		return
 	}
 	if err := s.auth.RequireAgentPermission(r.Context(), req.AgentID, domain.PermissionTasksUpdate); err != nil {
-		writeTaskError(w, err)
+		writeAgentAPIError(w, err)
 		return
 	}
 	task, err := s.tasks.UpdateStatus(r.Context(), r.PathValue("id"), req.Status, req.Comment, req.AgentID)
 	if err != nil {
-		writeTaskError(w, err)
+		writeAgentAPIError(w, err)
 		return
 	}
 	s.jsonResponse(w, s.taskResponse(r, task))
@@ -810,14 +814,17 @@ func (s *Server) handleAgentWakeTask(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		AgentID string `json:"agent_id"`
 	}
-	_ = json.NewDecoder(r.Body).Decode(&req)
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeAgentAPIError(w, fmt.Errorf("%w: invalid JSON: %v", domain.ErrInvalidInput, err))
+		return
+	}
 	if err := s.auth.RequireAgentPermission(r.Context(), req.AgentID, domain.PermissionTasksUpdate); err != nil {
-		writeTaskError(w, err)
+		writeAgentAPIError(w, err)
 		return
 	}
 	task, err := s.tasks.Wake(r.Context(), r.PathValue("id"))
 	if err != nil {
-		writeTaskError(w, err)
+		writeAgentAPIError(w, err)
 		return
 	}
 	s.jsonResponse(w, s.taskResponse(r, task))
@@ -859,6 +866,58 @@ func writeTaskError(w http.ResponseWriter, err error) {
 	http.Error(w, err.Error(), status)
 }
 
+type agentAPIErrorResponse struct {
+	Error agentAPIError `json:"error"`
+}
+
+type agentAPIError struct {
+	Code    string `json:"code"`
+	Message string `json:"message"`
+	Hint    string `json:"hint,omitempty"`
+}
+
+func writeAgentAPIError(w http.ResponseWriter, err error) {
+	status := http.StatusBadRequest
+	code := "invalid_input"
+	if errors.Is(err, domain.ErrConflict) {
+		status = http.StatusConflict
+		code = "conflict"
+	}
+	if errors.Is(err, domain.ErrNotFound) {
+		status = http.StatusNotFound
+		code = "not_found"
+	}
+	if errors.Is(err, domain.ErrForbidden) {
+		status = http.StatusForbidden
+		code = "forbidden"
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	_ = json.NewEncoder(w).Encode(agentAPIErrorResponse{Error: agentAPIError{Code: code, Message: err.Error(), Hint: agentAPIErrorHint(code, err)}})
+}
+
+func agentAPIErrorHint(code string, err error) string {
+	message := err.Error()
+	switch code {
+	case "forbidden":
+		return strings.TrimPrefix(message, domain.ErrForbidden.Error()+": ")
+	case "not_found":
+		return "Verify the resource id before retrying."
+	case "conflict":
+		return "Reload the task state before retrying."
+	case "invalid_input":
+		if strings.Contains(message, "invalid JSON") {
+			return "Fix request JSON and retry."
+		}
+		if strings.Contains(message, "agent_id") || strings.Contains(message, "agent") {
+			return "Provide a valid agent_id with the required permission."
+		}
+		return "Check the task state, payload, and allowed transition before retrying."
+	default:
+		return "Inspect the request and retry when safe."
+	}
+}
+
 func (s *Server) handleDelegateTask(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		FromAgentID string `json:"from_agent_id"`
@@ -867,24 +926,45 @@ func (s *Server) handleDelegateTask(w http.ResponseWriter, r *http.Request) {
 		Prompt      string `json:"prompt"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		if isAgentAPIRequest(r) {
+			writeAgentAPIError(w, fmt.Errorf("%w: invalid JSON: %v", domain.ErrInvalidInput, err))
+			return
+		}
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 	if err := s.auth.RequireAgentPermission(r.Context(), req.FromAgentID, domain.PermissionDelegate); err != nil {
+		if isAgentAPIRequest(r) {
+			writeAgentAPIError(w, err)
+			return
+		}
 		writeTaskError(w, err)
 		return
 	}
 	if req.ToAgentID == "" {
-		writeTaskError(w, domain.ErrInvalidInput)
+		err := fmt.Errorf("%w: to_agent_id is required", domain.ErrInvalidInput)
+		if isAgentAPIRequest(r) {
+			writeAgentAPIError(w, err)
+			return
+		}
+		writeTaskError(w, err)
 		return
 	}
 	if _, err := s.agents.Get(r.Context(), req.ToAgentID); err != nil {
+		if isAgentAPIRequest(r) {
+			writeAgentAPIError(w, err)
+			return
+		}
 		writeTaskError(w, err)
 		return
 	}
 
 	task, err := s.tasks.Delegate(r.Context(), r.PathValue("id"), req.FromAgentID, req.ToAgentID, req.Prompt)
 	if err != nil {
+		if isAgentAPIRequest(r) {
+			writeAgentAPIError(w, err)
+			return
+		}
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
