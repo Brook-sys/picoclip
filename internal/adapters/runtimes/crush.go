@@ -154,6 +154,9 @@ func (a *CrushAdapter) Execute(ctx context.Context, state domain.RuntimeState, i
 	args = append(args, input.Task.Prompt)
 	cmd := exec.CommandContext(ctx, bin, args...)
 	cmd.Env = append(cmd.Environ(), envPairs(input.Env)...)
+	if input.Task.WorkspaceID != "" {
+		cmd.Env = append(cmd.Env, "PICOCLIP_WORKSPACE_ID="+input.Task.WorkspaceID)
+	}
 	if state.ConfigPath != "" {
 		cmd.Env = append(cmd.Env, "CRUSH_GLOBAL_CONFIG="+filepath.Dir(state.ConfigPath))
 	}

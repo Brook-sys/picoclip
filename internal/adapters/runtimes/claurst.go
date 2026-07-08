@@ -153,6 +153,9 @@ func (a *ClaurstAdapter) Execute(ctx context.Context, state domain.RuntimeState,
 	args = append(args, input.ExtraArgs...)
 	cmd := exec.CommandContext(ctx, bin, args...)
 	cmd.Env = append(cmd.Environ(), envPairs(input.Env)...)
+	if input.Task.WorkspaceID != "" {
+		cmd.Env = append(cmd.Env, "PICOCLIP_WORKSPACE_ID="+input.Task.WorkspaceID)
+	}
 	if state.HomePath != "" {
 		cmd.Env = append(cmd.Env, "CLAURST_HOME="+state.HomePath)
 	}
