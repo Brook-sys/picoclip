@@ -122,6 +122,8 @@ attempt N -> capped at 300 seconds / 5 minutes
 
 A key safety property is that the task is **not** left immediately runnable while waiting for retry. The task stays `NeedsRun=false` until the wakeup is due and processed. This prevents the dispatcher from bypassing the backoff and re-running the task immediately.
 
+Direct runner timeouts follow the same safety contract as reconciler-detected stalled runs: a one-shot runtime deadline stores `runtime.timeout`, creates a retry wakeup with `reason=runtime_timeout`, keeps the task non-runnable while the backoff is pending, and emits `retry.scheduled`. When the task has reached its attempt limit, the runner blocks it instead of scheduling another retry.
+
 ## Retry classification and metadata
 
 PicoClip records a small retry classification on failure/retry events so humans and agents can distinguish transient failures from deterministic blockers.
@@ -145,7 +147,7 @@ classification
 reason
 ```
 
-For stalled-run timeout recovery, `reason` is `run_timeout`, `retryable=true`, and `classification=retryable`. For one-shot orphaned-run recovery caused by a missing output heartbeat, `reason` is `orphaned_run` with the same retryable classification and backoff payload.
+For direct runner deadline timeouts, `reason` is `runtime_timeout`, `retryable=true`, and `classification=retryable`. For stalled-run timeout recovery, `reason` is `run_timeout` with the same retryable classification. For one-shot orphaned-run recovery caused by a missing output heartbeat, `reason` is `orphaned_run` with the same retryable classification and backoff payload.
 
 Before creating a recovery retry, the reconciler checks whether a pending retry wakeup for the same `previous_run_id` already exists. This keeps recovery idempotent across repeated sweeps and prevents duplicate retry wakeups/events for the same failed run.
 

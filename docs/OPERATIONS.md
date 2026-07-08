@@ -212,7 +212,7 @@ Passos:
    - `run.recovered`;
    - `runtime.started`, `runtime.heartbeat`, `runtime.stalled`, `runtime.timeout` e `runtime.cancel_*` para entender liveness, stall e resultado de cancelamento do runtime;
    - `reconciler.failed` para falhas internas persistidas quando o reconciler abortou uma fase crítica como stale-lock sweep ou processamento de wakeups.
-4. Confira se há retry wakeup pendente com `DueAt` futuro. Depois de recovery de run órfão one-shot sem heartbeat de output, o esperado é ver `run.recovered` seguido de `retry.scheduled` com `reason=orphaned_run`; a task fica com `NeedsRun=false` até o wakeup vencer.
+4. Confira se há retry wakeup pendente com `DueAt` futuro. Depois de timeout direto do runner, o esperado é ver `runtime.timeout` seguido de `retry.scheduled` com `reason=runtime_timeout`; depois de recovery de run órfão one-shot sem heartbeat de output, o esperado é ver `run.recovered` seguido de `retry.scheduled` com `reason=orphaned_run`. Em ambos os casos, a task fica com `NeedsRun=false` até o wakeup vencer.
    - Para um snapshot compacto sem abrir detalhes completos, use:
      ```sh
      curl -s 'http://127.0.0.1:8088/api/v1/diagnostics/recovery-liveness?limit=10' | jq '.data.counts'

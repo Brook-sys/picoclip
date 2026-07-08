@@ -266,8 +266,10 @@ func (r *Runner) Run(ctx context.Context, task domain.Task) {
 		}
 		if task.Mode == domain.TaskModeContinuous {
 			r.completeContinuousCycle(ctx, task, run, finishedAt)
+		} else if run.Status == domain.RunStatusTimeout && !r.maxAttemptsReachedAfterRun(task) {
+			r.scheduleRetryAfterTimeout(ctx, task, run, finishedAt)
 		} else {
-			r.failTask(ctx, task, fmt.Sprintf("%v", err))
+			r.failTaskWithData(ctx, task, fmt.Sprintf("%v", err), classification)
 		}
 		r.recordTokenUsage(ctx, run)
 		return
@@ -380,11 +382,81 @@ func (r *Runner) failTaskWithData(ctx context.Context, task domain.Task, message
 	})
 }
 
+func (r *Runner) scheduleRetryAfterTimeout(ctx context.Context, task domain.Task, run domain.Run, now time.Time) {
+	latest, err := r.storage.Tasks().Get(ctx, task.ID)
+	if err == nil {
+		task = latest
+	}
+	if task.CheckoutRunID == run.ID {
+		task.CheckoutRunID = ""
+		task.CheckedOutByAgentID = ""
+		task.ExecutionLockedAt = nil
+		task.LockExpiresAt = nil
+	}
+	task.NeedsRun = false
+	task.UpdatedAt = now
+	_ = r.storage.Tasks().Update(ctx, task)
+	r.scheduleRetryWakeup(ctx, run, now, "runtime_timeout", "Retry scheduled after runtime timeout")
+}
+
+func (r *Runner) retryWakeupExists(ctx context.Context, run domain.Run) bool {
+	wakeups, err := r.storage.Wakeups().ListByTask(ctx, run.TaskID)
+	if err != nil {
+		return false
+	}
+	for _, wakeup := range wakeups {
+		if wakeup.Reason != domain.WakeupReasonRetry || wakeup.Status != domain.WakeupStatusPending {
+			continue
+		}
+		if wakeup.Payload["previous_run_id"] == run.ID {
+			return true
+		}
+	}
+	return false
+}
+
+func (r *Runner) scheduleRetryWakeup(ctx context.Context, run domain.Run, now time.Time, reason, message string) {
+	if r.retryWakeupExists(ctx, run) {
+		return
+	}
+	delay := retryBackoff(run.Attempt)
+	payload := map[string]string{
+		"previous_run_id": run.ID,
+		"attempt":         strconv.Itoa(run.Attempt),
+		"backoff_seconds": strconv.Itoa(int(delay.Seconds())),
+		"retryable":       "true",
+		"classification":  "retryable",
+		"reason":          reason,
+	}
+	wakeup := domain.WakeupRequest{
+		ID:        r.idGen.NewID("wakeup"),
+		TaskID:    run.TaskID,
+		AgentID:   run.AgentID,
+		Reason:    domain.WakeupReasonRetry,
+		Status:    domain.WakeupStatusPending,
+		Priority:  5,
+		DueAt:     now.Add(delay),
+		Payload:   payload,
+		CreatedAt: now,
+		UpdatedAt: now,
+	}
+	_ = r.storage.Wakeups().Create(ctx, wakeup)
+	r.emitEvent(ctx, domain.Event{ID: r.idGen.NewID("evt"), Type: domain.EventRetryScheduled, TaskID: run.TaskID, AgentID: run.AgentID, RunID: run.ID, Message: message, Data: payload, CreatedAt: now})
+}
+
 func (r *Runner) maxAttemptsExceeded(task domain.Task) bool {
 	limit := task.MaxAttempts
 	if limit <= 0 && task.Mode == domain.TaskModeContinuous {
 		return false
 	}
+	if limit <= 0 {
+		limit = r.config.MaxAttempts
+	}
+	return limit > 0 && task.Attempts >= limit
+}
+
+func (r *Runner) maxAttemptsReachedAfterRun(task domain.Task) bool {
+	limit := task.MaxAttempts
 	if limit <= 0 {
 		limit = r.config.MaxAttempts
 	}

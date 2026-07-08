@@ -122,6 +122,8 @@ attempt N -> limitado a 300 segundos / 5 minutos
 
 Uma propriedade de segurança importante é que a task **não** fica imediatamente executável enquanto espera o retry. A task permanece `NeedsRun=false` até o wakeup vencer e ser processado. Isso impede o dispatcher de burlar o backoff e executar a task imediatamente.
 
+Timeouts diretos do runner seguem o mesmo contrato de segurança dos runs travados detectados pelo reconciler: um deadline de runtime em task one-shot registra `runtime.timeout`, cria wakeup de retry com `reason=runtime_timeout`, mantém a task não executável enquanto o backoff está pendente e emite `retry.scheduled`. Quando a task já atingiu o limite de tentativas, o runner bloqueia a task em vez de agendar outro retry.
+
 ## Classificação e metadata de retry
 
 O PicoClip registra uma pequena classificação de retry em eventos de falha/retry para que humanos e agentes diferenciem falhas transitórias de bloqueios determinísticos.
@@ -145,7 +147,7 @@ classification
 reason
 ```
 
-Para recovery de timeout de run travado, `reason` é `run_timeout`, `retryable=true` e `classification=retryable`. Para recovery de run órfão one-shot causado por ausência de heartbeat de output, `reason` é `orphaned_run` com a mesma classificação retryable e payload de backoff.
+Para timeout direto do runner, `reason` é `runtime_timeout`, `retryable=true` e `classification=retryable`. Para recovery de timeout de run travado, `reason` é `run_timeout` com a mesma classificação retryable. Para recovery de run órfão one-shot causado por ausência de heartbeat de output, `reason` é `orphaned_run` com a mesma classificação retryable e payload de backoff.
 
 Antes de criar um retry de recovery, o reconciler verifica se já existe um retry wakeup pendente para o mesmo `previous_run_id`. Isso mantém recovery idempotente em sweeps repetidos e evita wakeups/eventos duplicados para o mesmo run com falha.
 

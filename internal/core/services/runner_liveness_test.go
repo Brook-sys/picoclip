@@ -117,11 +117,32 @@ func TestRunnerPersistsRuntimeTimeoutEvent(t *testing.T) {
 	if len(runs) != 1 || runs[0].Status != domain.RunStatusTimeout {
 		t.Fatalf("expected timeout run, got %#v", runs)
 	}
+	gotTask, err := st.Tasks().Get(ctx, task.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if gotTask.Status != domain.TaskStatusInProgress || gotTask.NeedsRun {
+		t.Fatalf("expected timed-out one-shot task to wait for retry wakeup, got status=%s needs_run=%v", gotTask.Status, gotTask.NeedsRun)
+	}
+	wakeups, err := st.Wakeups().ListByTask(ctx, task.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(wakeups) != 1 {
+		t.Fatalf("expected one retry wakeup, got %#v", wakeups)
+	}
+	if wakeups[0].Reason != domain.WakeupReasonRetry || wakeups[0].Payload["previous_run_id"] != runs[0].ID || wakeups[0].Payload["reason"] != "runtime_timeout" {
+		t.Fatalf("expected runtime timeout retry wakeup for run %s, got %#v", runs[0].ID, wakeups[0])
+	}
+	if got := int(wakeups[0].DueAt.Sub(clock.t).Seconds()); got != 30 {
+		t.Fatalf("expected first retry due after 30s, got %ds", got)
+	}
 	events, err := st.Events().ListByTask(ctx, task.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
 	assertRuntimeEvent(t, events, domain.EventRuntimeTimeout, runs[0].ID, map[string]string{"runtime_id": "crush", "status": string(domain.RunStatusTimeout), "phase": "timeout_handled", "retryable": "true", "reason": "runtime_timeout"})
+	assertEventData(t, events, domain.EventRetryScheduled, runs[0].ID, map[string]string{"retryable": "true", "classification": "retryable", "reason": "runtime_timeout", "backoff_seconds": "30"})
 }
 
 func TestRunnerClassifiesRuntimeUnavailableAsNonRetryable(t *testing.T) {
