@@ -183,7 +183,7 @@ GET /agent-api/tasks/{id}/heartbeat-context?include=execution_state
 GET /agent-api/tasks/{id}/heartbeat-context?include=execution_state,skills
 ```
 
-Seções disponíveis: `prompt`, `execution_state`, `skills`, `apis`. A resposta inclui `meta.mode` (`default` ou `selective`) e `meta.included` para o agente saber qual forma recebeu.
+Seções disponíveis: `prompt`, `execution_state`, `skills`, `apis`. A allowlist é estrita: qualquer seção desconhecida em `include` retorna `400 Bad Request` com a seção inválida em vez de aparecer em `meta.included`. A resposta inclui `meta.mode` (`default` ou `selective`) e `meta.included` para o agente saber qual forma recebeu; em modo seletivo, `meta.included` contém somente seções válidas realmente solicitadas.
 
 Use `/agent-api/tasks/{id}` somente quando o agente realmente precisar de mensagens/runs/eventos completos.
 > **Nota Operacional:** Para triagem e debug de tasks presas via Agent API, consulte a seção **Triagem Rápida via Agent API** no [Operations Runbook](OPERATIONS.md).

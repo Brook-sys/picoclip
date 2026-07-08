@@ -392,6 +392,62 @@ func TestAgentInboxLiteAndHeartbeatContext(t *testing.T) {
 	if !ok || meta["mode"] != "selective" {
 		t.Fatalf("lean heartbeat context should advertise selective mode: %+v", lean)
 	}
+	included, ok := meta["included"].([]any)
+	if !ok || len(included) != 1 || included[0] != "execution_state" {
+		t.Fatalf("lean heartbeat context should report only requested allowed section: %+v", meta)
+	}
+
+	mixedCtxRes, err := client.Get(ts.URL + "/agent-api/tasks/" + task["id"].(string) + "/heartbeat-context?include=execution_state,skills")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer mixedCtxRes.Body.Close()
+	if mixedCtxRes.StatusCode != http.StatusOK {
+		t.Fatalf("mixed heartbeat context status = %d", mixedCtxRes.StatusCode)
+	}
+	var mixed map[string]any
+	if err := json.NewDecoder(mixedCtxRes.Body).Decode(&mixed); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := mixed["execution_state"]; !ok {
+		t.Fatalf("mixed heartbeat context should include requested execution_state: %+v", mixed)
+	}
+	if _, ok := mixed["skills"]; !ok {
+		t.Fatalf("mixed heartbeat context should include requested skills: %+v", mixed)
+	}
+	if _, ok := mixed["prompt"]; ok {
+		t.Fatalf("mixed heartbeat context should omit unrequested prompt: %+v", mixed)
+	}
+	mixedMeta, ok := mixed["meta"].(map[string]any)
+	if !ok {
+		t.Fatalf("mixed heartbeat context should include meta: %+v", mixed)
+	}
+	mixedIncluded, ok := mixedMeta["included"].([]any)
+	if !ok || len(mixedIncluded) != 2 {
+		t.Fatalf("mixed heartbeat context should report two allowed sections: %+v", mixedMeta)
+	}
+	for _, want := range []string{"execution_state", "skills"} {
+		found := false
+		for _, got := range mixedIncluded {
+			found = found || got == want
+		}
+		if !found {
+			t.Fatalf("mixed heartbeat context meta.included missing %q: %+v", want, mixedMeta)
+		}
+	}
+
+	unknownCtxRes, err := client.Get(ts.URL + "/agent-api/tasks/" + task["id"].(string) + "/heartbeat-context?include=execution_state,unknown")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer unknownCtxRes.Body.Close()
+	if unknownCtxRes.StatusCode != http.StatusBadRequest {
+		t.Fatalf("unknown include status = %d, want 400", unknownCtxRes.StatusCode)
+	}
+	body := readBodyString(t, unknownCtxRes.Body)
+	if !strings.Contains(body, "invalid include section") || !strings.Contains(body, "unknown") {
+		t.Fatalf("unknown include response should name invalid section, got %q", body)
+	}
 }
 
 func readHTML(t *testing.T, client *http.Client, url string) string {

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"sort"
 	"strings"
 	"time"
 
@@ -334,7 +335,11 @@ func (s *Server) handleAgentHeartbeatContext(w http.ResponseWriter, r *http.Requ
 		http.Error(w, err.Error(), http.StatusNotFound)
 		return
 	}
-	include := parseIncludeSet(r.URL.Query().Get("include"))
+	include, unknown := parseIncludeSet(r.URL.Query().Get("include"))
+	if len(unknown) > 0 {
+		http.Error(w, "invalid include section: "+strings.Join(unknown, ","), http.StatusBadRequest)
+		return
+	}
 	selective := len(include) > 0
 	messages, _ := s.tasks.GetMessages(r.Context(), task.ID)
 	lastUser := ""
@@ -371,15 +376,30 @@ func (s *Server) handleAgentHeartbeatContext(w http.ResponseWriter, r *http.Requ
 	s.jsonResponse(w, ctx)
 }
 
-func parseIncludeSet(raw string) map[string]struct{} {
+func parseIncludeSet(raw string) (map[string]struct{}, []string) {
 	include := map[string]struct{}{}
+	unknown := []string{}
 	for _, part := range strings.Split(raw, ",") {
 		part = strings.TrimSpace(part)
 		if part != "" {
-			include[part] = struct{}{}
+			if isHeartbeatContextSection(part) {
+				include[part] = struct{}{}
+			} else {
+				unknown = append(unknown, part)
+			}
 		}
 	}
-	return include
+	sort.Strings(unknown)
+	return include, unknown
+}
+
+func isHeartbeatContextSection(section string) bool {
+	switch section {
+	case "prompt", "execution_state", "skills", "apis":
+		return true
+	default:
+		return false
+	}
 }
 
 func includeSection(include map[string]struct{}, section string) bool {
@@ -405,6 +425,7 @@ func includedSections(include map[string]struct{}) []string {
 	for section := range include {
 		sections = append(sections, section)
 	}
+	sort.Strings(sections)
 	return sections
 }
 
