@@ -43,6 +43,13 @@ templ SectionHeader(title string, description string) {
 	</div>
 }
 
+templ OperationalLink(text string, href string) {
+	<a class="pc-operational-link" href={ templ.URL(href) } target="_blank" rel="noreferrer">
+		@Icon("book", 14)
+		{ text }
+	</a>
+}
+
 templ Button(text string, variant string, iconName string) {
 	<button class={ "pc-btn", "pc-btn-" + variant }>
 		if iconName != "" {

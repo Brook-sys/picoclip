@@ -109,6 +109,7 @@ templ RuntimeConfiguredCard(r RuntimeCardView) {
 				<p>{ r.Description }</p>
 			</div>
 			<div class="runtime-health-badges">
+				@OperationalLink("Runtime runbook", "https://github.com/Brook-sys/picoclip/blob/main/docs/OPERATIONS.md#runbook-runtime-ausente-ou-mal-configurado")
 				<span class={ "runtime-overall-badge", runtimeOverallBadgeClass(r) }>{ runtimeOverallLabel(r) }</span>
 				if r.Health.Version != "" {
 					<span class="runtime-version-badge">{ r.Health.Version }</span>

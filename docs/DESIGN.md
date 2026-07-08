@@ -197,6 +197,7 @@ Definidos principalmente em `internal/adapters/web/ui.templ`.
 | `Card`, `CardEdit` | Containers de conteúdo. |
 | `SectionHeader` | Cabeçalho de seção com descrição e actions. |
 | `Button`, `ButtonLink`, `IconButton` | Ações primárias, secundárias, ghost e danger. |
+| `OperationalLink` | Link discreto para runbooks em superfícies críticas sem competir com ações primárias. |
 | `InlineTextField`, `InlineTextareaField` | Edição inline com HTMX. |
 | `FormField`, `FieldLabel`, `FieldMessage` | Estrutura acessível para campos. |
 | `TextField`, `TextareaField`, `SelectField` | Inputs base. |

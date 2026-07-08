@@ -1455,6 +1455,9 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monos
 .pc-description { margin: 0; color: var(--muted); font-size: 14px; }
 .pc-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .pc-icon { display: inline-block; flex: none; vertical-align: middle; }
+.pc-operational-link { display: inline-flex; align-items: center; gap: 6px; min-height: 28px; padding: 4px 8px; border: 1px solid var(--border); border-radius: 999px; background: var(--surface-soft); color: var(--muted); font-size: 12px; font-weight: 750; text-decoration: none; white-space: nowrap; transition: color 0.12s ease, border-color 0.12s ease, background 0.12s ease; }
+.pc-operational-link:hover { border-color: var(--brand-ring); background: var(--brand-soft); color: var(--text); }
+.pc-operational-link:focus-visible { outline: none; border-color: var(--brand); box-shadow: var(--focus-ring); }
 .pc-btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 38px; padding: 9px 14px; border: 1px solid transparent; border-radius: var(--radius-md); font: inherit; font-size: 14px; font-weight: 750; line-height: 1; cursor: pointer; text-decoration: none; transition: background 0.12s ease, border-color 0.12s ease, color 0.12s ease, box-shadow 0.12s ease, transform 0.12s ease; }
 .pc-btn:hover { transform: var(--button-hover-transform); }
 .pc-btn:disabled, .pc-btn[disabled] { opacity: 0.55; cursor: not-allowed; transform: none; }
@@ -1817,6 +1820,7 @@ pc-tag-multiselect { position: relative; display: flex; flex-wrap: wrap; align-i
 .run-live-eyebrow { display: inline-flex; margin-bottom: 4px; color: var(--muted); font-size: 11px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.1em; }
 .run-live-header h2 { margin: 0; font-size: clamp(24px, 3vw, 32px); font-weight: 850; letter-spacing: -0.04em; }
 .run-live-header p { margin: 4px 0 0; max-width: 780px; color: var(--muted); font-size: 14px; line-height: 1.5; }
+.run-live-actions { display: inline-flex; align-items: center; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
 .run-live-summary-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
 .run-live-summary-grid div { display: grid; gap: 2px; padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface-soft); }
 .run-live-summary-grid small { color: var(--muted); font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.06em; }

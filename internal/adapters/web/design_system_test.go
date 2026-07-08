@@ -139,6 +139,37 @@ func TestOverviewCardsUseCanonicalHelperAndCSS(t *testing.T) {
 	}
 }
 
+func TestCriticalOperationalPagesLinkToRunbooks(t *testing.T) {
+	t.Parallel()
+
+	checks := map[string]string{
+		"run_detail.templ": `docs/OPERATIONS.md#runbook-run-travado-ou-sem-output`,
+		"settings.templ":   `docs/OPERATIONS.md#runbook-runtime-ausente-ou-mal-configurado`,
+	}
+	for name, href := range checks {
+		body, err := os.ReadFile(name)
+		if err != nil {
+			t.Fatalf("read %s: %v", name, err)
+		}
+		text := string(body)
+		if !strings.Contains(text, "OperationalLink(") {
+			t.Fatalf("%s must use the canonical OperationalLink helper for runbook navigation", name)
+		}
+		if !strings.Contains(text, href) {
+			t.Fatalf("%s must link to %s", name, href)
+		}
+	}
+
+	uiBody, err := os.ReadFile("ui.templ")
+	if err != nil {
+		t.Fatalf("read ui.templ: %v", err)
+	}
+	ui := string(uiBody)
+	if !strings.Contains(ui, "templ OperationalLink(") || !strings.Contains(ui, `class="pc-operational-link"`) {
+		t.Fatalf("ui.templ must define the canonical OperationalLink helper")
+	}
+}
+
 func TestOverviewCardsKeepMetricTextInReadableVerticalFlow(t *testing.T) {
 	t.Parallel()
 
