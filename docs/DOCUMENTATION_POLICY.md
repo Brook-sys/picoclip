@@ -107,6 +107,24 @@ Atualize pelo menos um destes:
 - [ ] Padrão visual/HTMX documentado em `docs/DESIGN.md` se for reutilizável.
 - [ ] E2E smoke adicionado ou justificado.
 
+## Matriz de validação mínima por tipo de mudança
+
+Use esta matriz como ponto de partida. Ela define o mínimo esperado por tipo de
+mudança, mas não substitui julgamento: se a alteração toca várias áreas, combine as
+linhas relevantes. `make check` continua sendo a validação canônica antes de
+concluir mudanças relevantes de código, UI, API, storage, runtime ou documentação
+que altera comandos/contratos.
+
+| Tipo de mudança | Documentos obrigatórios a revisar | Validação mínima | Observações |
+| --- | --- | --- | --- |
+| Docs-only | Documento editado, links no `README.md`/`AGENTS.md` se a navegação mudar | Verificação de links internos; `make check` quando o doc altera comandos, contratos ou arquivos usados por testes | Não documente comportamento futuro como atual. |
+| UI / Templ / CSS | `docs/DESIGN.md`; `docs/PROJECT_MAP.md` se houver página/componente novo | Teste focado quando existir; `make templ-generate`; `make check` | Inclua E2E smoke ou justificativa quando criar fluxo/página nova. |
+| API / Agent API | `docs/API_REFERENCE.md`; `docs/PROJECT_MAP.md` se houver novo grupo/handler; `docs/OPERATIONS.md` se afetar runbook | Teste focado do handler/contrato; `go test ./...`; `make check` | Documente método, path, payload, permissões/capabilities e exemplos agent-facing quando útil. |
+| Storage / migrations | `docs/STORAGE.md`; `docs/PROJECT_MAP.md` se criar/mover adapter/repository | Contract test ou teste focado de repository/migration; `go test ./...`; `make check` | Mantenha paridade SQLite/memory quando aplicável e preserve restore/backup. |
+| Robustez / retry / recovery | `docs/ROBUSTNESS.md` e, quando aplicável, `docs/ROBUSTNESS.pt-BR.md`; `docs/OPERATIONS.md` para runbooks | Teste focado reproduzindo o caso; `go test ./...`; `make check` | Bugfixes precisam de teste RED antes do fix e evidência de recovery/cancelamento. |
+| Workflow dev / comandos | `docs/DEVELOPMENT.md`; `AGENTS.md`; `README.md`/`README.pt-BR.md` se afetar onboarding | Conferir comandos no `Makefile`/scripts; rodar o comando afetado quando seguro; `make check` se a mudança toca build/teste | Não invente comandos; registre limitações locais como Alpine/Playwright quando relevantes. |
+| Roadmap / current-state | `docs/CURRENT_STATE.md`; `docs/ROADMAP.md`; docs de área afetada se o estado real mudou | Verificação de links internos; teste/validação que comprova a entrega citada quando houver código associado | Separe claramente entregue, parcial e planejado. |
+
 ## Política para agentes de IA
 
 Agentes trabalhando no PicoClip devem seguir esta ordem:

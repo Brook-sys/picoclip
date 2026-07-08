@@ -211,7 +211,7 @@ make check
 5. `go build -o picoclip cmd/picoclip/main.go`;
 6. Playwright E2E.
 
-Use `make check` antes de considerar uma mudança relevante concluída, especialmente se ela toca UI, APIs, scheduler, storage, runtimes ou documentação com comandos.
+Use `make check` antes de considerar uma mudança relevante concluída, especialmente se ela toca UI, APIs, scheduler, storage, runtimes ou documentação com comandos. Para escolher o mínimo proporcional por tipo de mudança, consulte a matriz em [Documentation Policy](DOCUMENTATION_POLICY.md#matriz-de-validação-mínima-por-tipo-de-mudança).
 
 ## Ciclo autônomo via Hermes Kanban
 
