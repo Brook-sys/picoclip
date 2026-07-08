@@ -121,6 +121,46 @@ hermes kanban create "Título específico" \
   --body "..."
 ```
 
+### Checklist de deduplicação antes de criar cards
+
+Antes de criar um card novo durante a fase de descoberta, faça uma checagem curta
+contra o Kanban e contra o estado real do projeto. O objetivo é evitar que o loop
+autônomo acumule cards quase iguais ou reabra trabalho que já virou padrão.
+
+1. **Compare títulos e intenção**
+   - Procure termos centrais do título proposto em cards `ready`, `blocked` e
+     `done`.
+   - Se já existir card com o mesmo resultado observável, não crie outro.
+   - Se o card existente está `ready`, prefira comentar contexto adicional nele
+     em vez de abrir duplicata.
+
+2. **Compare área e arquivos prováveis**
+   - Verifique se outro card já cobre a mesma área (`UI`, `Agent API`,
+     `scheduler`, `storage`, `docs`) e os mesmos arquivos prováveis.
+   - Escopos visuais parecidos devem ser diferenciados por página/componente e
+     critério de aceite; caso contrário, são duplicatas.
+
+3. **Cheque trabalho `done` que virou padrão**
+   - Se um card concluído já estabeleceu helper, contrato, padrão visual,
+     runbook ou validação, o novo card deve aplicar esse padrão a uma lacuna
+     específica ainda não coberta.
+   - Não recrie cards genéricos para “padronizar” algo que já tem padrão; cite o
+     card concluído e descreva somente a aplicação restante.
+
+4. **Use idempotency-key estável e legível**
+   - Monte a chave com projeto, área e comportamento, por exemplo
+     `picoclip-agent-api-error-envelope-v1`.
+   - Reutilize a mesma chave se a descoberta for repetida em outra rodada.
+
+5. **Comente em vez de criar quando for follow-up pequeno**
+   - Se a lacuna é apenas uma observação, refinamento ou evidência para um card
+     existente, adicione comentário no card existente.
+   - Crie card novo apenas quando houver critério de aceite próprio e validação
+     independente.
+
+Se a checagem encontrar duplicata parcial, ajuste o título/body para explicitar o
+recorte que falta ou não crie o card.
+
 ## Política de priorização
 
 Ao escolher o próximo card, avalie nesta ordem:
