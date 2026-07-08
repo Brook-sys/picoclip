@@ -139,7 +139,7 @@ Campos/conceitos importantes:
 - permissões;
 - skills atribuídas;
 - config/env/extra args;
-- contadores de tokens.
+- contadores de tokens na UI (agregados).
 
 Capabilities atuais:
 
@@ -396,7 +396,7 @@ Prioridades técnicas ainda abertas:
 3. Recovery dashboard e métricas agregadas.
 4. Workspace isolation por task/run.
 5. Runtime events/streaming mais estruturados.
-6. Ledger de usage/custos mais completo.
+6. Ledger de usage/custos mais completo (além da visão agregada atual).
 7. Skills como pacotes com múltiplos arquivos/import/export.
 8. UI de inbox/atenção mais completa.
 9. Windows Job Objects para cancelamento completo de árvore de processos.
