@@ -68,6 +68,7 @@ Comportamento atual:
 
 - marca o run como `timeout`;
 - persiste um evento `run.timeout`;
+- persiste eventos estruturados de liveness do runtime (`runtime.stalled`, depois `runtime.cancel_requested` e `runtime.cancel_succeeded` ou `runtime.cancel_failed` quando há canceler configurado);
 - pede ao runtime manager para cancelar o processo/sessão;
 - destrava a task;
 - agenda retry com backoff, bloqueia a task quando `MaxAttempts` foi esgotado ou agenda o próximo ciclo de uma task contínua.
@@ -116,9 +117,19 @@ Eventos importantes de robustez:
 | --- | --- |
 | `run.timeout` | Um run parou de fazer progresso e foi encerrado como timeout. |
 | `run.recovered` | PicoClip reparou estado antigo ou órfão de run. |
+| `runtime.started` | Runner começou a executar um runtime configurado para um run. |
+| `runtime.process_started` | Adapter informou o identificador do processo/sessão do runtime. |
+| `runtime.heartbeat` | Adapter produziu output; payload inclui contagem de bytes em vez de output completo para evitar eventos persistidos ruidosos. |
+| `runtime.completed` | Execução do runtime terminou com o status final do run. |
+| `runtime.timeout` | Runner tratou um timeout direto do runtime. |
+| `runtime.stalled` | Reconciler detectou ausência de output antes do stall timeout. |
+| `runtime.cancel_requested` | PicoClip pediu cancelamento de um run de runtime travado. |
+| `runtime.cancel_succeeded` / `runtime.cancel_failed` | Cancelamento do runtime retornou sucesso ou falha. |
 | `retry.scheduled` | PicoClip agendou retry e registrou por quê, quando e com qual backoff. |
 | `budget.blocked` | Execução foi bloqueada por limite de budget. |
 | `driver.missing` | Runtime/driver necessário não estava disponível. |
+
+Payloads de eventos de liveness do runtime são intencionalmente compactos. Eles incluem campos estáveis como `runtime_id`, `phase`, `status`, `pid`, `stdout_bytes`, `stderr_bytes`, `reason` e `error` de cancelamento quando relevante. O output completo continua no run/output stream; heartbeats persistidos usam contagens de bytes para que output frequente não polua a Activity com payloads grandes.
 
 A página Activity transforma esses eventos em mensagens legíveis. Por exemplo, um evento de retry aparece como PicoClip aprendendo com um timeout e agendando retry após um número específico de segundos.
 
@@ -179,7 +190,7 @@ O sistema está mais robusto do que antes, mas ainda é experimental. Lacunas co
 
 - A classificação de retry ainda é básica. Timeouts são tratados como retryable, mas erros determinísticos ainda precisam ser separados entre retryable e non-retryable.
 - Ainda não há dashboard dedicado de recovery para locks antigos, retry queue, runtime health ou runs órfãos.
-- Liveness de runtime ainda é inferido principalmente por output/heartbeat, não por um modelo completo de eventos estruturados de runtime.
+- Liveness de runtime agora possui eventos estruturados por run para início, processo iniciado, heartbeats de output, timeout direto, detecção de stall e resultado de cancelamento, mas diagnostics agregados e resumos específicos de UI ainda são limitados.
 - Cancelamento de árvore de processos no Windows ainda precisa de Job Objects para paridade com Unix process groups.
 - Métricas aparecem em eventos/logs, mas métricas agregadas de confiabilidade ainda são limitadas.
 
@@ -191,5 +202,5 @@ Trabalhos recomendados:
 2. Persistir eventos `retry.skipped` ou `task.blocked` quando PicoClip decide não tentar de novo.
 3. Expor retry queue e estado de recovery na UI/API.
 4. Adicionar contadores agregados de confiabilidade: timeouts, recoveries, retries agendados, retries pulados, tentativas esgotadas e tasks atualmente lockadas.
-5. Expandir eventos de runtime para que liveness use sinais estruturados, não apenas timing de output.
+5. Expor eventos de liveness do runtime em diagnostics compactos e resumos de UI para que agentes expliquem rapidamente se um run está vivo, travado, em cancelamento ou em timeout.
 6. Adicionar suporte a Windows Job Objects para cancelamento completo de árvore de processos.

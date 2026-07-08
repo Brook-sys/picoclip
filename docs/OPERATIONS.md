@@ -199,7 +199,8 @@ Passos:
    - `budget.blocked`;
    - `retry.scheduled`;
    - `run.timeout`;
-   - `run.recovered`.
+   - `run.recovered`;
+   - `runtime.started`, `runtime.heartbeat`, `runtime.stalled`, `runtime.timeout` e `runtime.cancel_*` para entender liveness, stall e resultado de cancelamento do runtime.
 4. Confira se há retry wakeup pendente com `DueAt` futuro.
 5. Confira se `MaxAttempts` foi atingido.
 6. Confira runtime/agent:

@@ -68,6 +68,7 @@ Current behavior:
 
 - mark the run as `timeout`;
 - persist a `run.timeout` event;
+- persist structured runtime liveness events (`runtime.stalled`, then `runtime.cancel_requested` and either `runtime.cancel_succeeded` or `runtime.cancel_failed` when a canceler is configured);
 - ask the runtime manager to cancel the process/session;
 - unlock the task;
 - either schedule retry with backoff, block the task when max attempts are exhausted, or schedule the next continuous-task cycle.
@@ -116,9 +117,19 @@ Important robustness events include:
 | --- | --- |
 | `run.timeout` | A run stopped making progress and was closed as timed out. |
 | `run.recovered` | PicoClip repaired stale/orphaned run state. |
+| `runtime.started` | Runner began executing a configured runtime for a run. |
+| `runtime.process_started` | Adapter reported the OS process/session identifier for the runtime. |
+| `runtime.heartbeat` | Adapter produced output; payload includes byte counts instead of full output to avoid noisy persisted events. |
+| `runtime.completed` | Runtime execution finished with the final run status. |
+| `runtime.timeout` | Runner handled a direct runtime timeout. |
+| `runtime.stalled` | Reconciler detected missing output before the stall timeout. |
+| `runtime.cancel_requested` | PicoClip requested cancellation of a stalled runtime run. |
+| `runtime.cancel_succeeded` / `runtime.cancel_failed` | Runtime cancellation returned success or failure. |
 | `retry.scheduled` | PicoClip scheduled a retry and recorded why, when, and with what backoff. |
 | `budget.blocked` | Execution was blocked by a budget constraint. |
 | `driver.missing` | Required runtime/driver was unavailable. |
+
+Runtime liveness event payloads are intentionally compact. They include stable fields such as `runtime_id`, `phase`, `status`, `pid`, `stdout_bytes`, `stderr_bytes`, `reason`, and cancellation `error` when relevant. Full output still lives on the run/output stream; persisted heartbeat events use byte counts so frequent output does not spam Activity with large payloads.
 
 The Activity page turns these into human-readable messages. For example, a retry event is presented as PicoClip learning from a timeout and scheduling retry after a specific number of seconds.
 
@@ -179,7 +190,7 @@ The system is stronger than before, but still experimental. Known gaps:
 
 - Retry classification is still basic. Timeout retries are treated as retryable, but deterministic errors are not yet fully separated into retryable vs non-retryable categories.
 - There is no dedicated recovery dashboard for stale locks, retry queue, runtime health, or orphaned runs.
-- Runtime liveness is still mostly inferred from output/heartbeat state rather than a complete structured runtime event model.
+- Runtime liveness now has structured run-level events for start, process start, output heartbeats, direct timeout handling, stalled detection and cancellation results, but aggregate diagnostics and UI-specific liveness summaries are still limited.
 - Windows process-tree cancellation still needs Job Object support for parity with Unix process-group cancellation.
 - Metrics are visible through events/logs, but aggregate reliability metrics are still limited.
 
@@ -191,5 +202,5 @@ Recommended next work:
 2. Persist `retry.skipped` or `task.blocked` events when PicoClip intentionally refuses to retry.
 3. Expose the retry queue and recovery state in the UI/API.
 4. Add aggregate reliability counters: timeouts, recoveries, scheduled retries, skipped retries, exhausted attempts and currently locked tasks.
-5. Expand runtime events so liveness is based on structured signals, not only output timing.
+5. Surface runtime liveness events in compact diagnostics and UI summaries so agents can quickly explain whether a run is alive, stalled, canceling or timed out.
 6. Add Windows Job Objects support for runtime process-tree cancellation.

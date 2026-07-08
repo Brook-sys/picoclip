@@ -32,6 +32,16 @@ func (r *Reconciler) SetCanceler(canceler RunCanceler) {
 	r.canceler = canceler
 }
 
+func (r *Reconciler) emitRuntimeEvent(ctx context.Context, eventType domain.EventType, run domain.Run, message string, data map[string]string, now time.Time) {
+	if data == nil {
+		data = map[string]string{}
+	}
+	if _, ok := data["runtime_id"]; !ok {
+		data["runtime_id"] = run.DriverType
+	}
+	_ = r.storage.Events().Create(ctx, domain.Event{ID: r.idGen.NewID("evt"), Type: eventType, TaskID: run.TaskID, AgentID: run.AgentID, RunID: run.ID, Message: message, Data: data, CreatedAt: now})
+}
+
 func (r *Reconciler) Reconcile(ctx context.Context) {
 	dueContinuous := r.activateDueContinuousTasks(ctx)
 	if dueContinuous > 0 {
@@ -150,8 +160,14 @@ func (r *Reconciler) detectStalledRuns(ctx context.Context) int {
 		run.FinishedAt = &finished
 		_ = r.storage.Runs().Update(ctx, run)
 		_ = r.storage.Events().Create(ctx, domain.Event{ID: r.idGen.NewID("evt"), Type: domain.EventRunTimeout, TaskID: run.TaskID, AgentID: run.AgentID, RunID: run.ID, Message: run.Error, CreatedAt: now})
+		r.emitRuntimeEvent(ctx, domain.EventRuntimeStalled, run, "Runtime stalled", map[string]string{"phase": "stall_detected", "stall_timeout_seconds": strconv.Itoa(run.StallTimeout)}, now)
 		if r.canceler != nil {
-			_ = r.canceler.CancelRun(ctx, run)
+			r.emitRuntimeEvent(ctx, domain.EventRuntimeCancelRequested, run, "Runtime cancellation requested", map[string]string{"phase": "cancel_requested", "reason": "run_stalled"}, now)
+			if err := r.canceler.CancelRun(ctx, run); err != nil {
+				r.emitRuntimeEvent(ctx, domain.EventRuntimeCancelFailed, run, "Runtime cancellation failed", map[string]string{"phase": "cancel_failed", "reason": "run_stalled", "error": err.Error()}, now)
+			} else {
+				r.emitRuntimeEvent(ctx, domain.EventRuntimeCancelSucceeded, run, "Runtime cancellation succeeded", map[string]string{"phase": "cancel_succeeded", "reason": "run_stalled"}, now)
+			}
 		}
 
 		requeued := false

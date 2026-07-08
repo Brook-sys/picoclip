@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -38,6 +39,16 @@ func NewRunner(storage ports.Storage, clock ports.Clock, idGen ports.IDGenerator
 func (r *Runner) emitEvent(ctx context.Context, ev domain.Event) {
 	_ = r.storage.Events().Create(ctx, ev)
 	_ = r.storage.Events().CreateOutbox(ctx, ev)
+}
+
+func (r *Runner) emitRuntimeEvent(ctx context.Context, eventType domain.EventType, task domain.Task, agent domain.Agent, run domain.Run, message string, data map[string]string, now time.Time) {
+	if data == nil {
+		data = map[string]string{}
+	}
+	if _, ok := data["runtime_id"]; !ok {
+		data["runtime_id"] = string(agent.Type)
+	}
+	r.emitEvent(ctx, domain.Event{ID: r.idGen.NewID("evt"), Type: eventType, TaskID: task.ID, AgentID: agent.ID, RunID: run.ID, Message: message, Data: data, CreatedAt: now})
 }
 
 func (r *Runner) blockIfBudgetExceeded(ctx context.Context, task domain.Task, now time.Time) bool {
@@ -163,6 +174,7 @@ func (r *Runner) Run(ctx context.Context, task domain.Task) {
 
 	r.logger.Debug("runner.run_started", "task_id", task.ID, "agent_id", agent.ID, "run_id", run.ID, "runtime", agent.Type)
 	r.emitEvent(ctx, domain.Event{ID: r.idGen.NewID("evt"), Type: domain.EventRunStarted, TaskID: task.ID, AgentID: agent.ID, RunID: run.ID, Message: "Run started", CreatedAt: r.clock.Now()})
+	r.emitRuntimeEvent(ctx, domain.EventRuntimeStarted, task, agent, run, "Runtime execution started", map[string]string{"phase": "started"}, r.clock.Now())
 
 	runCtx, cancel := context.WithTimeout(ctx, r.config.TaskTimeout)
 	defer cancel()
@@ -187,6 +199,7 @@ func (r *Runner) Run(ctx context.Context, task domain.Task) {
 			OnStart: func(pid int) {
 				run.ProcessID = pid
 				_ = r.storage.Runs().Update(ctx, run)
+				r.emitRuntimeEvent(ctx, domain.EventRuntimeProcessStarted, task, agent, run, "Runtime process started", map[string]string{"phase": "process_started", "pid": strconv.Itoa(pid)}, r.clock.Now())
 			},
 			OnOutput: func(stdout, stderr []byte) {
 				now := r.clock.Now()
@@ -194,6 +207,7 @@ func (r *Runner) Run(ctx context.Context, task domain.Task) {
 				run.Error = appendRunStream(run.Error, stderr)
 				run.LastOutputAt = &now
 				_ = r.storage.Runs().Update(ctx, run)
+				r.emitRuntimeEvent(ctx, domain.EventRuntimeHeartbeat, task, agent, run, "Runtime output heartbeat", map[string]string{"phase": "output_heartbeat", "stdout_bytes": strconv.Itoa(len(stdout)), "stderr_bytes": strconv.Itoa(len(stderr))}, now)
 				_ = r.bus.Publish(ctx, domain.Event{
 					ID:        r.idGen.NewID("evt"),
 					Type:      domain.EventRunOutput,
@@ -230,6 +244,11 @@ func (r *Runner) Run(ctx context.Context, task domain.Task) {
 		r.logger.Warn("runner.run_failed", "task_id", task.ID, "run_id", run.ID, "runtime", agent.Type, "err", err)
 		_ = r.storage.Runs().Update(ctx, run)
 		r.emitEvent(ctx, domain.Event{ID: r.idGen.NewID("evt"), Type: domain.EventRunFailed, TaskID: task.ID, AgentID: agent.ID, RunID: run.ID, Message: err.Error(), CreatedAt: finishedAt})
+		if run.Status == domain.RunStatusTimeout {
+			r.emitRuntimeEvent(ctx, domain.EventRuntimeTimeout, task, agent, run, "Runtime execution timed out", map[string]string{"phase": "timeout_handled", "status": string(run.Status)}, finishedAt)
+		} else {
+			r.emitRuntimeEvent(ctx, domain.EventRuntimeCompleted, task, agent, run, "Runtime execution failed", map[string]string{"phase": "completed", "status": string(run.Status)}, finishedAt)
+		}
 		if task.Mode == domain.TaskModeContinuous {
 			r.completeContinuousCycle(ctx, task, run, finishedAt)
 		} else {
@@ -273,6 +292,7 @@ func (r *Runner) Run(ctx context.Context, task domain.Task) {
 		}
 	}
 	r.emitEvent(ctx, domain.Event{ID: r.idGen.NewID("evt"), Type: domain.EventRunCompleted, TaskID: task.ID, AgentID: agent.ID, RunID: run.ID, Message: "Run completed", CreatedAt: now})
+	r.emitRuntimeEvent(ctx, domain.EventRuntimeCompleted, task, agent, run, "Runtime execution completed", map[string]string{"phase": "completed", "status": string(run.Status)}, now)
 }
 
 func (r *Runner) completeContinuousCycle(ctx context.Context, task domain.Task, run domain.Run, finishedAt time.Time) {
