@@ -11,22 +11,22 @@ templ SkillDetailPage(skill domain.Skill, projects []domain.Workspace, agents []
 					@SectionHeader("Editor", "Modify the skill prompt and instructions.") {}
 					<form hx-post={ "/skills/" + skill.ID + "/edit" } data-success="Skill updated." hx-target="body" hx-swap="outerHTML" class="stacked">
 						@FormField("name", "Name", "") {
-							<input name="name" value={ skill.Name } required/>
+							@TextField("name", skill.Name, "", false)
 						}
 						@FormField("description", "Description", "") {
-							<input name="description" value={ skill.Description }/>
+							@TextField("description", skill.Description, "", false)
 						}
 						@FormField("instructions", "Instructions (SKILL.md)", "The main markdown document describing the skill.") {
-							<textarea name="instructions" required style="min-height: 280px; font-family: monospace;">{ skill.Instructions }</textarea>
+							@TextareaField("instructions", skill.Instructions, "", 14, false)
 						}
-						<label class="check-row" style="display: flex; gap: 8px; align-items: flex-start; margin-top: 8px;">
-							<input type="checkbox" name="enabled" checked?={ skill.Enabled } style="width: auto; margin-top: 4px;"/>
+						<label class="pc-checkbox-row skill-check-row">
+							<input type="checkbox" name="enabled" checked?={ skill.Enabled }/>
 							<span>
-								<strong style="display: block;">Enabled</strong>
+								<strong>Enabled</strong>
 								<small class="muted">Agents can load and execute this skill</small>
 							</span>
 						</label>
-						<button type="submit" style="margin-top: 8px;">Save Changes</button>
+						<button type="submit" class="pc-btn pc-btn-primary">Save Changes</button>
 					</form>
 				</div>
 				
@@ -38,23 +38,23 @@ templ SkillDetailPage(skill domain.Skill, projects []domain.Workspace, agents []
 						@EmptyState("No files attached", "This skill uses only the main instructions.", "book") {}
 					}
 					for i, file := range skill.Files {
-						<form hx-post={ "/skills/" + skill.ID + "/files/" + fmt.Sprintf("%d", i) } data-success="File updated." hx-target="body" hx-swap="outerHTML" class="card stack" style="margin-bottom: 16px;">
-							<div class="card-header" style="margin-bottom: 0;">
-								<input name="path" value={ file.Path } required placeholder="filename.py" style="max-width: 250px; font-family: monospace;" />
+						<form hx-post={ "/skills/" + skill.ID + "/files/" + fmt.Sprintf("%d", i) } data-success="File updated." hx-target="body" hx-swap="outerHTML" class="card stack skill-file-card">
+							<div class="card-header skill-file-card-header">
+								<input name="path" value={ file.Path } required placeholder="filename.py" class="pc-input skill-path-input" />
 								<div class="actions">
 									<button type="submit" class="pc-btn pc-btn-secondary">Save</button>
 									<button type="submit" name="action" value="delete" class="pc-btn pc-btn-danger">Remove</button>
 								</div>
 							</div>
-							<textarea name="content" required style="min-height: 120px; font-family: monospace;">{ file.Content }</textarea>
+							<textarea name="content" required class="pc-input skill-file-content">{ file.Content }</textarea>
 						</form>
 					}
-					<form id="add-file-row" hx-post={ "/skills/" + skill.ID + "/files/new" } data-success="File added." hx-target="body" hx-swap="outerHTML" class="card stack" style="margin-bottom: 16px; display: none;">
-						<div class="card-header" style="margin-bottom: 0;">
-							<input name="path" required placeholder="new_script.js" style="max-width: 250px; font-family: monospace;" />
+					<form id="add-file-row" hx-post={ "/skills/" + skill.ID + "/files/new" } data-success="File added." hx-target="body" hx-swap="outerHTML" class="card stack skill-file-card skill-add-file-row">
+						<div class="card-header skill-file-card-header">
+							<input name="path" required placeholder="new_script.js" class="pc-input skill-path-input" />
 							<button type="submit" class="pc-btn pc-btn-secondary">Add File</button>
 						</div>
-						<textarea name="content" required style="min-height: 120px; font-family: monospace;" placeholder="File content..."></textarea>
+						<textarea name="content" required class="pc-input skill-file-content" placeholder="File content..."></textarea>
 					</form>
 				</div>
 			</div>
@@ -113,18 +113,18 @@ templ SkillAgentForm(skill domain.Skill, agents []domain.Agent) {
 		if len(agents) == 0 {
 			<p class="empty">No agents available.</p>
 		}
-		<div style="display: flex; flex-direction: column; gap: 8px;">
+		<div class="skill-agent-list">
 			for _, agent := range agents {
-				<label class="check-row" style="display: flex; gap: 8px; align-items: flex-start;">
-					<input type="checkbox" name="agent_ids" value={ agent.ID } checked?={ skillAgentChecked(skill, agent) } disabled?={ skillAgentDisabled(skill, agent) } style="width: auto; margin-top: 4px;"/>
+				<label class="pc-checkbox-row skill-check-row">
+					<input type="checkbox" name="agent_ids" value={ agent.ID } checked?={ skillAgentChecked(skill, agent) } disabled?={ skillAgentDisabled(skill, agent) }/>
 					<span>
-						<strong style="display: block;">{ agent.Name }</strong>
+						<strong>{ agent.Name }</strong>
 						<small class="muted">{ string(agent.Type) + " · " + fmt.Sprintf("%d", len(agent.Permissions)) + " permissions" + skillAgentInheritedText(skill, agent) }</small>
 					</span>
 				</label>
 			}
 		</div>
-		<button type="submit" style="margin-top: 8px;">Save Assignments</button>
+		<button type="submit" class="pc-btn pc-btn-primary">Save Assignments</button>
 	</form>
 }
 

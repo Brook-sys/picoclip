@@ -6,6 +6,29 @@ import (
 	"testing"
 )
 
+func TestSkillDetailUsesCanonicalControlsWithoutInlineStyles(t *testing.T) {
+	t.Parallel()
+
+	body, err := os.ReadFile("skill_detail.templ")
+	if err != nil {
+		t.Fatalf("read skill_detail.templ: %v", err)
+	}
+	text := string(body)
+	if strings.Contains(text, `style="`) {
+		t.Fatalf("skill_detail.templ must not use inline style attributes; use canonical helpers or CSS classes instead")
+	}
+	for _, want := range []string{
+		"@TextField(",
+		"@TextareaField(",
+		"class=\"pc-input",
+		"class=\"pc-btn",
+	} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("skill_detail.templ must include canonical control marker %q", want)
+		}
+	}
+}
+
 func TestCanonicalActionAndBadgeHelpersReplaceLegacyProjectAndSkillMarkup(t *testing.T) {
 	t.Parallel()
 
