@@ -266,10 +266,31 @@ func TestMobileDashboardCSSStacksCanonicalOverviewAndPanelHeaders(t *testing.T) 
 	mobileBlock := cssMediaBlock(t, css, "@media (max-width: 768px) {")
 	for _, want := range []string{
 		".pc-overview-grid { grid-template-columns: 1fr; }",
-		".dashboard-panel-header { flex-direction: column; align-items: stretch; }",
+		".dashboard-panel-header, .runs-panel-header, .tasks-panel-header, .activity-panel-header { flex-direction: column; align-items: stretch; }",
 	} {
 		if !strings.Contains(mobileBlock, want) {
 			t.Fatalf("mobile dashboard CSS missing %q in:\n%s", want, mobileBlock)
+		}
+	}
+}
+
+func TestMobilePanelHeadersStackAcrossOperationalPages(t *testing.T) {
+	t.Parallel()
+
+	body, err := os.ReadFile("assets/app.css")
+	if err != nil {
+		t.Fatalf("read app.css: %v", err)
+	}
+	css := string(body)
+
+	mobileBlock := cssMediaBlock(t, css, "@media (max-width: 768px) {")
+	for _, want := range []string{
+		".dashboard-panel-header, .runs-panel-header, .tasks-panel-header, .activity-panel-header { flex-direction: column; align-items: stretch; }",
+		".dashboard-panel-header > *, .runs-panel-header > *, .tasks-panel-header > *, .activity-panel-header > * { width: 100%; }",
+		".runs-filter-pill, .activity-live-pill { align-self: flex-start; }",
+	} {
+		if !strings.Contains(mobileBlock, want) {
+			t.Fatalf("mobile operational panel headers missing %q in:\n%s", want, mobileBlock)
 		}
 	}
 }

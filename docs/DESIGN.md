@@ -322,7 +322,7 @@ Use:
 - tabs para filtros de status;
 - empty states quando listas estiverem vazias.
 
-Em telas até `768px`, grids de overview canônicos devem empilhar em uma coluna (`.pc-overview-grid`) e headers de painéis operacionais devem virar coluna com actions esticadas/alinhadas (`.dashboard-panel-header`, `.tasks-panel-header`, `.runs-panel-header`, `.activity-panel-header`). Esse contrato evita overflow e mantém ações alcançáveis no mobile; mudanças devem manter `TestMobileDashboardCSSStacksCanonicalOverviewAndPanelHeaders` verde.
+Em telas até `768px`, grids de overview canônicos devem empilhar em uma coluna (`.pc-overview-grid`) e headers de painéis operacionais devem virar coluna com conteúdo ocupando a largura disponível (`.dashboard-panel-header`, `.tasks-panel-header`, `.runs-panel-header`, `.activity-panel-header`). Pills/filtros compactos como `.runs-filter-pill` e `.activity-live-pill` permanecem alinhados ao início para não parecerem botões full-width. Esse contrato evita overflow e mantém ações alcançáveis no mobile; mudanças devem manter `TestMobileDashboardCSSStacksCanonicalOverviewAndPanelHeaders` e `TestMobilePanelHeadersStackAcrossOperationalPages` verdes.
 
 ## HTMX patterns
 
