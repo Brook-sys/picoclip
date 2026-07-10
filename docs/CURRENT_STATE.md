@@ -233,7 +233,7 @@ Wakeups são requests duráveis para tornar tasks executáveis por razões como 
 
 ### Usage e Budget
 
-Há contadores agregados em runs/tasks/agents e um ledger persistente `UsageEvent` por run. O runner grava eventos de usage com tokens de entrada/saída e a API v1 expõe `/api/v1/usage` com filtros por `run_id`, `task_id` e `agent_id` e totais no `meta`. O `BudgetService` usa esses dados para bloquear execução por hard stop. Custo monetário real ainda é futuro: `cost_micros` existe no modelo/storage, mas permanece `0` até haver configuração de preço/modelo.
+Há contadores agregados em runs/tasks/agents e um ledger persistente `UsageEvent` por run. O runner grava eventos de usage com tokens de entrada/saída; o detalhe do workspace também exibe o agregado do ledger por workspace, correlacionando cada evento à task correspondente. A API v1 expõe `/api/v1/usage` com filtros por `run_id`, `task_id` e `agent_id` e totais no `meta`. O `BudgetService` usa esses dados para bloquear execução por hard stop. Custo monetário real ainda é futuro: `cost_micros` existe no modelo/storage, mas permanece `0` até haver configuração de preço/modelo.
 
 ### Webhook
 

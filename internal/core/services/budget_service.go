@@ -49,6 +49,10 @@ func (s *BudgetService) UsageForAgent(ctx context.Context, agentID string) (doma
 	return domain.BudgetUsage{InputTokens: input, OutputTokens: output, CachedTokens: cached, TotalTokens: input + output + cached, CostMicros: costMicros}, nil
 }
 
+func (s *BudgetService) UsageForWorkspace(ctx context.Context, workspaceID string) (domain.BudgetUsage, error) {
+	return s.usageForScope(ctx, workspaceID, "", true)
+}
+
 func (s *BudgetService) IsHardStopped(ctx context.Context, workspaceID string, agentID string) (bool, domain.Budget, domain.BudgetUsage, error) {
 	budgets, err := s.storage.Budgets().List(ctx)
 	if err != nil {
@@ -66,7 +70,7 @@ func (s *BudgetService) IsHardStopped(ctx context.Context, workspaceID string, a
 			return true, budget, usage, nil
 		}
 	}
-	usage, err := s.usageForScope(ctx, workspaceID, agentID)
+	usage, err := s.usageForScope(ctx, workspaceID, agentID, false)
 	if err != nil {
 		return false, domain.Budget{}, domain.BudgetUsage{}, err
 	}
@@ -76,17 +80,17 @@ func (s *BudgetService) IsHardStopped(ctx context.Context, workspaceID string, a
 func (s *BudgetService) usageForBudget(ctx context.Context, budget domain.Budget) (domain.BudgetUsage, error) {
 	switch budget.Scope {
 	case domain.BudgetScopeGlobal:
-		return s.usageForScope(ctx, "", "")
+		return s.usageForScope(ctx, "", "", false)
 	case domain.BudgetScopeWorkspace:
-		return s.usageForScope(ctx, budget.WorkspaceID, "")
+		return s.usageForScope(ctx, budget.WorkspaceID, "", false)
 	case domain.BudgetScopeAgent:
-		return s.usageForScope(ctx, "", budget.AgentID)
+		return s.usageForScope(ctx, "", budget.AgentID, false)
 	default:
 		return domain.BudgetUsage{}, nil
 	}
 }
 
-func (s *BudgetService) usageForScope(ctx context.Context, workspaceID string, agentID string) (domain.BudgetUsage, error) {
+func (s *BudgetService) usageForScope(ctx context.Context, workspaceID string, agentID string, strictWorkspaceLookup bool) (domain.BudgetUsage, error) {
 	events, err := s.storage.Usage().List(ctx)
 	if err != nil {
 		return domain.BudgetUsage{}, err
@@ -98,7 +102,13 @@ func (s *BudgetService) usageForScope(ctx context.Context, workspaceID string, a
 		}
 		if workspaceID != "" {
 			task, err := s.storage.Tasks().Get(ctx, event.TaskID)
-			if err != nil || task.WorkspaceID != workspaceID {
+			if err != nil {
+				if strictWorkspaceLookup {
+					return domain.BudgetUsage{}, err
+				}
+				continue
+			}
+			if task.WorkspaceID != workspaceID {
 				continue
 			}
 		}
