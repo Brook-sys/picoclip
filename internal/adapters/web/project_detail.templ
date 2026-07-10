@@ -3,7 +3,7 @@ package web
 import "picoclip/internal/core/domain"
 import "fmt"
 
-templ ProjectDetailPage(project domain.Workspace, agents []domain.Agent, tasks []taskResponse, skills []domain.Skill, events []domain.Event) {
+templ ProjectDetailPage(project domain.Workspace, usage domain.BudgetUsage, agents []domain.Agent, tasks []taskResponse, skills []domain.Skill, events []domain.Event) {
 	@PageShell("projects", project.Name, project.Description, projectDetailAction()) {
 		<section class="detail-grid">
 			<div class="main-column">
@@ -21,16 +21,22 @@ templ ProjectDetailPage(project domain.Workspace, agents []domain.Agent, tasks [
 			<aside class="side-column">
 				<div class="panel">
 					<h2>Workspace</h2>
-					<dl>
-						<dt>ID</dt>
-						<dd><code>{ project.ID }</code></dd>
-						<dt>Path</dt>
-						<dd><code>{ project.RootPath }</code></dd>
-						<dt>Agentes globais</dt>
-						<dd>{ fmt.Sprintf("%d", len(agents)) }</dd>
-						<dt>Skills</dt>
-						<dd>{ fmt.Sprintf("%d", len(skills)) }</dd>
-					</dl>
+					@PropertyList() {
+						@PropertyItemHTML("ID") {
+							<code>{ project.ID }</code>
+						}
+						@PropertyItemHTML("Path") {
+							<code>{ project.RootPath }</code>
+						}
+						@PropertyItem("Uso do ledger", workspaceUsageText(usage))
+						@PropertyItem("Input", fmt.Sprintf("%d input", usage.InputTokens))
+						@PropertyItem("Output", fmt.Sprintf("%d output", usage.OutputTokens))
+						@PropertyItem("Cached", fmt.Sprintf("%d cached", usage.CachedTokens))
+						@PropertyItem("Total", fmt.Sprintf("%d total", usage.TotalTokens))
+						@PropertyItem("Runs", fmt.Sprintf("%d runs", usage.Runs))
+						@PropertyItem("Agentes globais", fmt.Sprintf("%d", len(agents)))
+						@PropertyItem("Skills", fmt.Sprintf("%d", len(skills)))
+					}
 				</div>
 				<div class="panel">
 					<h2>Nova task</h2>
@@ -45,6 +51,13 @@ templ ProjectDetailPage(project domain.Workspace, agents []domain.Agent, tasks [
 		</section>
 		@TaskModal("project-task-modal", project.ID, []domain.Workspace{project}, agents)
 	}
+}
+
+func workspaceUsageText(usage domain.BudgetUsage) string {
+	if usage.Runs == 0 {
+		return "Nenhum uso registrado ainda"
+	}
+	return fmt.Sprintf("%d tokens em %d runs", usage.TotalTokens, usage.Runs)
 }
 
 templ projectDetailAction() {

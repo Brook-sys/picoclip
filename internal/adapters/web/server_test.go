@@ -628,6 +628,71 @@ func TestAPIV1TaskFullIncludesWakeupsAndTaskWakeupsEndpoint(t *testing.T) {
 	}
 }
 
+func TestProjectDetailShowsWorkspaceLedgerUsage(t *testing.T) {
+	storage := memory.NewStorage()
+	now := time.Now().UTC()
+	workspace := domain.Workspace{ID: "workspace_usage", Name: "Usage workspace", RootPath: t.TempDir(), CreatedAt: now, UpdatedAt: now}
+	otherWorkspace := domain.Workspace{ID: "workspace_other_usage", Name: "Other workspace", RootPath: t.TempDir(), CreatedAt: now, UpdatedAt: now}
+	for _, project := range []domain.Workspace{workspace, otherWorkspace} {
+		if err := storage.Workspaces().Create(t.Context(), project); err != nil {
+			t.Fatalf("create workspace %s: %v", project.ID, err)
+		}
+	}
+	workspaceTaskA := domain.Task{ID: "task_usage_a", WorkspaceID: workspace.ID, Title: "usage a", Prompt: "usage a", Status: domain.TaskStatusDone, CreatedAt: now, UpdatedAt: now}
+	workspaceTaskB := domain.Task{ID: "task_usage_b", WorkspaceID: workspace.ID, Title: "usage b", Prompt: "usage b", Status: domain.TaskStatusDone, CreatedAt: now, UpdatedAt: now}
+	otherWorkspaceTask := domain.Task{ID: "task_usage_other", WorkspaceID: otherWorkspace.ID, Title: "other usage", Prompt: "other usage", Status: domain.TaskStatusDone, CreatedAt: now, UpdatedAt: now}
+	for _, task := range []domain.Task{workspaceTaskA, workspaceTaskB, otherWorkspaceTask} {
+		if err := storage.Tasks().Create(t.Context(), task); err != nil {
+			t.Fatalf("create task %s: %v", task.ID, err)
+		}
+	}
+	for _, event := range []domain.UsageEvent{
+		{ID: "usage_detail_a", TaskID: workspaceTaskA.ID, InputTokens: 10, OutputTokens: 4, CachedTokens: 2, CreatedAt: now},
+		{ID: "usage_detail_b", TaskID: workspaceTaskB.ID, InputTokens: 5, OutputTokens: 3, CachedTokens: 1, CreatedAt: now},
+		{ID: "usage_detail_other", TaskID: otherWorkspaceTask.ID, InputTokens: 100, OutputTokens: 100, CachedTokens: 100, CreatedAt: now},
+	} {
+		if err := storage.Usage().Create(t.Context(), event); err != nil {
+			t.Fatalf("create usage event %s: %v", event.ID, err)
+		}
+	}
+	ts := newTestServerWithStorage(t, storage, true)
+	defer ts.Close()
+
+	res, err := ts.Client().Get(ts.URL + "/projects/" + workspace.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("project detail status = %d, want 200", res.StatusCode)
+	}
+	body := readBodyString(t, res.Body)
+	for _, want := range []string{"Uso do ledger", "15 input", "7 output", "3 cached", "25 total", "2 runs"} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("project detail missing %q: %s", want, body)
+		}
+	}
+	if strings.Contains(body, "300 total") {
+		t.Fatalf("project detail included usage from another workspace: %s", body)
+	}
+
+	zeroWorkspace := domain.Workspace{ID: "workspace_zero_usage", Name: "Zero usage workspace", RootPath: t.TempDir(), CreatedAt: now, UpdatedAt: now}
+	if err := storage.Workspaces().Create(t.Context(), zeroWorkspace); err != nil {
+		t.Fatalf("create zero usage workspace: %v", err)
+	}
+	zeroRes, err := ts.Client().Get(ts.URL + "/projects/" + zeroWorkspace.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer zeroRes.Body.Close()
+	if zeroRes.StatusCode != http.StatusOK {
+		t.Fatalf("zero usage project detail status = %d, want 200", zeroRes.StatusCode)
+	}
+	if zeroBody := readBodyString(t, zeroRes.Body); !strings.Contains(zeroBody, "Nenhum uso registrado ainda") {
+		t.Fatalf("zero usage project detail missing empty state: %s", zeroBody)
+	}
+}
+
 func TestAPIV1UsageLedgerFiltersByRunTaskAndAgent(t *testing.T) {
 	storage := memory.NewStorage()
 	now := time.Now().UTC()

@@ -134,6 +134,11 @@ func (s *Server) handleWebProjectDetail(w http.ResponseWriter, r *http.Request) 
 	if !ok {
 		return
 	}
+	usage, err := services.NewBudgetService(s.storage, services.SystemClock{}, &services.TimeIDGenerator{}).UsageForWorkspace(r.Context(), project.ID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 	projectAgents := agents
 	projectTasks := make([]taskResponse, 0)
 	for _, task := range tasks {
@@ -148,7 +153,7 @@ func (s *Server) handleWebProjectDetail(w http.ResponseWriter, r *http.Request) 
 		}
 	}
 	events, _ := s.storage.Events().ListRecent(r.Context(), 20)
-	if err := ProjectDetailPage(project, projectAgents, projectTasks, projectSkills, events).Render(r.Context(), w); err != nil {
+	if err := ProjectDetailPage(project, usage, projectAgents, projectTasks, projectSkills, events).Render(r.Context(), w); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
 }
