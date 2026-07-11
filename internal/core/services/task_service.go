@@ -441,7 +441,7 @@ func (s *TaskService) completionAuditConfig(ctx context.Context) (completionAudi
 func (s *TaskService) completeWithAudit(ctx context.Context, snapshot domain.Task, comment, agentID string) (domain.Task, error) {
 	config, err := s.completionAuditConfig(ctx)
 	if err != nil {
-		return domain.Task{}, err
+		return s.persistAuditFailure(ctx, snapshot, agentID, domain.CompletionAuditError, "completion audit configuration unavailable", domain.EventCompletionAuditError, domain.ErrCompletionAuditFailed)
 	}
 	if config.Mode == "disabled" {
 		return s.applyApprovedCompletion(ctx, snapshot, comment, agentID)

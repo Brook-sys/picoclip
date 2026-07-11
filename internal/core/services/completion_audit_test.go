@@ -166,6 +166,43 @@ func TestCompletionAuditErrorFailsClosedAndIsObservable(t *testing.T) {
 	}
 }
 
+func TestCompletionAuditInvalidConfigurationFailsClosedAndIsObservable(t *testing.T) {
+	stub := &completionAuditStub{}
+	svc, st, _, task := newAuditedTaskService(t, stub)
+	if err := st.Settings().Set(context.Background(), completionAuditSettingsKey, `{invalid`); err != nil {
+		t.Fatal(err)
+	}
+
+	_, err := svc.UpdateStatus(context.Background(), task.ID, domain.TaskStatusDone, "finished", "agent_worker")
+	if !errors.Is(err, domain.ErrCompletionAuditFailed) {
+		t.Fatalf("error = %v, want unavailable", err)
+	}
+	if stub.calls != 0 {
+		t.Fatalf("auditor calls = %d, want 0 for invalid config", stub.calls)
+	}
+	got, err := st.Tasks().Get(context.Background(), task.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Status != domain.TaskStatusInProgress || got.CheckoutRunID == "" || got.NeedsRun {
+		t.Fatalf("invalid config mutated lifecycle: %#v", got)
+	}
+	audits, err := st.CompletionAudits().ListByTask(context.Background(), task.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(audits) != 1 || audits[0].Outcome != domain.CompletionAuditError {
+		t.Fatalf("invalid config audit was not persisted: %#v", audits)
+	}
+	events, err := st.Events().ListByTask(context.Background(), task.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !hasEvent(events, domain.EventCompletionAuditError) {
+		t.Fatalf("missing invalid-config error event: %#v", events)
+	}
+}
+
 func TestCompletionAuditDisabledPreservesExistingCompletionFlow(t *testing.T) {
 	st := memory.NewStorage()
 	clock := fixedClock{t: time.Date(2026, 7, 11, 13, 0, 0, 0, time.UTC)}
