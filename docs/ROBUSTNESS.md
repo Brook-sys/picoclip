@@ -13,9 +13,17 @@ Robustness work follows these principles:
 - **Fail visibly**: important failures should create persistent events, not only log lines.
 - **Claim conservatively**: tasks should only be claimed when PicoClip can actually start work.
 - **Recover conservatively**: recovery should unlock work safely without creating duplicate active runs.
-- **Avoid retry storms**: retry should use backoff and must not bypass its own schedule.
+- **Avoid retry storms**: retry should use backoff and must not bypass its own schedule. Free model rate limits (429/rate-limit errors) trigger backoff retries: continuous tasks schedule backoffs without blocking or failing the task itself, allowing slow but steady iterative progress.
 - **Learn from failures**: retry and recovery decisions should carry structured metadata explaining what happened and why the system reacted.
 - **Keep local-first simplicity**: robustness features should not require external queues, databases, or services.
+
+## Bubblewrap sandbox runtime
+
+PicoClip registers `bwrap` as an opt-in runtime rather than wrapping existing runtime adapters implicitly. The runner still resolves the runtime before execution; if Bubblewrap is missing, disabled, unhealthy, or cannot start, the run fails visibly and PicoClip does **not** execute the configured command directly on the host.
+
+The sandbox runtime is Linux-only and requires `agent.config.sandbox_command` to resolve to an executable beneath the approved `/bin` or `/usr/bin` roots. It runs that pinned executable with `bwrap --unshare-all --die-with-parent --new-session` in a fresh tmpfs root containing only `/usr/bin`, dynamic-loader libraries (`/lib`, `/lib64`, `/usr/lib` when present), `/proc`, `/dev`, and a fresh `/tmp`. It does not bind the host root, `/run`, `/var/run`, home directories, or host sockets. The bwrap host process itself gets a minimal explicit environment; the sandbox gets a cleared environment plus an allowlisted fixed baseline and explicit agent environment entries.
+
+`agent.config.sandbox_workspace_path` is optional. When configured, it must canonicalize beneath the operator-controlled `PICOCLIP_WORKSPACES` root and is pinned through an inherited descriptor before being bind-mounted read-write; arbitrary absolute directories and symlink escapes are rejected. Network remains isolated through `--unshare-all`. This is a minimal Linux Bubblewrap boundary, not a general policy engine: it intentionally supplies only dynamically linked executables rooted in `/bin` or `/usr/bin`, and commands needing other host files/dependencies will fail. Install Bubblewrap with the host package manager and use `BWRAP_PATH` to override its executable path. Missing/unsupported Bubblewrap fails closed; PicoClip never runs the command directly on the host.
 
 ## Execution lifecycle overview
 

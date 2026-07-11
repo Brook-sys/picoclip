@@ -9,6 +9,7 @@ type RuntimeKind string
 const (
 	RuntimeKindNative   RuntimeKind = "native"
 	RuntimeKindExternal RuntimeKind = "external"
+	RuntimeKindSandbox  RuntimeKind = "sandbox"
 )
 
 type InstallMode string

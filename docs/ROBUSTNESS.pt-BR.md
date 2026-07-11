@@ -13,9 +13,17 @@ O trabalho de robustez segue estes princípios:
 - **Falhar de forma visível**: falhas importantes devem criar eventos persistidos, não apenas linhas de log.
 - **Reivindicar de forma conservadora**: tasks só devem ser reivindicadas quando o PicoClip realmente puder iniciar trabalho.
 - **Recuperar de forma conservadora**: recovery deve destravar trabalho com segurança, sem criar runs ativos duplicados.
-- **Evitar retry storms**: retry deve usar backoff e não pode burlar o próprio agendamento.
+- **Evitar retry storms**: retry deve usar backoff e não pode burlar o próprio agendamento. Limites de taxa (erros 429/rate-limit) em modelos gratuitos disparam retries com backoff: tarefas contínuas agendam retries com backoff sem falhar ou bloquear a tarefa de forma abrupta, permitindo progresso iterativo lento e constante.
 - **Aprender com falhas**: decisões de retry/recovery devem carregar metadata estruturada explicando o que aconteceu e por que o sistema reagiu.
 - **Preservar simplicidade local-first**: robustez não deve depender de filas, bancos ou serviços externos.
+
+## Runtime sandbox Bubblewrap
+
+O PicoClip registra `bwrap` como runtime opt-in em vez de envolver implicitamente os adapters de runtime existentes. O runner ainda resolve o runtime antes da execução; se o Bubblewrap estiver ausente, desabilitado, não saudável ou não puder iniciar, o run falha de forma visível e o PicoClip **não** executa o comando configurado diretamente no host.
+
+O runtime sandbox é exclusivo para Linux e exige que `agent.config.sandbox_command` resolva para um executável sob as raízes aprovadas `/bin` ou `/usr/bin`. Ele executa esse executável fixado com `bwrap --unshare-all --die-with-parent --new-session` em uma raiz tmpfs nova contendo somente `/usr/bin`, bibliotecas do dynamic loader (`/lib`, `/lib64`, `/usr/lib` quando presentes), `/proc`, `/dev` e um `/tmp` novo. Não monta a raiz do host, `/run`, `/var/run`, homes ou sockets do host. O processo bwrap no host também recebe ambiente mínimo explícito; o sandbox recebe ambiente limpo, baseline fixo permitido e apenas entradas explícitas do agent.
+
+`agent.config.sandbox_workspace_path` é opcional. Quando configurado, deve ser canonicalizado sob a raiz `PICOCLIP_WORKSPACES` controlada pelo operador e é fixado por descritor herdado antes do bind mount com escrita; diretórios absolutos arbitrários e escapes por symlink são rejeitados. A rede continua isolada por `--unshare-all`. Esta é uma fronteira mínima de Bubblewrap para Linux, não um motor de políticas genérico: ela fornece intencionalmente apenas executáveis dinamicamente ligados sob `/bin` ou `/usr/bin`; comandos que dependam de outros arquivos/dependências do host falharão. Instale Bubblewrap pelo gerenciador de pacotes do host e use `BWRAP_PATH` para sobrescrever o caminho do executável. Bubblewrap ausente/não suportado falha fechado; o PicoClip nunca executa o comando diretamente no host.
 
 ## Visão geral do ciclo de execução
 

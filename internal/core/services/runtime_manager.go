@@ -46,6 +46,7 @@ func NewRuntimeManager(storage ports.Storage, baseDir string, clock ports.Clock)
 			{ID: "crush", Name: "Crush", Description: "Charmbracelet agentic coding runtime.", Kind: domain.RuntimeKindNative, Repo: "charmbracelet/crush", DocsURL: "https://github.com/charmbracelet/crush"},
 			{ID: "picoclaw", Name: "PicoClaw", Description: "Sipeed ultra-lightweight Go AI assistant runtime.", Kind: domain.RuntimeKindNative, Repo: "sipeed/picoclaw", DocsURL: "https://docs.picoclaw.io/"},
 			{ID: "claurst", Name: "Claurst", Description: "Open-source multi-provider terminal coding agent built in Rust.", Kind: domain.RuntimeKindNative, Repo: "Kuberwastaken/claurst", DocsURL: "https://claurst.kuber.studio/docs"},
+			{ID: "bwrap", Name: "Bubblewrap Sandbox", Description: "Isolated fail-closed application container runtime.", Kind: domain.RuntimeKindSandbox, Repo: "containers/bubblewrap", DocsURL: "https://github.com/containers/bubblewrap"},
 		},
 	}
 }

@@ -87,9 +87,27 @@ func main() {
 	if claurstPath == "" {
 		claurstPath = "claurst"
 	}
+	bwrapPath := os.Getenv("BWRAP_PATH")
+	if bwrapPath == "" {
+		bwrapPath = "bwrap"
+	}
+	workspaceBase := os.Getenv("PICOCLIP_WORKSPACES")
+	if workspaceBase == "" {
+		workspaceBase = "workspaces"
+	}
+	workspaceRoot, err := filepath.Abs(workspaceBase)
+	if err != nil {
+		appLogger.Error("workspace.path_invalid", "err", err)
+		os.Exit(1)
+	}
+	if err := os.MkdirAll(workspaceRoot, 0o755); err != nil {
+		appLogger.Error("workspace.mkdir_failed", "err", err)
+		os.Exit(1)
+	}
 	runtimeManager.Register(runtimes.NewCrushAdapter(crushPath))
 	runtimeManager.Register(runtimes.NewPicoClawAdapter(picoclawPath))
 	runtimeManager.Register(runtimes.NewClaurstAdapter(claurstPath))
+	runtimeManager.Register(runtimes.NewBwrapRuntimeWithBinaryAndWorkspaceRoots(bwrapPath, []string{workspaceRoot}))
 
 	config := services.DefaultConfig()
 	engine := services.NewEngine(storage, bus, runtimeManager, services.NoopMemoryProvider{}, appLogger, config)
@@ -100,11 +118,7 @@ func main() {
 	agentService := services.NewAgentService(storage, clock, idGen)
 	taskService := services.NewTaskService(storage, clock, idGen, bus)
 	taskService.SetCanceler(runtimeManager)
-	workspaceBase := os.Getenv("PICOCLIP_WORKSPACES")
-	if workspaceBase == "" {
-		workspaceBase = "workspaces"
-	}
-	workspaceService := services.NewWorkspaceService(storage, clock, idGen, workspaceBase)
+	workspaceService := services.NewWorkspaceService(storage, clock, idGen, workspaceRoot)
 	_, _ = workspaceService.EnsureDefault(ctx)
 	skillService := services.NewSkillService(storage, clock, idGen)
 	_ = skillService.InstallBuiltins(ctx)

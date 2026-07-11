@@ -2,6 +2,7 @@ package ports
 
 import (
 	"context"
+	"errors"
 
 	"picoclip/internal/core/domain"
 )
@@ -37,6 +38,27 @@ type RuntimeAdapter interface {
 	WriteConfig(ctx context.Context, state domain.RuntimeState, fileName string, content []byte) error
 	Execute(ctx context.Context, state domain.RuntimeState, input RuntimeExecutionInput) (RuntimeExecutionResult, error)
 	Cancel(ctx context.Context, state domain.RuntimeState, run domain.Run) error
+}
+
+var ErrSandboxCommandRequired = errors.New("sandbox command is required")
+
+type SandboxCommand struct {
+	Command   string
+	Args      []string
+	Env       []string
+	Workspace string
+	OnStart   func(pid int)
+	OnOutput  func(stdout, stderr []byte)
+}
+
+type SandboxResult struct {
+	Output string
+}
+
+// Sandbox executes an explicitly configured command in an isolated environment.
+// Implementations must fail closed: they must never fall back to a host command.
+type Sandbox interface {
+	Isolate(ctx context.Context, command SandboxCommand) (SandboxResult, error)
 }
 
 type RuntimeRepository interface {

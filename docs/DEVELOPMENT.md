@@ -82,6 +82,7 @@ PICOCLIP_WORKSPACES=workspaces
 PICOCLIP_RUNTIMES=data/runtimes
 PICOCLIP_LOG_LEVEL=info
 PICOCLIP_DEBUG=false
+BWRAP_PATH=bwrap  # Bubblewrap para o runtime sandbox opt-in
 ```
 
 Rodar manualmente:

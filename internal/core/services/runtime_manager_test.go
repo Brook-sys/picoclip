@@ -218,3 +218,19 @@ func TestRuntimeManagerCatalogIncludesClaurst(t *testing.T) {
 	}
 	t.Fatal("expected claurst in runtime catalog")
 }
+
+func TestRuntimeManagerCatalogIncludesBwrapSandbox(t *testing.T) {
+	manager := NewRuntimeManager(memory.NewStorage(), t.TempDir(), SystemClock{})
+	for _, manifest := range manager.Catalog() {
+		if manifest.ID == "bwrap" {
+			if manifest.Name == "" || manifest.Description == "" || manifest.Repo == "" {
+				t.Fatalf("bwrap manifest incomplete: %#v", manifest)
+			}
+			if manifest.Kind != domain.RuntimeKindSandbox {
+				t.Fatalf("expected sandbox kind, got %q", manifest.Kind)
+			}
+			return
+		}
+	}
+	t.Fatal("expected bwrap in runtime catalog")
+}

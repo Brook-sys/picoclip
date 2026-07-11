@@ -178,6 +178,150 @@ func TestRunnerClassifiesRuntimeUnavailableAsNonRetryable(t *testing.T) {
 	assertEventData(t, events, domain.EventTaskFailed, "", map[string]string{"retryable": "false", "classification": "non_retryable", "reason": "runtime_unavailable"})
 }
 
+func TestRunnerRateLimitOneShot(t *testing.T) {
+	ctx := context.Background()
+	st := memory.NewStorage()
+	clock := fixedClock{t: time.Date(2026, 7, 8, 3, 20, 0, 0, time.UTC)}
+	idgen := &seqID{}
+	runtimes := NewRuntimeManager(st, t.TempDir(), clock)
+	// Return a rate limit error (429)
+	runtimes.Register(fakeRuntimeAdapter{id: "crush", err: errors.New("rate limit: 429 too many requests")})
+	if err := st.Runtimes().Save(ctx, domain.RuntimeState{ID: "runtime_crush", RuntimeID: "crush", Mode: domain.InstallModeExisting, Enabled: true, SettingsJSON: "{}", MetadataJSON: "{}"}); err != nil {
+		t.Fatal(err)
+	}
+	agent := domain.Agent{ID: "agent_ratelimit", Name: "agent", Type: "crush", Enabled: true, CreatedAt: clock.t, UpdatedAt: clock.t}
+	if err := st.Agents().Create(ctx, agent); err != nil {
+		t.Fatal(err)
+	}
+	task := domain.Task{ID: "task_ratelimit", AgentID: agent.ID, Title: "ratelimit one shot", Prompt: "run", Status: domain.TaskStatusTodo, NeedsRun: true, CreatedAt: clock.t, UpdatedAt: clock.t}
+	if err := st.Tasks().Create(ctx, task); err != nil {
+		t.Fatal(err)
+	}
+
+	runner := NewRunner(st, clock, idgen, noopBus{}, runtimes, NoopMemoryProvider{}, testLogger{}, Config{TaskTimeout: time.Minute, MaxAttempts: 3})
+	runner.Run(ctx, task)
+
+	runs, err := st.Runs().ListByTask(ctx, task.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(runs) != 1 || runs[0].Status != domain.RunStatusFailed {
+		t.Fatalf("expected failed run, got %#v", runs)
+	}
+	gotTask, err := st.Tasks().Get(ctx, task.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if gotTask.Status != domain.TaskStatusInProgress || gotTask.NeedsRun {
+		t.Fatalf("expected one-shot task to wait for retry wakeup, got status=%s needs_run=%v", gotTask.Status, gotTask.NeedsRun)
+	}
+	wakeups, err := st.Wakeups().ListByTask(ctx, task.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(wakeups) != 1 {
+		t.Fatalf("expected one retry wakeup, got %#v", wakeups)
+	}
+	if wakeups[0].Reason != domain.WakeupReasonRetry || wakeups[0].Payload["previous_run_id"] != runs[0].ID || wakeups[0].Payload["reason"] != "rate_limit" {
+		t.Fatalf("expected rate limit retry wakeup for run %s, got %#v", runs[0].ID, wakeups[0])
+	}
+	if got := int(wakeups[0].DueAt.Sub(clock.t).Seconds()); got != 30 {
+		t.Fatalf("expected first retry due after 30s, got %ds", got)
+	}
+	events, err := st.Events().ListByTask(ctx, task.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertEventData(t, events, domain.EventRetryScheduled, runs[0].ID, map[string]string{"retryable": "true", "classification": "retryable", "reason": "rate_limit", "backoff_seconds": "30"})
+}
+
+func TestRunnerRateLimitContinuous(t *testing.T) {
+	ctx := context.Background()
+	st := memory.NewStorage()
+	clock := fixedClock{t: time.Date(2026, 7, 8, 3, 20, 0, 0, time.UTC)}
+	idgen := &seqID{}
+	runtimes := NewRuntimeManager(st, t.TempDir(), clock)
+	// Return a rate limit error (429)
+	runtimes.Register(fakeRuntimeAdapter{id: "crush", err: errors.New("429 too many requests")})
+	if err := st.Runtimes().Save(ctx, domain.RuntimeState{ID: "runtime_crush", RuntimeID: "crush", Mode: domain.InstallModeExisting, Enabled: true, SettingsJSON: "{}", MetadataJSON: "{}"}); err != nil {
+		t.Fatal(err)
+	}
+	agent := domain.Agent{ID: "agent_ratelimit_cont", Name: "agent", Type: "crush", Enabled: true, CreatedAt: clock.t, UpdatedAt: clock.t}
+	if err := st.Agents().Create(ctx, agent); err != nil {
+		t.Fatal(err)
+	}
+	task := domain.Task{
+		ID:        "task_ratelimit_cont",
+		AgentID:   agent.ID,
+		Title:     "ratelimit continuous",
+		Prompt:    "run",
+		Status:    domain.TaskStatusTodo,
+		Mode:      domain.TaskModeContinuous,
+		NeedsRun:  true,
+		CreatedAt: clock.t,
+		UpdatedAt: clock.t,
+	}
+	if err := st.Tasks().Create(ctx, task); err != nil {
+		t.Fatal(err)
+	}
+
+	runner := NewRunner(st, clock, idgen, noopBus{}, runtimes, NoopMemoryProvider{}, testLogger{}, Config{TaskTimeout: time.Minute, MaxAttempts: 3})
+	runner.Run(ctx, task)
+
+	runs, err := st.Runs().ListByTask(ctx, task.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(runs) != 1 || runs[0].Status != domain.RunStatusFailed {
+		t.Fatalf("expected failed run, got %#v", runs)
+	}
+	gotTask, err := st.Tasks().Get(ctx, task.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if gotTask.Status != domain.TaskStatusWaitingNextCycle || gotTask.NeedsRun {
+		t.Fatalf("expected continuous task to remain in waiting next cycle, got status=%s needs_run=%v", gotTask.Status, gotTask.NeedsRun)
+	}
+	if gotTask.LoopNextRunAt == nil {
+		t.Fatal("expected LoopNextRunAt to be set")
+	}
+	// First retry backoff is 30s
+	wantNext := clock.t.Add(30 * time.Second)
+	if !gotTask.LoopNextRunAt.Equal(wantNext) {
+		t.Fatalf("expected LoopNextRunAt = %v, got %v", wantNext, gotTask.LoopNextRunAt)
+	}
+
+	// Verify retry.scheduled event was recorded for continuous task backoff
+	events, err := st.Events().ListByTask(ctx, task.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertEventData(t, events, domain.EventRetryScheduled, runs[0].ID, map[string]string{"retryable": "true", "classification": "retryable", "reason": "rate_limit", "backoff_seconds": "30"})
+
+	// Reset agent response to success
+	runtimes.Register(fakeRuntimeAdapter{id: "crush", out: "success"})
+
+	// Prepare for next loop run: wake task and clear LoopNextRunAt
+	gotTask.Status = domain.TaskStatusTodo
+	gotTask.NeedsRun = true
+	gotTask.LoopNextRunAt = nil
+	if err := st.Tasks().Update(ctx, gotTask); err != nil {
+		t.Fatal(err)
+	}
+
+	// Run again (should succeed)
+	runner.Run(ctx, gotTask)
+
+	// Attempts should be reset to 0
+	gotTask2, err := st.Tasks().Get(ctx, task.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if gotTask2.Attempts != 0 {
+		t.Fatalf("expected attempts to reset to 0 on successful continuous task run, got %d", gotTask2.Attempts)
+	}
+}
+
 func TestReconcilerPersistsRuntimeCancellationEventsForStalledRun(t *testing.T) {
 	st := memory.NewStorage()
 	clock := fixedClock{t: time.Date(2026, 7, 8, 3, 30, 0, 0, time.UTC)}
@@ -207,6 +351,70 @@ func TestReconcilerPersistsRuntimeCancellationEventsForStalledRun(t *testing.T) 
 	assertRuntimeEvent(t, events, domain.EventRuntimeStalled, run.ID, map[string]string{"runtime_id": "crush", "phase": "stall_detected"})
 	assertRuntimeEvent(t, events, domain.EventRuntimeCancelRequested, run.ID, map[string]string{"runtime_id": "crush", "phase": "cancel_requested", "reason": "run_stalled"})
 	assertRuntimeEvent(t, events, domain.EventRuntimeCancelFailed, run.ID, map[string]string{"runtime_id": "crush", "phase": "cancel_failed"})
+}
+
+func TestRunnerRateLimitContinuousDoesNotFailOnMaxAttempts(t *testing.T) {
+	ctx := context.Background()
+	st := memory.NewStorage()
+	clock := fixedClock{t: time.Date(2026, 7, 8, 3, 20, 0, 0, time.UTC)}
+	idgen := &seqID{}
+	runtimes := NewRuntimeManager(st, t.TempDir(), clock)
+	// Return a rate limit error (429)
+	runtimes.Register(fakeRuntimeAdapter{id: "crush", err: errors.New("429 too many requests")})
+	if err := st.Runtimes().Save(ctx, domain.RuntimeState{ID: "runtime_crush", RuntimeID: "crush", Mode: domain.InstallModeExisting, Enabled: true, SettingsJSON: "{}", MetadataJSON: "{}"}); err != nil {
+		t.Fatal(err)
+	}
+	agent := domain.Agent{ID: "agent_ratelimit_cont_max", Name: "agent", Type: "crush", Enabled: true, CreatedAt: clock.t, UpdatedAt: clock.t}
+	if err := st.Agents().Create(ctx, agent); err != nil {
+		t.Fatal(err)
+	}
+	task := domain.Task{
+		ID:          "task_ratelimit_cont_max",
+		AgentID:     agent.ID,
+		Title:       "ratelimit continuous max",
+		Prompt:      "run",
+		Status:      domain.TaskStatusTodo,
+		Mode:        domain.TaskModeContinuous,
+		NeedsRun:    true,
+		MaxAttempts: 3,
+		CreatedAt:   clock.t,
+		UpdatedAt:   clock.t,
+	}
+	if err := st.Tasks().Create(ctx, task); err != nil {
+		t.Fatal(err)
+	}
+
+	runner := NewRunner(st, clock, idgen, noopBus{}, runtimes, NoopMemoryProvider{}, testLogger{}, Config{TaskTimeout: time.Minute, MaxAttempts: 3})
+
+	// Run 4 times (each run should schedule a retry/backoff, and because it's a rate limit error,
+	// it should NEVER block the task even if attempts (4) > MaxAttempts (3))
+	for i := 1; i <= 4; i++ {
+		gotTask, err := st.Tasks().Get(ctx, task.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		// Wake the task for the next run
+		gotTask.Status = domain.TaskStatusTodo
+		gotTask.NeedsRun = true
+		gotTask.LoopNextRunAt = nil
+		if err := st.Tasks().Update(ctx, gotTask); err != nil {
+			t.Fatal(err)
+		}
+
+		runner.Run(ctx, gotTask)
+
+		// Verify task status is waiting next cycle, NOT blocked
+		afterRunTask, err := st.Tasks().Get(ctx, task.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if afterRunTask.Status != domain.TaskStatusWaitingNextCycle {
+			t.Fatalf("run %d: expected task to remain waiting_next_cycle, got status=%s", i, afterRunTask.Status)
+		}
+		if afterRunTask.Attempts != i {
+			t.Fatalf("run %d: expected task attempts to be %d, got %d", i, i, afterRunTask.Attempts)
+		}
+	}
 }
 
 func assertRuntimeEvent(t *testing.T, events []domain.Event, eventType domain.EventType, runID string, want map[string]string) {

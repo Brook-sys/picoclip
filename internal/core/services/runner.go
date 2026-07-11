@@ -248,10 +248,15 @@ func (r *Runner) Run(ctx context.Context, task domain.Task) {
 		run.TotalTokens = run.InputTokens + run.OutputTokens
 		r.logger.Warn("runner.run_failed", "task_id", task.ID, "run_id", run.ID, "runtime", agent.Type, "err", err)
 		_ = r.storage.Runs().Update(ctx, run)
+
+		isRateLimit := isRateLimitError(err.Error(), run.Error)
 		classification := retryClassificationData("unknown", "unknown", "runtime_error")
-		if run.Status == domain.RunStatusTimeout {
+		if isRateLimit {
+			classification = retryClassificationData("retryable", "true", "rate_limit")
+		} else if run.Status == domain.RunStatusTimeout {
 			classification = retryClassificationData("retryable", "true", "runtime_timeout")
 		}
+
 		r.emitEvent(ctx, domain.Event{ID: r.idGen.NewID("evt"), Type: domain.EventRunFailed, TaskID: task.ID, AgentID: agent.ID, RunID: run.ID, Message: err.Error(), Data: classification, CreatedAt: finishedAt})
 		if run.Status == domain.RunStatusTimeout {
 			data := retryClassificationData("retryable", "true", "runtime_timeout")
@@ -259,13 +264,22 @@ func (r *Runner) Run(ctx context.Context, task domain.Task) {
 			data["status"] = string(run.Status)
 			r.emitRuntimeEvent(ctx, domain.EventRuntimeTimeout, task, agent, run, "Runtime execution timed out", data, finishedAt)
 		} else {
-			data := retryClassificationData("unknown", "unknown", "runtime_error")
+			reason := "runtime_error"
+			if isRateLimit {
+				reason = "rate_limit"
+			}
+			data := retryClassificationData("unknown", "unknown", reason)
+			if isRateLimit {
+				data = retryClassificationData("retryable", "true", "rate_limit")
+			}
 			data["phase"] = "completed"
 			data["status"] = string(run.Status)
 			r.emitRuntimeEvent(ctx, domain.EventRuntimeCompleted, task, agent, run, "Runtime execution failed", data, finishedAt)
 		}
 		if task.Mode == domain.TaskModeContinuous {
 			r.completeContinuousCycle(ctx, task, run, finishedAt)
+		} else if isRateLimit && !r.maxAttemptsReachedAfterRun(task) {
+			r.scheduleRetryAfterRateLimit(ctx, task, run, finishedAt)
 		} else if run.Status == domain.RunStatusTimeout && !r.maxAttemptsReachedAfterRun(task) {
 			r.scheduleRetryAfterTimeout(ctx, task, run, finishedAt)
 		} else {
@@ -344,6 +358,34 @@ func (r *Runner) completeContinuousCycle(ctx context.Context, task domain.Task, 
 		delay = 60
 		task.LoopDelaySeconds = delay
 	}
+
+	isRateLimit := isRateLimitError("", run.Error)
+	if isRateLimit {
+		backoff := retryBackoff(task.Attempts)
+		delay = int(backoff.Seconds())
+
+		payload := map[string]string{
+			"previous_run_id": run.ID,
+			"attempt":         strconv.Itoa(task.Attempts),
+			"backoff_seconds": strconv.Itoa(delay),
+			"retryable":       "true",
+			"classification":  "retryable",
+			"reason":          "rate_limit",
+		}
+		r.emitEvent(ctx, domain.Event{
+			ID:        r.idGen.NewID("evt"),
+			Type:      domain.EventRetryScheduled,
+			TaskID:    task.ID,
+			AgentID:   task.AgentID,
+			RunID:     run.ID,
+			Message:   "Continuous task rate limit backoff scheduled",
+			Data:      payload,
+			CreatedAt: finishedAt,
+		})
+	} else if run.Status == domain.RunStatusSucceeded {
+		task.Attempts = 0
+	}
+
 	nextRunAt := finishedAt.Add(time.Duration(delay) * time.Second)
 	task.Status = domain.TaskStatusWaitingNextCycle
 	task.NeedsRun = false
@@ -383,6 +425,14 @@ func (r *Runner) failTaskWithData(ctx context.Context, task domain.Task, message
 }
 
 func (r *Runner) scheduleRetryAfterTimeout(ctx context.Context, task domain.Task, run domain.Run, now time.Time) {
+	r.scheduleRetry(ctx, task, run, now, "runtime_timeout", "Retry scheduled after runtime timeout")
+}
+
+func (r *Runner) scheduleRetryAfterRateLimit(ctx context.Context, task domain.Task, run domain.Run, now time.Time) {
+	r.scheduleRetry(ctx, task, run, now, "rate_limit", "Retry scheduled after rate limit error")
+}
+
+func (r *Runner) scheduleRetry(ctx context.Context, task domain.Task, run domain.Run, now time.Time, reason, message string) {
 	latest, err := r.storage.Tasks().Get(ctx, task.ID)
 	if err == nil {
 		task = latest
@@ -396,7 +446,7 @@ func (r *Runner) scheduleRetryAfterTimeout(ctx context.Context, task domain.Task
 	task.NeedsRun = false
 	task.UpdatedAt = now
 	_ = r.storage.Tasks().Update(ctx, task)
-	r.scheduleRetryWakeup(ctx, run, now, "runtime_timeout", "Retry scheduled after runtime timeout")
+	r.scheduleRetryWakeup(ctx, run, now, reason, message)
 }
 
 func (r *Runner) retryWakeupExists(ctx context.Context, run domain.Run) bool {
@@ -445,10 +495,10 @@ func (r *Runner) scheduleRetryWakeup(ctx context.Context, run domain.Run, now ti
 }
 
 func (r *Runner) maxAttemptsExceeded(task domain.Task) bool {
-	limit := task.MaxAttempts
-	if limit <= 0 && task.Mode == domain.TaskModeContinuous {
+	if task.Mode == domain.TaskModeContinuous {
 		return false
 	}
+	limit := task.MaxAttempts
 	if limit <= 0 {
 		limit = r.config.MaxAttempts
 	}
@@ -456,6 +506,9 @@ func (r *Runner) maxAttemptsExceeded(task domain.Task) bool {
 }
 
 func (r *Runner) maxAttemptsReachedAfterRun(task domain.Task) bool {
+	if task.Mode == domain.TaskModeContinuous {
+		return false
+	}
 	limit := task.MaxAttempts
 	if limit <= 0 {
 		limit = r.config.MaxAttempts
@@ -490,6 +543,17 @@ const maxRunStreamBytes = 256 * 1024
 
 func estimateTokens(text string) int {
 	return len(strings.Fields(text)) * 4 / 3
+}
+
+func isRateLimitError(errStr, runErr string) bool {
+	lowerErr := strings.ToLower(errStr)
+	lowerRunErr := strings.ToLower(runErr)
+	return strings.Contains(lowerErr, "429") ||
+		strings.Contains(lowerErr, "rate limit") ||
+		strings.Contains(lowerErr, "rate_limit") ||
+		strings.Contains(lowerRunErr, "429") ||
+		strings.Contains(lowerRunErr, "rate limit") ||
+		strings.Contains(lowerRunErr, "rate_limit")
 }
 
 func appendRunStream(current string, chunk []byte) string {
