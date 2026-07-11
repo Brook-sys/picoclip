@@ -147,6 +147,29 @@ func TestAgentDocsAdvertisesPaperclipLikeWorkflow(t *testing.T) {
 	}
 }
 
+func TestAPIV1ImportSkillRejectsPrivateRemoteURL(t *testing.T) {
+	remote := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Fatal("private remote endpoint must not be fetched")
+	}))
+	defer remote.Close()
+
+	ts := newTestServer(t)
+	defer ts.Close()
+
+	body, err := json.Marshal(map[string]string{"source_url": remote.URL, "project_id": "project_1"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	response, err := ts.Client().Post(ts.URL+"/api/v1/skills/import", "application/json", bytes.NewReader(body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusBadRequest {
+		t.Fatalf("status = %d, want %d", response.StatusCode, http.StatusBadRequest)
+	}
+}
+
 func TestAgentNextActionRecommendsCheckoutForRunnableTask(t *testing.T) {
 	storage := memory.NewStorage()
 	now := time.Now().UTC()

@@ -100,6 +100,7 @@ Erros usam `error.code` estável, por exemplo `invalid_input`, `not_found`, `dri
 | `GET` | `/api/v1/usage` | Lista ledger compacto de UsageEvent com filtros por run, task ou agente. |
 | `GET` | `/api/v1/skills` | Lista skills. |
 | `POST` | `/api/v1/skills` | Cria skill. |
+| `POST` | `/api/v1/skills/import` | Busca e importa uma skill YAML remota. |
 | `GET` | `/api/v1/skills/{id}` | Detalhe de skill. |
 | `PATCH` | `/api/v1/skills/{id}` | Atualiza skill. |
 | `DELETE` | `/api/v1/skills/{id}` | Remove skill. |
@@ -110,6 +111,24 @@ Erros usam `error.code` estável, por exemplo `invalid_input`, `not_found`, `dri
 | `GET` | `/api/v1/webhooks/{id}/deliveries` | Lista deliveries de webhook. |
 | `GET` | `/api/v1/events` | Lista eventos recentes com filtros e `limit` validado. |
 | `GET` | `/api/v1/activity` | Alias de eventos recentes. |
+
+### Importação remota de skills YAML
+
+`POST /api/v1/skills/import` faz fetch síncrono de um único arquivo YAML e persiste a skill custom resultante imediatamente; portanto, workers que carregam skills a cada execução podem usá-la sem reiniciar o Dispatcher. O payload exige `source_url` absoluto com esquema `http` ou `https`; `project_id` é opcional.
+
+```json
+{"source_url":"https://example.com/skills/release.yaml","project_id":"prj_123"}
+```
+
+O YAML precisa ter `name` e `instructions`; pode conter `description`, `version` e `files` (`path` e `content`). A resposta usa o envelope v1, preserva a URL em `data.source` e a versão declarada em `data.version`. O fetch tem timeout de 15 segundos e tamanho máximo de 1 MiB. A URL e cada redirect devem resolver somente para endereços públicos; endereços privados, loopback, link-local, multicast, não especificados e a faixa compartilhada `100.64.0.0/10` são rejeitados. Respostas não-2xx, YAML inválido e arquivos sem os campos obrigatórios retornam erro; importação não agenda polling nem atualização automática e não permite credenciais embutidas na URL.
+
+Exemplo:
+
+```sh
+curl -sS -X POST http://127.0.0.1:8088/api/v1/skills/import \
+  -H 'Content-Type: application/json' \
+  -d '{"source_url":"https://example.com/skills/release.yaml"}'
+```
 
 ### Filtros comuns de API v1
 

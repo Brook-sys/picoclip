@@ -3,12 +3,44 @@ package services
 import (
 	"context"
 	"fmt"
+	"io"
+	"net"
+	"net/http"
+	"net/netip"
+	"net/url"
 	"regexp"
 	"strings"
+	"time"
+
+	"gopkg.in/yaml.v3"
 
 	"picoclip/internal/core/domain"
 	"picoclip/internal/core/ports"
 )
+
+const maxRemoteSkillYAMLBytes = 1 << 20
+
+var remoteSkillHTTPClient = &http.Client{
+	Timeout: 15 * time.Second,
+	Transport: &http.Transport{
+		Proxy:       nil,
+		DialContext: dialPublicRemoteSkillHost,
+	},
+	CheckRedirect: func(request *http.Request, via []*http.Request) error {
+		if len(via) >= 10 {
+			return fmt.Errorf("remote skill fetch exceeded redirect limit")
+		}
+		return validateRemoteSkillURL(request.URL)
+	},
+}
+
+type remoteSkillYAML struct {
+	Name         string             `yaml:"name"`
+	Description  string             `yaml:"description"`
+	Instructions string             `yaml:"instructions"`
+	Files        []domain.SkillFile `yaml:"files"`
+	Version      string             `yaml:"version"`
+}
 
 type SkillService struct {
 	storage ports.Storage
@@ -99,6 +131,96 @@ func (s *SkillService) CreateWithFiles(ctx context.Context, projectID, name, des
 		return domain.Skill{}, err
 	}
 	return skill, nil
+}
+
+func (s *SkillService) ImportRemoteYAML(ctx context.Context, projectID, sourceURL string) (domain.Skill, error) {
+	parsedURL, err := url.ParseRequestURI(sourceURL)
+	if err != nil || validateRemoteSkillURL(parsedURL) != nil {
+		return domain.Skill{}, fmt.Errorf("%w: source_url must be an absolute http or https URL without credentials", domain.ErrInvalidInput)
+	}
+
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, sourceURL, nil)
+	if err != nil {
+		return domain.Skill{}, fmt.Errorf("%w: invalid source_url", domain.ErrInvalidInput)
+	}
+	response, err := remoteSkillHTTPClient.Do(request)
+	if err != nil {
+		return domain.Skill{}, fmt.Errorf("fetch remote skill YAML: %w", err)
+	}
+	defer response.Body.Close()
+	if response.StatusCode < http.StatusOK || response.StatusCode >= http.StatusMultipleChoices {
+		return domain.Skill{}, fmt.Errorf("fetch remote skill YAML: unexpected HTTP status %d", response.StatusCode)
+	}
+
+	body, err := io.ReadAll(io.LimitReader(response.Body, maxRemoteSkillYAMLBytes+1))
+	if err != nil {
+		return domain.Skill{}, fmt.Errorf("read remote skill YAML: %w", err)
+	}
+	if len(body) > maxRemoteSkillYAMLBytes {
+		return domain.Skill{}, fmt.Errorf("%w: remote skill YAML exceeds %d bytes", domain.ErrInvalidInput, maxRemoteSkillYAMLBytes)
+	}
+
+	var document remoteSkillYAML
+	if err := yaml.Unmarshal(body, &document); err != nil {
+		return domain.Skill{}, fmt.Errorf("%w: invalid remote skill YAML: %v", domain.ErrInvalidInput, err)
+	}
+	if strings.TrimSpace(document.Name) == "" || strings.TrimSpace(document.Instructions) == "" {
+		return domain.Skill{}, fmt.Errorf("%w: name and instructions are required", domain.ErrInvalidInput)
+	}
+	for _, file := range document.Files {
+		if strings.TrimSpace(file.Path) == "" {
+			return domain.Skill{}, fmt.Errorf("%w: skill file path is required", domain.ErrInvalidInput)
+		}
+	}
+
+	skill, err := s.CreateWithFiles(ctx, projectID, document.Name, document.Description, document.Instructions, document.Files)
+	if err != nil {
+		return domain.Skill{}, err
+	}
+	skill.Source = sourceURL
+	skill.Version = document.Version
+	skill.UpdatedAt = s.clock.Now()
+	if err := s.storage.Skills().Update(ctx, skill); err != nil {
+		return domain.Skill{}, err
+	}
+	return skill, nil
+}
+
+func validateRemoteSkillURL(remoteURL *url.URL) error {
+	if remoteURL == nil || (remoteURL.Scheme != "http" && remoteURL.Scheme != "https") || remoteURL.Host == "" || remoteURL.User != nil {
+		return fmt.Errorf("remote skill URL must be an absolute http or https URL without credentials")
+	}
+	return nil
+}
+
+func dialPublicRemoteSkillHost(ctx context.Context, network, address string) (net.Conn, error) {
+	host, port, err := net.SplitHostPort(address)
+	if err != nil {
+		return nil, err
+	}
+	addresses, err := net.DefaultResolver.LookupNetIP(ctx, "ip", host)
+	if err != nil {
+		return nil, err
+	}
+	dialer := &net.Dialer{}
+	for _, resolved := range addresses {
+		if !isPublicRemoteSkillIP(resolved) {
+			return nil, fmt.Errorf("%w: remote skill URL resolves to a non-public address", domain.ErrInvalidInput)
+		}
+		connection, err := dialer.DialContext(ctx, network, net.JoinHostPort(resolved.String(), port))
+		if err == nil {
+			return connection, nil
+		}
+	}
+	return nil, fmt.Errorf("connect to remote skill URL: no public address accepted the connection")
+}
+
+func isPublicRemoteSkillIP(address netip.Addr) bool {
+	address = address.Unmap()
+	if !address.IsValid() || !address.IsGlobalUnicast() || address.IsPrivate() || address.IsLoopback() || address.IsLinkLocalUnicast() || address.IsMulticast() || address.IsUnspecified() {
+		return false
+	}
+	return !(address.Is4() && address.As4()[0] == 100 && address.As4()[1]&0xc0 == 0x40)
 }
 
 func (s *SkillService) List(ctx context.Context, projectID string) ([]domain.Skill, error) {

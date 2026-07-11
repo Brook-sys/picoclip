@@ -292,6 +292,23 @@ func (s *Server) handleAPIV1CreateSkill(w http.ResponseWriter, r *http.Request) 
 	s.apiData(w, skill)
 }
 
+func (s *Server) handleAPIV1ImportSkill(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		ProjectID string `json:"project_id"`
+		SourceURL string `json:"source_url"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		s.apiError(w, domain.ErrInvalidInput)
+		return
+	}
+	skill, err := s.skills.ImportRemoteYAML(r.Context(), req.ProjectID, req.SourceURL)
+	if err != nil {
+		s.apiError(w, err)
+		return
+	}
+	s.apiData(w, skill)
+}
+
 func (s *Server) handleAPIV1Skill(w http.ResponseWriter, r *http.Request) {
 	skill, err := s.skills.Get(r.Context(), r.PathValue("id"))
 	if err != nil {
@@ -442,6 +459,7 @@ func apiV1Paths() map[string]any {
 		"GET /api/v1/runs/{id}",
 		"GET /api/v1/usage",
 		"GET,POST /api/v1/skills",
+		"POST /api/v1/skills/import",
 		"GET,PATCH,DELETE /api/v1/skills/{id}",
 		"GET,POST /api/v1/webhooks",
 		"GET /api/v1/webhooks/{id}/deliveries",

@@ -72,6 +72,7 @@ func (s *Server) mountAPIV1(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/v1/runs/{id}", s.handleAPIV1Run)
 	mux.HandleFunc("GET /api/v1/skills", s.handleAPIV1Skills)
 	mux.HandleFunc("POST /api/v1/skills", s.handleAPIV1CreateSkill)
+	mux.HandleFunc("POST /api/v1/skills/import", s.handleAPIV1ImportSkill)
 	mux.HandleFunc("GET /api/v1/skills/{id}", s.handleAPIV1Skill)
 	mux.HandleFunc("PATCH /api/v1/skills/{id}", s.handleAPIV1UpdateSkill)
 	mux.HandleFunc("DELETE /api/v1/skills/{id}", s.handleAPIV1DeleteSkill)
