@@ -50,10 +50,13 @@ lint: vet
 check-docs:
 	python3 scripts/check_markdown_links.py .
 
-build:
+proto-generate:
+	go run github.com/bufbuild/buf/cmd/buf@latest generate
+
+build: proto-generate
 	go build -o $(APP) cmd/picoclip/main.go
 
-build-dev:
+build-dev: proto-generate
 	mkdir -p $(TMP_DIR)
 	go build -o $(DEV_BIN) cmd/picoclip/main.go
 

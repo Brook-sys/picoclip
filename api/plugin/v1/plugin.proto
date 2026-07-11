@@ -1,0 +1,56 @@
+syntax = "proto3";
+
+package picoclip.plugin.v1;
+
+option go_package = "github.com/picoclip/picoclip/api/plugin/v1;pluginv1";
+
+// PluginService é o serviço gRPC que todo plugin do PicoClip deve implementar.
+service PluginService {
+  // Discovery retorna a lista de ferramentas expostas pelo plugin.
+  rpc Discovery(DiscoveryRequest) returns (DiscoveryResponse) {}
+  
+  // Execute executa uma ferramenta específica exposta pelo plugin.
+  rpc Execute(ExecuteRequest) returns (ExecuteResponse) {}
+}
+
+// Mensagem vazia para o request de descoberta, o plugin deve apenas retornar o que ele sabe.
+message DiscoveryRequest {}
+
+// Resposta contendo a lista de ferramentas que o plugin expõe.
+message DiscoveryResponse {
+  repeated Tool tools = 1;
+}
+
+// Representa uma ferramenta que o agente pode usar.
+message Tool {
+  // Nome único da ferramenta dentro deste plugin (ex: "pesquisar_banco", "reiniciar_servidor").
+  string name = 1;
+  
+  // Descrição do que a ferramenta faz, usada pelo agente para decidir quando chamá-la.
+  string description = 2;
+  
+  // O JSON Schema (em formato de string) que descreve os argumentos esperados pela ferramenta.
+  // Deve ser compatível com o padrão JSON Schema e será fornecido ao LLM.
+  string input_schema_json = 3;
+}
+
+// Requisição para executar uma ferramenta.
+message ExecuteRequest {
+  // O nome da ferramenta a ser executada (deve ser um dos nomes retornados no Discovery).
+  string tool_name = 1;
+  
+  // Os argumentos fornecidos pelo agente para a ferramenta, codificados como uma string JSON.
+  // Esta string deve validar contra o input_schema_json fornecido no Discovery.
+  string arguments_json = 2;
+}
+
+// Resposta da execução da ferramenta.
+message ExecuteResponse {
+  // O resultado da execução da ferramenta. Este conteúdo será passado de volta ao agente.
+  // Pode ser texto simples, JSON, ou qualquer string, dependendo da ferramenta.
+  string result = 1;
+  
+  // Indica se a execução encontrou um erro.
+  // Se true, o 'result' geralmente conterá a mensagem de erro.
+  bool is_error = 2;
+}
