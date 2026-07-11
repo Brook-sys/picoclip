@@ -1,0 +1,6 @@
+version: v1
+nodes:
+  - id: prepare
+    agent: planner
+  - id: prepare
+    agent: builder

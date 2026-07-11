@@ -14,6 +14,8 @@ Para chegar produtivo no projeto:
    - `docs/API_REFERENCE.md` para APIs e rotas.
    - `docs/ROBUSTNESS.md` para recovery, retry, locks e cancelamento.
    - `docs/STORAGE.md` para SQLite, migrations e restore.
+   - `docs/PLUGINS.md` para arquitetura de plugins gRPC.
+   - docs/ADR_EVENT_BUS_REDIS.md para a decisão de Redis Pub/Sub como adapter opcional de Event Bus.
    - `docs/DESIGN.md` para UI, HTMX e componentes.
    - `docs/DOCUMENTATION_POLICY.md` para manter documentação atualizada.
 
@@ -33,6 +35,7 @@ PicoClip deve permanecer:
 
 ```text
 cmd/picoclip/main.go                  # entrypoint e wiring da aplicação
+api/plugin/v1/                        # Contratos Protobuf e gRPC
 internal/core/domain/                 # entidades e enums do domínio
 internal/core/ports/                  # interfaces do core
 internal/core/services/               # regras de aplicação e orquestração
@@ -85,6 +88,7 @@ Variáveis importantes:
 | `CRUSH_PATH` | `crush` | Executável Crush. |
 | `PICOCLAW_PATH` | `picoclaw` | Executável PicoClaw. |
 | `CLAURST_PATH` | `claurst` | Executável Claurst. |
+| `BWRAP_PATH` | `bwrap` | Executável Bubblewrap usado pelo runtime sandbox fail-closed. |
 
 ## Core domain
 
@@ -103,9 +107,21 @@ Diretório: `internal/core/domain/`
 | `wakeup.go` | Wakeup requests | Retry, manual, assignment, schedule e recovery. |
 | `usage.go` | Uso/tokens | Base para ledger/contadores. |
 | `budget.go` | Orçamentos | Hard stop/warn para uso. |
+| `internal/core/workflow/` | Workflow YAML declarativo | Contrato versionado v1, parser e validação de grafo acíclico; não executa nodes. |
 | `webhook.go` | Webhook subscriptions/deliveries | Entrega de eventos externos. |
 | `diagnostics.go` | Health/diagnostics | Dados para diagnostics API/UI. |
 | `errors.go` | Erros canônicos | `ErrNotFound`, `ErrNoPendingTasks`, etc. |
+
+## Event bus e outbox
+
+Estado atual:
+
+- `internal/core/ports/event_bus.go` define publish/subscribe de `domain.Event`;
+- `internal/adapters/events/inmemory.go` é o único adapter e continua sendo o default;
+- o outbox SQLite tenta publicar eventos persistidos e alimenta também webhook deliveries;
+- Redis Pub/Sub não está implementado nem é dependência do PicoClip.
+
+A decisão proposta para um adapter Redis opcional, incluindo tópicos, envelope v1, configuração, falhas, migração e rollback, está em [ADR: Redis Pub/Sub como adapter opcional de Event Bus](ADR_EVENT_BUS_REDIS.md). Não trate esse ADR como comportamento entregue enquanto seu status for “Proposto; não implementado”.
 
 ## Ports
 
@@ -191,6 +207,7 @@ Notas:
 - Unix usa grupo de processos para cancelar árvore.
 - Windows ainda precisa Job Objects para paridade completa.
 - Claurst pode precisar imagem Debian/glibc em vez de Alpine/musl.
+- O runtime `bwrap` é um sandbox opt-in apenas para Linux: ele só executa comandos absolutos aprovados sob `/bin` ou `/usr/bin`, sem rede (`--unshare-all`) e sem fallback para execução no host. A raiz é tmpfs mínima, sem mounts do root, homes, `/run` ou sockets do host; workspace opcional precisa ficar sob `PICOCLIP_WORKSPACES`. O operador deve instalar Bubblewrap no host e, quando necessário, sobrescrever o executável com `BWRAP_PATH`.
 
 ## Web, UI e APIs
 

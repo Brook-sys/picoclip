@@ -1,0 +1,5 @@
+version: v1
+nodes:
+  - id: prepare
+    agent: planner
+    unexpected: value

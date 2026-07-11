@@ -1,0 +1,7 @@
+version: v1
+nodes:
+  - id: prepare
+    agent: planner
+edges:
+  - from: prepare
+    to: missing

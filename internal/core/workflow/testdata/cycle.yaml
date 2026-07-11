@@ -1,0 +1,11 @@
+version: v1
+nodes:
+  - id: prepare
+    agent: planner
+  - id: implement
+    agent: builder
+edges:
+  - from: prepare
+    to: implement
+  - from: implement
+    to: prepare

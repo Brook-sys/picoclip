@@ -1,0 +1,16 @@
+version: v1
+nodes:
+  - id: prepare
+    agent: planner
+    profile: planning
+    inputs:
+      environment: staging
+  - id: implement
+    agent: builder
+  - id: review
+    agent: reviewer
+edges:
+  - from: prepare
+    to: implement
+  - from: implement
+    to: review
