@@ -87,6 +87,32 @@ It also exposes:
 
 Rule: application services should go through ports/repositories. UI handlers should not hand-write SQL.
 
+## Agent memory provider boundary
+
+Agent memory is a separate pluggable boundary from `ports.Storage`. The
+provider-neutral contract lives in `internal/core/ports/memory_provider.go` and
+supports:
+
+- idempotent storage of `MemoryDocument` values by document ID;
+- lexical or vector similarity search through `MemoryQuery`;
+- conjunctive workspace, agent, task, run and document-kind filters;
+- normalized search scores in the `[0,1]` range, ordered from most to least
+  similar with deterministic document-ID tie-breaking;
+- prompt-ready context retrieval for a task and agent;
+- idempotent extraction of durable memory from a run, keyed by run ID.
+
+`MemoryDocument.Embedding` is optional. Lightweight local adapters may perform
+lexical search when no embedding model is configured; Redis/Postgres/vector
+adapters may persist and compare embeddings. Vector callers identify the vector
+space through `EmbeddingModel`; adapters must not compare vectors from different
+non-empty model/version spaces. The port definition does not make an adapter
+active by itself: the current application wiring continues to use
+`NoopMemoryProvider` until a concrete provider is configured.
+
+Memory metadata must not contain credentials or secrets. Adapter
+implementations must preserve scope filters so memory from unrelated
+workspaces, agents, tasks or runs is not returned accidentally.
+
 ## Schema strategy
 
 Each main entity has strong columns for important fields and JSON text columns for future expansion.
@@ -202,6 +228,19 @@ Important indexes cover common UI, Agent API and scheduler paths:
 - usage by task, agent and run;
 - budgets by scope, workspace and agent;
 - outbox/webhook deliveries by due retry state.
+
+## Outbox de eventos e transportes externos
+
+No estado atual, eventos de domínio podem ser gravados em `events` e em `outbox_events` na mesma transação de aplicação. O `OutboxWorker` seleciona até 50 entradas due, cria deliveries de webhook, publica no `EventBus` e só então remove a entrada. Falhas incrementam `attempts`, registram `last_error` e adiam nova tentativa em 5 segundos; a query SQLite deixa de selecionar entradas após 10 tentativas.
+
+O único event bus implementado hoje é o adapter em memória. Redis Pub/Sub permanece uma proposta e não altera o storage padrão. O contrato planejado de entrega best-effort alimentada pelo outbox, incluindo a necessidade de tornar tentativas terminais observáveis e reprocessáveis, está em [ADR: Redis Pub/Sub como adapter opcional de Event Bus](ADR_EVENT_BUS_REDIS.md).
+
+Limitações atuais relevantes:
+
+- Redis não está implementado nem configurável;
+- o outbox do memory storage é no-op, portanto testes do fluxo durável devem usar SQLite;
+- a entrada que alcança o limite atual de tentativas deixa de ser selecionada, mas ainda não possui uma superfície dedicada de health/reprocessamento;
+- sucesso do bus seguido de falha ao deletar pode causar publicação duplicada com o mesmo event ID.
 
 ## Usage ledger
 
