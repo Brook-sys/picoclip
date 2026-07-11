@@ -222,6 +222,7 @@ There is an active roadmap, and more features will be added gradually as the pro
 See:
 
 - [Project Map](docs/PROJECT_MAP.md)
+- [Plugins](docs/PLUGINS.md)
 - [Documentation Policy](docs/DOCUMENTATION_POLICY.md)
 - [API Reference](docs/API_REFERENCE.md)
 - [Operations Runbook](docs/OPERATIONS.md)
