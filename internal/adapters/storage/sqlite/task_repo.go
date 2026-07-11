@@ -140,6 +140,24 @@ func (r *TaskRepository) Update(ctx context.Context, task domain.Task) error {
 	return nil
 }
 
+func (r *TaskRepository) UpdateIfUnchanged(ctx context.Context, task domain.Task, precondition ports.TaskPrecondition) (bool, error) {
+	query := `UPDATE tasks SET
+		parent_id=?, workspace_id=?, agent_id=?, title=?, prompt=?, status=?, priority=?, mode=?, loop_delay_seconds=?, loop_run_count=?, loop_next_run_at=?, loop_paused_at=?, loop_audit_prompt=?, attempts=?, max_attempts=?, needs_run=?, checkout_run_id=?, checked_out_by_agent_id=?, execution_locked_at=?, lock_expires_at=?, cancel_reason=?, input_tokens=?, output_tokens=?, total_tokens=?, updated_at=?, started_at=?, finished_at=?, completed_at=?, cancelled_at=?
+		WHERE id=? AND status=? AND updated_at=? AND checkout_run_id=?`
+	res, err := getQueryer(ctx, r.db).ExecContext(ctx, query,
+		task.ParentID, task.WorkspaceID, task.AgentID, task.Title, task.Prompt, string(task.Status), task.Priority, string(task.Mode), task.LoopDelaySeconds, task.LoopRunCount, task.LoopNextRunAt, task.LoopPausedAt, task.LoopAuditPrompt, task.Attempts, task.MaxAttempts, task.NeedsRun, task.CheckoutRunID, task.CheckedOutByAgentID, task.ExecutionLockedAt, task.LockExpiresAt, task.CancelReason, task.InputTokens, task.OutputTokens, task.TotalTokens, task.UpdatedAt, task.StartedAt, task.FinishedAt, task.CompletedAt, task.CancelledAt,
+		task.ID, string(precondition.Status), precondition.UpdatedAt, precondition.CheckoutRunID,
+	)
+	if err != nil {
+		return false, err
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return false, err
+	}
+	return n == 1, nil
+}
+
 func (r *TaskRepository) ClaimNextPending(ctx context.Context) (domain.Task, error) {
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {

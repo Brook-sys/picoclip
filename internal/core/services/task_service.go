@@ -2,6 +2,7 @@ package services
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -13,18 +14,25 @@ import (
 )
 
 const defaultTaskLockTTL = 30 * time.Minute
+const completionAuditSettingsKey = "completion_audit.v1"
+
+type completionAuditConfig struct {
+	Mode           string `json:"mode"`
+	TimeoutSeconds int    `json:"timeout_seconds"`
+}
 
 type RunCanceler interface {
 	CancelRun(ctx context.Context, run domain.Run) error
 }
 
 type TaskService struct {
-	storage   ports.Storage
-	clock     ports.Clock
-	idGen     ports.IDGenerator
-	bus       ports.EventBus
-	lifecycle TaskLifecycle
-	canceler  RunCanceler
+	storage           ports.Storage
+	clock             ports.Clock
+	idGen             ports.IDGenerator
+	bus               ports.EventBus
+	lifecycle         TaskLifecycle
+	canceler          RunCanceler
+	completionAuditor ports.CompletionAuditor
 }
 
 func NewTaskService(storage ports.Storage, clock ports.Clock, idGen ports.IDGenerator, bus ports.EventBus) *TaskService {
@@ -39,6 +47,12 @@ func NewTaskService(storage ports.Storage, clock ports.Clock, idGen ports.IDGene
 
 func (s *TaskService) SetCanceler(canceler RunCanceler) {
 	s.canceler = canceler
+}
+
+// SetCompletionAuditor injects the direct, non-recursive audit port. A nil value is
+// valid only when the explicit settings mode remains disabled.
+func (s *TaskService) SetCompletionAuditor(auditor ports.CompletionAuditor) {
+	s.completionAuditor = auditor
 }
 
 func (s *TaskService) Create(ctx context.Context, agentID, title, prompt string) (domain.Task, error) {
@@ -389,6 +403,9 @@ func (s *TaskService) UpdateStatus(ctx context.Context, id string, status domain
 	if err != nil {
 		return domain.Task{}, err
 	}
+	if status == domain.TaskStatusDone && task.Status != domain.TaskStatusDone && (task.Status == domain.TaskStatusInProgress || task.Status == domain.TaskStatusInReview) {
+		return s.completeWithAudit(ctx, task, comment, agentID)
+	}
 	now := s.clock.Now()
 	task, err = s.lifecycle.Apply(task, TaskTransition{From: task.Status, To: status, Comment: comment, Now: now, UpdatedBy: agentID})
 	if err != nil {
@@ -401,6 +418,215 @@ func (s *TaskService) UpdateStatus(ctx context.Context, id string, status domain
 		_, _ = s.AddMessage(ctx, id, agentID, "", domain.MessageRoleAgent, comment)
 	}
 	return task, nil
+}
+
+func (s *TaskService) completionAuditConfig(ctx context.Context) (completionAuditConfig, error) {
+	raw, err := s.storage.Settings().Get(ctx, completionAuditSettingsKey)
+	if errors.Is(err, domain.ErrNotFound) {
+		return completionAuditConfig{Mode: "disabled"}, nil
+	}
+	if err != nil {
+		return completionAuditConfig{}, err
+	}
+	var config completionAuditConfig
+	if err := json.Unmarshal([]byte(raw), &config); err != nil {
+		return completionAuditConfig{}, fmt.Errorf("%w: invalid completion audit configuration", domain.ErrCompletionAuditFailed)
+	}
+	if config.Mode == "" {
+		config.Mode = "disabled"
+	}
+	return config, nil
+}
+
+func (s *TaskService) completeWithAudit(ctx context.Context, snapshot domain.Task, comment, agentID string) (domain.Task, error) {
+	config, err := s.completionAuditConfig(ctx)
+	if err != nil {
+		return domain.Task{}, err
+	}
+	if config.Mode == "disabled" {
+		return s.applyApprovedCompletion(ctx, snapshot, comment, agentID)
+	}
+	if config.Mode != "enforce" || s.completionAuditor == nil {
+		return s.persistAuditFailure(ctx, snapshot, agentID, domain.CompletionAuditError, "auditor unavailable", domain.EventCompletionAuditError, domain.ErrCompletionAuditFailed)
+	}
+	if config.TimeoutSeconds < 1 {
+		config.TimeoutSeconds = 30
+	}
+	now := s.clock.Now()
+	audit := domain.CompletionAudit{ID: s.idGen.NewID("audit"), TaskID: snapshot.ID, RequestedByAgentID: agentID, Outcome: domain.CompletionAuditPending, RequestedAt: now}
+	if err := s.storage.RunInTx(ctx, func(txCtx context.Context) error {
+		return s.persistAuditEvent(txCtx, audit, domain.EventCompletionAuditRequested, "completion audit requested")
+	}); err != nil {
+		return domain.Task{}, err
+	}
+	runs, err := s.storage.Runs().ListByTask(ctx, snapshot.ID)
+	if err != nil {
+		return domain.Task{}, err
+	}
+	messages, err := s.storage.Messages().ListByTask(ctx, snapshot.ID)
+	if err != nil {
+		return domain.Task{}, err
+	}
+	auditCtx, cancel := context.WithTimeout(ctx, time.Duration(config.TimeoutSeconds)*time.Second)
+	decision, auditErr := s.completionAuditor.AuditCompletion(auditCtx, ports.CompletionAuditRequest{AuditID: audit.ID, Task: snapshot, RequestedByAgentID: agentID, CompletionComment: comment, Runs: runs, Messages: messages, RequestedAt: now})
+	cancel()
+	if auditErr != nil {
+		if errors.Is(auditErr, context.DeadlineExceeded) {
+			return s.finishAuditFailure(ctx, audit, domain.CompletionAuditTimeout, "completion audit timed out", domain.EventCompletionAuditTimeout, domain.ErrCompletionAuditTimeout)
+		}
+		return s.finishAuditFailure(ctx, audit, domain.CompletionAuditError, "completion audit unavailable", domain.EventCompletionAuditError, domain.ErrCompletionAuditFailed)
+	}
+	if decision.Outcome == ports.CompletionAuditApprove {
+		return s.applyAuditedApproval(ctx, snapshot, comment, agentID, audit, decision)
+	}
+	if decision.Outcome == ports.CompletionAuditReject {
+		return s.applyAuditRejection(ctx, snapshot, agentID, audit, decision)
+	}
+	return s.finishAuditFailure(ctx, audit, domain.CompletionAuditError, "completion audit returned an invalid decision", domain.EventCompletionAuditError, domain.ErrCompletionAuditFailed)
+}
+
+func (s *TaskService) persistAuditEvent(ctx context.Context, audit domain.CompletionAudit, eventType domain.EventType, message string) error {
+	if err := s.storage.CompletionAudits().Create(ctx, audit); err != nil {
+		return err
+	}
+	event := domain.Event{ID: s.idGen.NewID("evt"), Type: eventType, TaskID: audit.TaskID, AgentID: audit.RequestedByAgentID, Message: message, Data: map[string]string{"audit_id": audit.ID, "outcome": string(audit.Outcome)}, CreatedAt: s.clock.Now()}
+	if err := s.storage.Events().Create(ctx, event); err != nil {
+		return err
+	}
+	return s.storage.Events().CreateOutbox(ctx, event)
+}
+
+func (s *TaskService) persistAuditFailure(ctx context.Context, task domain.Task, agentID string, outcome domain.CompletionAuditOutcome, summary string, eventType domain.EventType, result error) (domain.Task, error) {
+	now := s.clock.Now()
+	audit := domain.CompletionAudit{ID: s.idGen.NewID("audit"), TaskID: task.ID, RequestedByAgentID: agentID, Outcome: outcome, Summary: summary, RequestedAt: now, DecidedAt: &now}
+	err := s.storage.RunInTx(ctx, func(txCtx context.Context) error { return s.persistAuditEvent(txCtx, audit, eventType, summary) })
+	if err != nil {
+		return domain.Task{}, err
+	}
+	return domain.Task{}, result
+}
+
+func (s *TaskService) finishAuditFailure(ctx context.Context, audit domain.CompletionAudit, outcome domain.CompletionAuditOutcome, summary string, eventType domain.EventType, result error) (domain.Task, error) {
+	now := s.clock.Now()
+	audit.Outcome, audit.Summary, audit.DecidedAt = outcome, summary, &now
+	err := s.storage.RunInTx(ctx, func(txCtx context.Context) error {
+		if err := s.storage.CompletionAudits().Update(txCtx, audit); err != nil {
+			return err
+		}
+		event := domain.Event{ID: s.idGen.NewID("evt"), Type: eventType, TaskID: audit.TaskID, AgentID: audit.RequestedByAgentID, Message: summary, Data: map[string]string{"audit_id": audit.ID, "outcome": string(outcome)}, CreatedAt: now}
+		if err := s.storage.Events().Create(txCtx, event); err != nil {
+			return err
+		}
+		return s.storage.Events().CreateOutbox(txCtx, event)
+	})
+	if err != nil {
+		return domain.Task{}, err
+	}
+	return domain.Task{}, result
+}
+
+func (s *TaskService) applyApprovedCompletion(ctx context.Context, snapshot domain.Task, comment, agentID string) (domain.Task, error) {
+	now := s.clock.Now()
+	updated, err := s.lifecycle.Apply(snapshot, TaskTransition{From: snapshot.Status, To: domain.TaskStatusDone, Comment: comment, Now: now, UpdatedBy: agentID})
+	if err != nil {
+		return domain.Task{}, err
+	}
+	if err := s.storage.Tasks().Update(ctx, updated); err != nil {
+		return domain.Task{}, err
+	}
+	if strings.TrimSpace(comment) != "" {
+		_, _ = s.AddMessage(ctx, snapshot.ID, agentID, "", domain.MessageRoleAgent, comment)
+	}
+	return updated, nil
+}
+
+func (s *TaskService) applyAuditedApproval(ctx context.Context, snapshot domain.Task, comment, agentID string, audit domain.CompletionAudit, decision ports.CompletionAuditDecision) (domain.Task, error) {
+	now := s.clock.Now()
+	updated, err := s.lifecycle.Apply(snapshot, TaskTransition{From: snapshot.Status, To: domain.TaskStatusDone, Comment: comment, Now: now, UpdatedBy: agentID})
+	if err != nil {
+		return domain.Task{}, err
+	}
+	audit.Outcome, audit.Summary, audit.DecidedAt = domain.CompletionAuditApproved, decision.Summary, &now
+	err = s.storage.RunInTx(ctx, func(txCtx context.Context) error {
+		ok, err := s.storage.Tasks().UpdateIfUnchanged(txCtx, updated, ports.TaskPrecondition{Status: snapshot.Status, UpdatedAt: snapshot.UpdatedAt, CheckoutRunID: snapshot.CheckoutRunID})
+		if err != nil {
+			return err
+		}
+		if !ok {
+			return domain.ErrConflict
+		}
+		if err := s.storage.CompletionAudits().Update(txCtx, audit); err != nil {
+			return err
+		}
+		if strings.TrimSpace(comment) != "" {
+			if err := s.storage.Messages().Create(txCtx, domain.Message{ID: s.idGen.NewID("msg"), TaskID: snapshot.ID, FromID: agentID, Role: domain.MessageRoleAgent, Body: comment, CreatedAt: now}); err != nil {
+				return err
+			}
+		}
+		return s.createAuditEvents(txCtx, snapshot, audit, domain.EventCompletionAuditApproved, "completion audit approved", domain.EventTaskCompleted, "Task completed")
+	})
+	if errors.Is(err, domain.ErrConflict) {
+		if _, markErr := s.finishAuditFailure(ctx, audit, domain.CompletionAuditSuperseded, "task changed while completion audit ran", domain.EventCompletionAuditSuperseded, domain.ErrCompletionAuditSuperseded); markErr != nil && !errors.Is(markErr, domain.ErrCompletionAuditSuperseded) {
+			return domain.Task{}, markErr
+		}
+		return domain.Task{}, domain.ErrCompletionAuditSuperseded
+	}
+	if err != nil {
+		return domain.Task{}, err
+	}
+	return updated, nil
+}
+
+func (s *TaskService) applyAuditRejection(ctx context.Context, snapshot domain.Task, agentID string, audit domain.CompletionAudit, decision ports.CompletionAuditDecision) (domain.Task, error) {
+	now := s.clock.Now()
+	rejected := snapshot
+	// Preserve an active checkout so the dispatcher cannot start duplicate work.
+	// Without checkout ownership, rejection deliberately makes the rework runnable.
+	rejected.Status = domain.TaskStatusInProgress
+	rejected.NeedsRun = snapshot.CheckoutRunID == "" && snapshot.CheckedOutByAgentID == ""
+	rejected.FinishedAt, rejected.CompletedAt, rejected.UpdatedAt = nil, nil, now
+	findings, _ := json.Marshal(decision.Findings)
+	audit.Outcome, audit.Summary, audit.FindingsJSON, audit.DecidedAt = domain.CompletionAuditRejected, decision.Summary, string(findings), &now
+	err := s.storage.RunInTx(ctx, func(txCtx context.Context) error {
+		ok, err := s.storage.Tasks().UpdateIfUnchanged(txCtx, rejected, ports.TaskPrecondition{Status: snapshot.Status, UpdatedAt: snapshot.UpdatedAt, CheckoutRunID: snapshot.CheckoutRunID})
+		if err != nil {
+			return err
+		}
+		if !ok {
+			return domain.ErrConflict
+		}
+		if err := s.storage.CompletionAudits().Update(txCtx, audit); err != nil {
+			return err
+		}
+		feedback := "Semantic completion audit rejected: " + decision.Summary
+		if err := s.storage.Messages().Create(txCtx, domain.Message{ID: s.idGen.NewID("msg"), TaskID: snapshot.ID, Role: domain.MessageRoleSystem, Body: feedback, CreatedAt: now}); err != nil {
+			return err
+		}
+		return s.createAuditEvents(txCtx, snapshot, audit, domain.EventCompletionAuditRejected, "completion audit rejected")
+	})
+	if errors.Is(err, domain.ErrConflict) {
+		if _, markErr := s.finishAuditFailure(ctx, audit, domain.CompletionAuditSuperseded, "task changed while completion audit ran", domain.EventCompletionAuditSuperseded, domain.ErrCompletionAuditSuperseded); markErr != nil && !errors.Is(markErr, domain.ErrCompletionAuditSuperseded) {
+			return domain.Task{}, markErr
+		}
+		return domain.Task{}, domain.ErrCompletionAuditSuperseded
+	}
+	if err != nil {
+		return domain.Task{}, err
+	}
+	return domain.Task{}, domain.ErrCompletionAuditRejected
+}
+
+func (s *TaskService) createAuditEvents(ctx context.Context, task domain.Task, audit domain.CompletionAudit, entries ...interface{}) error {
+	for i := 0; i < len(entries); i += 2 {
+		event := domain.Event{ID: s.idGen.NewID("evt"), Type: entries[i].(domain.EventType), TaskID: task.ID, AgentID: task.AgentID, Message: entries[i+1].(string), Data: map[string]string{"audit_id": audit.ID, "outcome": string(audit.Outcome)}, CreatedAt: s.clock.Now()}
+		if err := s.storage.Events().Create(ctx, event); err != nil {
+			return err
+		}
+		if err := s.storage.Events().CreateOutbox(ctx, event); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (s *TaskService) Wake(ctx context.Context, id string) (domain.Task, error) {

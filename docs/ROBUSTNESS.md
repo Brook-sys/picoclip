@@ -73,6 +73,31 @@ Status side effects are part of the contract:
 
 Direct service paths may add extra effects around this lifecycle contract. For example, `TaskService.Cancel` persists `CancelReason`, closes the active run as `canceled`, emits `task.canceled` and asks the runtime adapter to cancel when possible. `Checkout` is the atomic execution-claim path that moves runnable work into `in_progress` while assigning lock/run ownership.
 
+## Semantic completion audit and fail-safe policy
+
+An explicit non-terminal transition from `in_progress` or `in_review` to `done` passes through `TaskService`'s completion-audit gate. The runner does not invoke this gate and a `done -> done` self-transition is not re-audited. This keeps process execution distinct from the user/agent's explicit semantic completion decision.
+
+The optional local setting `completion_audit.v1` is intentionally explicit:
+
+```json
+{"mode":"disabled|enforce","auditor_agent_id":"agt_...","timeout_seconds":30}
+```
+
+- `disabled` is the default compatibility/rollback setting and preserves the prior completion flow.
+- `enforce` requires a configured, enabled auditor distinct from the task's assigned agent. Missing/invalid configuration, invalid output, runtime errors, and timeouts are fail-closed: the task remains in its existing state and checkout/lock data are preserved.
+- The auditor is invoked directly through `CompletionAuditor`; it receives a task/runs/messages snapshot and must not create a normal task/run or call task-status APIs, avoiding recursive self-auditing.
+
+Every enforce attempt persists a `CompletionAudit` record. `completion_audit.requested` is emitted before the call; approved, rejected, error, and timeout states are also persisted as events/outbox records. Audit summaries and structured findings are durable; raw model output is not stored.
+
+| Audit result | Task effect | Lock/runnable effect |
+| --- | --- | --- |
+| approve | commits `done` and its normal timestamps/comment | lifecycle clears checkout; `NeedsRun=false` |
+| reject | returns to/remains `in_progress` with a system feedback message | preserves active checkout and `NeedsRun=false`; without a checkout it is runnable for rework |
+| error or timeout | no completion | preserves task status, checkout, lock and run; caller receives a non-success result |
+| concurrent change | conditional commit loses with conflict | winner state is preserved; no second `task.completed` is emitted |
+
+The final `done` update uses status, update timestamp, and checkout-run preconditions so an audit decision cannot apply to a changed or cancelled snapshot. Approval writes the audit outcome, completion comment, and completion events in the same storage transaction. Operators may disable the gate explicitly for rollback; that action removes the control and must not be described as enforced auditing.
+
 ## Dispatcher concurrency safety
 
 The dispatcher uses a bounded semaphore to respect `maxConcurrentRuns`.

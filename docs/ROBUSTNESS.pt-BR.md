@@ -73,6 +73,31 @@ Efeitos colaterais de status fazem parte do contrato:
 
 Caminhos diretos de serviço podem adicionar efeitos em volta deste contrato de lifecycle. Por exemplo, `TaskService.Cancel` persiste `CancelReason`, fecha o run ativo como `canceled`, emite `task.canceled` e pede cancelamento ao runtime adapter quando possível. `Checkout` é o caminho atômico de claim de execução que move trabalho executável para `in_progress` enquanto atribui ownership de lock/run.
 
+## Auditoria semântica de conclusão e política fail-safe
+
+Uma transição explícita e não terminal de `in_progress` ou `in_review` para `done` passa pelo gate de auditoria de conclusão do `TaskService`. O Runner não invoca esse gate e uma auto-transição `done -> done` não é auditada novamente. Assim, sucesso de processo permanece separado da decisão explícita de conclusão semântica.
+
+A configuração local opcional `completion_audit.v1` é explícita:
+
+```json
+{"mode":"disabled|enforce","auditor_agent_id":"agt_...","timeout_seconds":30}
+```
+
+- `disabled` é o padrão de compatibilidade/rollback e preserva o fluxo anterior de conclusão.
+- `enforce` exige auditor configurado, enabled e diferente do agente atribuído à task. Configuração ausente/inválida, saída inválida, erro de runtime e timeout são fail-closed: a task mantém status, checkout e lock atuais.
+- O auditor é chamado diretamente pela porta `CompletionAuditor`; recebe snapshot de task/runs/messages e não cria task/run normal nem chama APIs de status, evitando autoauditoria recursiva.
+
+Cada tentativa em modo enforce persiste um `CompletionAudit`. `completion_audit.requested` é emitido antes da chamada; estados approved, rejected, error e timeout também são persistidos como eventos/outbox. Resumo e findings estruturados são duráveis; a saída bruta do modelo não é armazenada.
+
+| Resultado | Efeito na task | Efeito em lock/executabilidade |
+| --- | --- | --- |
+| approve | confirma `done`, timestamps e comentário normais | lifecycle limpa checkout; `NeedsRun=false` |
+| reject | retorna/permanece em `in_progress` com mensagem system de feedback | preserva checkout ativo e `NeedsRun=false`; sem checkout fica executável para retrabalho |
+| error ou timeout | não conclui | preserva status, checkout, lock e run; caller recebe resultado não-sucesso |
+| mudança concorrente | commit condicional perde com conflito | estado vencedor é preservado; não há segundo `task.completed` |
+
+A atualização final para `done` usa precondições de status, timestamp de atualização e checkout-run, impedindo que uma decisão se aplique a snapshot alterado ou cancelado. A aprovação grava o resultado da auditoria, comentário de conclusão e eventos de conclusão na mesma transação. Um operador pode desabilitar o gate explicitamente para rollback; isso remove o controle e não deve ser apresentado como auditoria enforced.
+
 ## Segurança de concorrência do dispatcher
 
 O dispatcher usa um semáforo limitado para respeitar `maxConcurrentRuns`.

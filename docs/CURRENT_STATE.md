@@ -18,7 +18,7 @@ PicoClip é um motor local-first e leve de orquestração de agentes inspirado n
 
 - aplicação Go single-binary;
 - storage SQLite padrão e storage em memória para testes/sessões temporárias;
-- domínio com agents, tasks, runs, messages, events, workspaces, skills, runtimes, wakeups, usage, budgets e webhooks;
+- domínio com agents, tasks, runs, messages, events, workspaces, skills, runtimes, wakeups, usage, budgets, webhooks e auditorias semânticas de conclusão;
 - scheduler/dispatcher/runner/reconciler para execução de tasks;
 - task lifecycle com status Paperclip-like;
 - execução por runtime adapters locais;

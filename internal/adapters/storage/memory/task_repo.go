@@ -62,6 +62,20 @@ func (r taskRepository) Update(ctx context.Context, task domain.Task) error {
 	return nil
 }
 
+func (r taskRepository) UpdateIfUnchanged(ctx context.Context, task domain.Task, precondition ports.TaskPrecondition) (bool, error) {
+	r.storage.mu.Lock()
+	defer r.storage.mu.Unlock()
+	current, ok := r.storage.tasks[task.ID]
+	if !ok {
+		return false, domain.ErrNotFound
+	}
+	if current.Status != precondition.Status || !current.UpdatedAt.Equal(precondition.UpdatedAt) || current.CheckoutRunID != precondition.CheckoutRunID {
+		return false, nil
+	}
+	r.storage.tasks[task.ID] = task
+	return true, nil
+}
+
 func taskStatusIn(status domain.TaskStatus, statuses []domain.TaskStatus) bool {
 	for _, candidate := range statuses {
 		if candidate == status {

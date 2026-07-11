@@ -1005,7 +1005,19 @@ type agentAPIError struct {
 func writeAgentAPIError(w http.ResponseWriter, err error) {
 	status := http.StatusBadRequest
 	code := "invalid_input"
-	if errors.Is(err, domain.ErrConflict) {
+	switch {
+	case errors.Is(err, domain.ErrCompletionAuditRejected):
+		status, code = http.StatusConflict, "semantic_audit_rejected"
+	case errors.Is(err, domain.ErrCompletionAuditTimeout):
+		status, code = http.StatusGatewayTimeout, "semantic_audit_timeout"
+	case errors.Is(err, domain.ErrCompletionAuditFailed):
+		status, code = http.StatusServiceUnavailable, "semantic_audit_unavailable"
+	case errors.Is(err, domain.ErrCompletionAuditSuperseded):
+		status, code = http.StatusConflict, "semantic_audit_superseded"
+	case errors.Is(err, domain.ErrConflict):
+		status, code = http.StatusConflict, "conflict"
+	}
+	if errors.Is(err, domain.ErrConflict) && code == "invalid_input" {
 		status = http.StatusConflict
 		code = "conflict"
 	}

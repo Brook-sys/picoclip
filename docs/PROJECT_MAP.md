@@ -109,6 +109,7 @@ Diretório: `internal/core/domain/`
 | `budget.go` | Orçamentos | Hard stop/warn para uso. |
 | `internal/core/workflow/` | Workflow YAML declarativo | Contrato versionado v1, parser e validação de grafo acíclico; não executa nodes. |
 | `webhook.go` | Webhook subscriptions/deliveries | Entrega de eventos externos. |
+| `completion_audit.go` | CompletionAudit | Histórico de decisões semânticas antes de concluir uma task. |
 | `diagnostics.go` | Health/diagnostics | Dados para diagnostics API/UI. |
 | `errors.go` | Erros canônicos | `ErrNotFound`, `ErrNoPendingTasks`, etc. |
 
@@ -137,6 +138,7 @@ As portas mantêm o core independente de implementação concreta:
 - `Logger`;
 - `MemoryProvider`;
 - `SecretProvider`;
+- `CompletionAuditor` e repositório de auditorias de conclusão;
 - drivers legados.
 
 Regra: serviços do core devem depender de `ports`, não de adapters concretos.
@@ -150,6 +152,7 @@ Diretório: `internal/core/services/`
 | `AgentService` | Criar, listar, atualizar e deletar agents. |
 | `TaskService` | Criar, listar, comentar, delegar, checkout, release, wake, cancel e atualizar tasks. |
 | `TaskLifecycle` | Regras de transição de status e efeitos colaterais. |
+| `TaskService` / `RuntimeCompletionAuditor` | Faz o gate semântico em transições não-terminais para `done`; executa o auditor diretamente, sem criar task/run normal. |
 | `Runner` | Monta prompt, executa runtime, salva run/output/mensagens/eventos/uso. |
 | `Dispatcher` | Reivindica tasks runnable respeitando concorrência e cria runs. |
 | `Scheduler` | Ciclo periódico: reconciler antes, dispatcher depois. |

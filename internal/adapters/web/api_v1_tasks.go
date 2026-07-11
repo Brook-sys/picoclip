@@ -74,6 +74,20 @@ func (s *Server) handleAPIV1TaskFull(w http.ResponseWriter, r *http.Request) {
 	s.apiData(w, taskFullResponse{Task: s.taskResponse(r, task), Messages: messages, Runs: runs, Events: events, Wakeups: wakeups, Children: s.taskResponses(r, children)})
 }
 
+func (s *Server) handleAPIV1TaskCompletionAudits(w http.ResponseWriter, r *http.Request) {
+	taskID := r.PathValue("id")
+	if _, err := s.tasks.Get(r.Context(), taskID); err != nil {
+		s.apiError(w, err)
+		return
+	}
+	audits, err := s.storage.CompletionAudits().ListByTask(r.Context(), taskID)
+	if err != nil {
+		s.apiError(w, err)
+		return
+	}
+	s.apiList(w, audits, map[string]any{"count": len(audits)})
+}
+
 func (s *Server) handleAPIV1CancelTask(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Reason string `json:"reason"`
@@ -453,6 +467,7 @@ func apiV1Paths() map[string]any {
 		"GET,POST /api/v1/tasks/{id}/messages",
 		"GET /api/v1/tasks/{id}/runs",
 		"GET /api/v1/tasks/{id}/events",
+		"GET /api/v1/tasks/{id}/completion-audits",
 		"GET /api/v1/tasks/{id}/wakeups",
 		"GET /api/v1/tasks/{id}/children",
 		"GET /api/v1/runs",

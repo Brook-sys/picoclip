@@ -470,5 +470,22 @@ func migrations() []migration {
 					CREATE INDEX IF NOT EXISTS idx_webhook_deliveries_subscription ON webhook_deliveries(subscription_id, created_at);
 				`,
 		},
+		{
+			version: 16,
+			name:    "create_completion_audits_table",
+			sql: `
+				CREATE TABLE IF NOT EXISTS completion_audits (
+					id TEXT PRIMARY KEY,
+					task_id TEXT NOT NULL,
+					requested_by_agent_id TEXT NOT NULL DEFAULT '',
+					outcome TEXT NOT NULL,
+					summary TEXT NOT NULL DEFAULT '',
+					findings_json TEXT NOT NULL DEFAULT '[]',
+					requested_at TIMESTAMP NOT NULL,
+					decided_at TIMESTAMP
+				);
+				CREATE INDEX IF NOT EXISTS idx_completion_audits_task_requested ON completion_audits(task_id, requested_at DESC);
+			`,
+		},
 	}
 }

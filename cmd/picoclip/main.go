@@ -118,6 +118,7 @@ func main() {
 	agentService := services.NewAgentService(storage, clock, idGen)
 	taskService := services.NewTaskService(storage, clock, idGen, bus)
 	taskService.SetCanceler(runtimeManager)
+	taskService.SetCompletionAuditor(services.NewRuntimeCompletionAuditor(storage, runtimeManager))
 	workspaceService := services.NewWorkspaceService(storage, clock, idGen, workspaceRoot)
 	_, _ = workspaceService.EnsureDefault(ctx)
 	skillService := services.NewSkillService(storage, clock, idGen)

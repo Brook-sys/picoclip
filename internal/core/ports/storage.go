@@ -8,19 +8,20 @@ import (
 )
 
 type BackupData struct {
-	Settings   map[string]string            `json:"settings"`
-	Agents     []domain.Agent               `json:"agents"`
-	Workspaces []domain.Workspace           `json:"projects"`
-	Skills     []domain.Skill               `json:"skills"`
-	Tasks      []domain.Task                `json:"tasks"`
-	Runs       []domain.Run                 `json:"runs"`
-	Runtimes   []domain.RuntimeState        `json:"runtimes"`
-	Messages   []domain.Message             `json:"messages"`
-	Events     []domain.Event               `json:"events"`
-	Wakeups    []domain.WakeupRequest       `json:"wakeups"`
-	Usage      []domain.UsageEvent          `json:"usage"`
-	Budgets    []domain.Budget              `json:"budgets"`
-	Webhooks   []domain.WebhookSubscription `json:"webhooks"`
+	Settings         map[string]string            `json:"settings"`
+	Agents           []domain.Agent               `json:"agents"`
+	Workspaces       []domain.Workspace           `json:"projects"`
+	Skills           []domain.Skill               `json:"skills"`
+	Tasks            []domain.Task                `json:"tasks"`
+	Runs             []domain.Run                 `json:"runs"`
+	Runtimes         []domain.RuntimeState        `json:"runtimes"`
+	Messages         []domain.Message             `json:"messages"`
+	Events           []domain.Event               `json:"events"`
+	Wakeups          []domain.WakeupRequest       `json:"wakeups"`
+	Usage            []domain.UsageEvent          `json:"usage"`
+	Budgets          []domain.Budget              `json:"budgets"`
+	Webhooks         []domain.WebhookSubscription `json:"webhooks"`
+	CompletionAudits []domain.CompletionAudit     `json:"completion_audits"`
 }
 
 type Storage interface {
@@ -37,6 +38,7 @@ type Storage interface {
 	Usage() UsageRepository
 	Budgets() BudgetRepository
 	Webhooks() WebhookRepository
+	CompletionAudits() CompletionAuditRepository
 	ResetAllData(ctx context.Context) error
 	RestoreAllData(ctx context.Context, data BackupData) error
 	RunInTx(ctx context.Context, fn func(ctx context.Context) error) error
@@ -85,6 +87,7 @@ type TaskRepository interface {
 	Get(ctx context.Context, id string) (domain.Task, error)
 	List(ctx context.Context, filter TaskFilter) ([]domain.Task, error)
 	Update(ctx context.Context, task domain.Task) error
+	UpdateIfUnchanged(ctx context.Context, task domain.Task, precondition TaskPrecondition) (bool, error)
 	Delete(ctx context.Context, id string) error
 	ClaimNextPending(ctx context.Context) (domain.Task, error)
 	ClaimNextRunnable(ctx context.Context, now time.Time, lockTTL time.Duration) (domain.Task, domain.Run, error)

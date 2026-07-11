@@ -17,6 +17,7 @@ func (s *Storage) RestoreAllData(ctx context.Context, data ports.BackupData) err
 	if _, err := tx.ExecContext(ctx, `
 		DELETE FROM webhook_deliveries;
 		DELETE FROM webhook_subscriptions;
+		DELETE FROM completion_audits;
 		DELETE FROM wakeups;
 		DELETE FROM messages;
 		DELETE FROM events;
@@ -108,6 +109,11 @@ func (s *Storage) RestoreAllData(ctx context.Context, data ports.BackupData) err
 	for _, x := range data.Webhooks {
 		eventTypes, _ := json.Marshal(x.EventTypes)
 		if _, err := tx.ExecContext(ctx, `INSERT INTO webhook_subscriptions (id, name, url, secret, event_types, enabled, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`, x.ID, x.Name, x.URL, x.Secret, string(eventTypes), x.Enabled, x.CreatedAt, x.UpdatedAt); err != nil {
+			return err
+		}
+	}
+	for _, x := range data.CompletionAudits {
+		if _, err := tx.ExecContext(ctx, `INSERT INTO completion_audits (id, task_id, requested_by_agent_id, outcome, summary, findings_json, requested_at, decided_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`, x.ID, x.TaskID, x.RequestedByAgentID, string(x.Outcome), x.Summary, x.FindingsJSON, x.RequestedAt, x.DecidedAt); err != nil {
 			return err
 		}
 	}

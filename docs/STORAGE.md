@@ -77,7 +77,10 @@ Current storage interface exposes repositories for:
 - wakeups;
 - usage;
 - budgets;
-- webhooks.
+- webhooks;
+- completion audits.
+
+`completion_audits` stores the small durable decision record for semantic completion review: task/actor IDs, pending/final outcome, bounded summary/findings JSON, and request/decision timestamps. It intentionally does not store raw prompt/evidence or raw model output. Completion commits use `TaskRepository.UpdateIfUnchanged` with status, `updated_at`, and checkout-run preconditions, matching memory and SQLite behavior.
 
 It also exposes:
 
@@ -192,6 +195,7 @@ Rules:
 | 13 | `add_outbox_retry_columns` | Outbox retry attempts, next attempt and last error. |
 | 14 | `add_continuous_task_columns` | Continuous task mode, delay, counters and next run time. |
 | 15 | `create_webhook_tables` | Webhook subscriptions and delivery retry state. |
+| 16 | `create_completion_audits_table` | Durable semantic completion-audit records and task/timestamp index. |
 
 ## Current tables
 
@@ -215,6 +219,7 @@ Runtime/reliability/operations tables:
 - `outbox_events`
 - `webhook_subscriptions`
 - `webhook_deliveries`
+- `completion_audits`
 
 Important indexes cover common UI, Agent API and scheduler paths:
 

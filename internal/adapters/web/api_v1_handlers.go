@@ -66,6 +66,7 @@ func (s *Server) mountAPIV1(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/v1/tasks/{id}/messages", s.handleAPIV1CreateTaskMessage)
 	mux.HandleFunc("GET /api/v1/tasks/{id}/runs", s.handleAPIV1TaskRuns)
 	mux.HandleFunc("GET /api/v1/tasks/{id}/events", s.handleAPIV1TaskEvents)
+	mux.HandleFunc("GET /api/v1/tasks/{id}/completion-audits", s.handleAPIV1TaskCompletionAudits)
 	mux.HandleFunc("GET /api/v1/tasks/{id}/wakeups", s.handleAPIV1TaskWakeups)
 	mux.HandleFunc("GET /api/v1/tasks/{id}/children", s.handleAPIV1TaskChildren)
 	mux.HandleFunc("GET /api/v1/runs", s.handleAPIV1Runs)

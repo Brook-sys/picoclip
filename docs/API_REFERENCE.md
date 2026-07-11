@@ -88,7 +88,8 @@ Erros usam `error.code` estável, por exemplo `invalid_input`, `not_found`, `dri
 | `GET` | `/api/v1/tasks/{id}/messages` | Lista mensagens da task. |
 | `POST` | `/api/v1/tasks/{id}/messages` | Adiciona mensagem. |
 | `GET` | `/api/v1/tasks/{id}/runs` | Lista runs da task. |
-| `GET` | `/api/v1/tasks/{id}/events` | Lista eventos da task. |
+| `GET` | `/api/v1/tasks/{id}/events` | Lista eventos da task, incluindo eventos de auditoria de conclusão. |
+| `GET` | `/api/v1/tasks/{id}/completion-audits` | Lista o histórico durável de decisões de auditoria semântica da task. |
 | `GET` | `/api/v1/tasks/{id}/children` | Lista subtasks. |
 | `POST` | `/api/v1/tasks/{id}/cancel` | Cancela task. |
 | `POST` | `/api/v1/tasks/{id}/pause` | Pausa task contínua. |
@@ -179,6 +180,10 @@ curl -s 'http://127.0.0.1:8088/api/v1/usage?agent_id=agt_123' | jq
 | `parent_id` | Filtra subtasks de uma task pai. |
 | `project_id` | Filtra por workspace/projeto. |
 | `status` | Filtra por um status ou lista parseada pelo helper de status. |
+
+### Auditoria semântica de conclusão
+
+`GET /api/v1/tasks/{id}/completion-audits` é somente leitura e retorna o histórico de tentativas e decisões persistidas para a task. Em `completion_audit.v1.mode=enforce`, uma atualização Agent API para `status=done` só responde sucesso após decisão `approve`. Os resultados fail-closed retornam JSON com códigos estáveis: `409 semantic_audit_rejected`, `409 semantic_audit_superseded`, `503 semantic_audit_unavailable` e `504 semantic_audit_timeout`; nenhum deles representa conclusão bem-sucedida.
 
 ## Agent API
 
