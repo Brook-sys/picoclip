@@ -417,6 +417,60 @@ func TestRunnerRateLimitContinuousDoesNotFailOnMaxAttempts(t *testing.T) {
 	}
 }
 
+func TestRunnerContinuousPermanentFailureStopsAtMaxAttempts(t *testing.T) {
+	ctx := context.Background()
+	st := memory.NewStorage()
+	clock := fixedClock{t: time.Date(2026, 7, 8, 3, 20, 0, 0, time.UTC)}
+	idgen := &seqID{}
+	runtimes := NewRuntimeManager(st, t.TempDir(), clock)
+	runtimes.Register(fakeRuntimeAdapter{id: "crush", err: errors.New("invalid credentials")})
+	if err := st.Runtimes().Save(ctx, domain.RuntimeState{ID: "runtime_crush", RuntimeID: "crush", Mode: domain.InstallModeExisting, Enabled: true, SettingsJSON: "{}", MetadataJSON: "{}"}); err != nil {
+		t.Fatal(err)
+	}
+	agent := domain.Agent{ID: "agent_cont_permanent", Name: "agent", Type: "crush", Enabled: true, CreatedAt: clock.t, UpdatedAt: clock.t}
+	if err := st.Agents().Create(ctx, agent); err != nil {
+		t.Fatal(err)
+	}
+	task := domain.Task{
+		ID:          "task_cont_permanent",
+		AgentID:     agent.ID,
+		Title:       "continuous permanent failure",
+		Prompt:      "run",
+		Status:      domain.TaskStatusTodo,
+		Mode:        domain.TaskModeContinuous,
+		NeedsRun:    true,
+		MaxAttempts: 2,
+		CreatedAt:   clock.t,
+		UpdatedAt:   clock.t,
+	}
+	if err := st.Tasks().Create(ctx, task); err != nil {
+		t.Fatal(err)
+	}
+	runner := NewRunner(st, clock, idgen, noopBus{}, runtimes, NoopMemoryProvider{}, testLogger{}, Config{TaskTimeout: time.Minute, MaxAttempts: 2})
+
+	for attempt := 1; attempt <= 2; attempt++ {
+		current, err := st.Tasks().Get(ctx, task.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		current.Status = domain.TaskStatusTodo
+		current.NeedsRun = true
+		current.LoopNextRunAt = nil
+		if err := st.Tasks().Update(ctx, current); err != nil {
+			t.Fatal(err)
+		}
+		runner.Run(ctx, current)
+	}
+
+	got, err := st.Tasks().Get(ctx, task.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Status != domain.TaskStatusBlocked || got.NeedsRun {
+		t.Fatalf("expected permanent continuous failure to stop at max attempts, got status=%s needs_run=%v attempts=%d", got.Status, got.NeedsRun, got.Attempts)
+	}
+}
+
 func assertRuntimeEvent(t *testing.T, events []domain.Event, eventType domain.EventType, runID string, want map[string]string) {
 	t.Helper()
 	assertEventData(t, events, eventType, runID, want)

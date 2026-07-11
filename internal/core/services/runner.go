@@ -276,7 +276,7 @@ func (r *Runner) Run(ctx context.Context, task domain.Task) {
 			data["status"] = string(run.Status)
 			r.emitRuntimeEvent(ctx, domain.EventRuntimeCompleted, task, agent, run, "Runtime execution failed", data, finishedAt)
 		}
-		if task.Mode == domain.TaskModeContinuous {
+		if task.Mode == domain.TaskModeContinuous && (isRateLimit || !r.maxAttemptsReachedAfterRun(task)) {
 			r.completeContinuousCycle(ctx, task, run, finishedAt)
 		} else if isRateLimit && !r.maxAttemptsReachedAfterRun(task) {
 			r.scheduleRetryAfterRateLimit(ctx, task, run, finishedAt)
@@ -506,9 +506,6 @@ func (r *Runner) maxAttemptsExceeded(task domain.Task) bool {
 }
 
 func (r *Runner) maxAttemptsReachedAfterRun(task domain.Task) bool {
-	if task.Mode == domain.TaskModeContinuous {
-		return false
-	}
 	limit := task.MaxAttempts
 	if limit <= 0 {
 		limit = r.config.MaxAttempts

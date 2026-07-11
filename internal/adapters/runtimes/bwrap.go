@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 	"time"
 
 	"picoclip/internal/core/domain"
@@ -83,9 +84,11 @@ func (s *BwrapSandbox) Isolate(ctx context.Context, command ports.SandboxCommand
 	cmd := exec.CommandContext(ctx, binary, args...)
 	cmd.Env = []string{"PATH=/usr/bin:/bin", "HOME=/nonexistent", "LANG=C", "TMPDIR=/tmp"}
 	cmd.ExtraFiles = extraFiles
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
+	var callbackMu sync.Mutex
+	stdout := &sandboxOutputWriter{onOutput: command.OnOutput, callbackMu: &callbackMu}
+	stderr := &sandboxOutputWriter{stderr: true, onOutput: command.OnOutput, callbackMu: &callbackMu}
+	cmd.Stdout = stdout
+	cmd.Stderr = stderr
 	if err := startRuntimeCommand(cmd); err != nil {
 		return ports.SandboxResult{}, fmt.Errorf("sandbox start failed: %w", err)
 	}
@@ -93,13 +96,36 @@ func (s *BwrapSandbox) Isolate(ctx context.Context, command ports.SandboxCommand
 		command.OnStart(cmd.Process.Pid)
 	}
 	err = cmd.Wait()
-	if command.OnOutput != nil {
-		command.OnOutput(stdout.Bytes(), stderr.Bytes())
-	}
 	if err != nil {
 		return ports.SandboxResult{}, fmt.Errorf("sandbox execution failed: %w\nstderr: %s", err, strings.TrimSpace(stderr.String()))
 	}
 	return ports.SandboxResult{Output: strings.TrimSpace(stdout.String())}, nil
+}
+
+type sandboxOutputWriter struct {
+	buffer     bytes.Buffer
+	stderr     bool
+	onOutput   func(stdout, stderr []byte)
+	callbackMu *sync.Mutex
+}
+
+func (w *sandboxOutputWriter) Write(chunk []byte) (int, error) {
+	n, err := w.buffer.Write(chunk)
+	if n > 0 && w.onOutput != nil {
+		copied := append([]byte(nil), chunk[:n]...)
+		w.callbackMu.Lock()
+		if w.stderr {
+			w.onOutput(nil, copied)
+		} else {
+			w.onOutput(copied, nil)
+		}
+		w.callbackMu.Unlock()
+	}
+	return n, err
+}
+
+func (w *sandboxOutputWriter) String() string {
+	return w.buffer.String()
 }
 
 func minimalBwrapArgs() []string {

@@ -89,6 +89,47 @@ func TestBwrapSandboxWorkspaceMustBeUnderAuthorizedRoot(t *testing.T) {
 	}
 }
 
+func TestBwrapSandboxStreamsOutputBeforeProcessExit(t *testing.T) {
+	binary := filepath.Join(t.TempDir(), "bwrap")
+	body := "#!/bin/sh\nprintf 'first\\n'\nsleep 1\nprintf 'second\\n'\n"
+	if err := os.WriteFile(binary, []byte(body), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	sandbox := NewBwrapSandbox(binary)
+	firstOutput := make(chan string, 1)
+	done := make(chan error, 1)
+
+	go func() {
+		_, err := sandbox.Isolate(context.Background(), ports.SandboxCommand{
+			Command: "/bin/echo",
+			OnOutput: func(stdout, stderr []byte) {
+				if len(stdout) > 0 {
+					select {
+					case firstOutput <- string(stdout):
+					default:
+					}
+				}
+			},
+		})
+		done <- err
+	}()
+
+	select {
+	case output := <-firstOutput:
+		if !strings.Contains(output, "first") {
+			t.Fatalf("expected first output chunk, got %q", output)
+		}
+	case err := <-done:
+		t.Fatalf("sandbox exited before streaming output: %v", err)
+	case <-time.After(500 * time.Millisecond):
+		t.Fatal("expected output callback while sandbox was still running")
+	}
+
+	if err := <-done; err != nil {
+		t.Fatalf("sandbox execution: %v", err)
+	}
+}
+
 func TestBwrapSandboxIntegrationIsolation(t *testing.T) {
 	if runtime.GOOS != "linux" {
 		t.Skip("bubblewrap sandbox is Linux-only")
