@@ -1,6 +1,7 @@
 package services
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"io"
@@ -145,11 +146,11 @@ func (s *SkillService) ImportRemoteYAML(ctx context.Context, projectID, sourceUR
 	}
 	response, err := remoteSkillHTTPClient.Do(request)
 	if err != nil {
-		return domain.Skill{}, fmt.Errorf("fetch remote skill YAML: %w", err)
+		return domain.Skill{}, fmt.Errorf("%w: fetch remote skill YAML: %v", domain.ErrInvalidInput, err)
 	}
 	defer response.Body.Close()
 	if response.StatusCode < http.StatusOK || response.StatusCode >= http.StatusMultipleChoices {
-		return domain.Skill{}, fmt.Errorf("fetch remote skill YAML: unexpected HTTP status %d", response.StatusCode)
+		return domain.Skill{}, fmt.Errorf("%w: fetch remote skill YAML: unexpected HTTP status %d", domain.ErrInvalidInput, response.StatusCode)
 	}
 
 	body, err := io.ReadAll(io.LimitReader(response.Body, maxRemoteSkillYAMLBytes+1))
@@ -161,9 +162,12 @@ func (s *SkillService) ImportRemoteYAML(ctx context.Context, projectID, sourceUR
 	}
 
 	var document remoteSkillYAML
-	if err := yaml.Unmarshal(body, &document); err != nil {
+	decoder := yaml.NewDecoder(bytes.NewReader(body))
+	decoder.KnownFields(true)
+	if err := decoder.Decode(&document); err != nil {
 		return domain.Skill{}, fmt.Errorf("%w: invalid remote skill YAML: %v", domain.ErrInvalidInput, err)
 	}
+
 	if strings.TrimSpace(document.Name) == "" || strings.TrimSpace(document.Instructions) == "" {
 		return domain.Skill{}, fmt.Errorf("%w: name and instructions are required", domain.ErrInvalidInput)
 	}
@@ -173,14 +177,28 @@ func (s *SkillService) ImportRemoteYAML(ctx context.Context, projectID, sourceUR
 		}
 	}
 
-	skill, err := s.CreateWithFiles(ctx, projectID, document.Name, document.Description, document.Instructions, document.Files)
-	if err != nil {
+	slug := skillSlug(document.Name)
+	if err := validateSkillSlug(slug); err != nil {
 		return domain.Skill{}, err
 	}
-	skill.Source = sourceURL
-	skill.Version = document.Version
-	skill.UpdatedAt = s.clock.Now()
-	if err := s.storage.Skills().Update(ctx, skill); err != nil {
+
+	skill := domain.Skill{
+		ID:           s.idGen.NewID("sk"),
+		ProjectID:    projectID,
+		Name:         document.Name,
+		Slug:         slug,
+		Description:  document.Description,
+		Instructions: document.Instructions,
+		Files:        document.Files,
+		Kind:         domain.SkillKindCustom,
+		Enabled:      true,
+		Source:       sourceURL,
+		Version:      document.Version,
+		CreatedAt:    s.clock.Now(),
+		UpdatedAt:    s.clock.Now(),
+	}
+
+	if err := s.storage.Skills().Create(ctx, skill); err != nil {
 		return domain.Skill{}, err
 	}
 	return skill, nil
