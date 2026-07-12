@@ -69,3 +69,31 @@ func TestParseYAMLRejectsMultipleDocuments(t *testing.T) {
 		t.Fatalf("ParseYAML error = %v, want single document validation error", err)
 	}
 }
+
+func TestParseYAMLNormalizesWhitespace(t *testing.T) {
+	yamlStr := `
+version: v1
+nodes:
+  - id: " my-node "
+    agent: "dummy"
+  - id: " next-node "
+    agent: "dummy"
+edges:
+  - from: " my-node "
+    to: " next-node "
+`
+	workflow, err := ParseYAML([]byte(yamlStr))
+	if err != nil {
+		t.Fatalf("ParseYAML returned error: %v", err)
+	}
+
+	if workflow.Nodes[0].ID != "my-node" {
+		t.Errorf("expected node ID to be normalized to 'my-node', got %q", workflow.Nodes[0].ID)
+	}
+	if workflow.Nodes[1].ID != "next-node" {
+		t.Errorf("expected node ID to be normalized to 'next-node', got %q", workflow.Nodes[1].ID)
+	}
+	if workflow.Edges[0].From != "my-node" || workflow.Edges[0].To != "next-node" {
+		t.Errorf("expected edge to be normalized to from: 'my-node', to: 'next-node', got from: %q, to: %q", workflow.Edges[0].From, workflow.Edges[0].To)
+	}
+}

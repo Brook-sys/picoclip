@@ -52,6 +52,15 @@ func ParseYAML(document []byte) (Workflow, error) {
 		return Workflow{}, fmt.Errorf("decode workflow YAML: %w", err)
 	}
 
+	// Normalize whitespace in node and edge IDs immediately on parse
+	for i := range workflow.Nodes {
+		workflow.Nodes[i].ID = strings.TrimSpace(workflow.Nodes[i].ID)
+	}
+	for i := range workflow.Edges {
+		workflow.Edges[i].From = strings.TrimSpace(workflow.Edges[i].From)
+		workflow.Edges[i].To = strings.TrimSpace(workflow.Edges[i].To)
+	}
+
 	if err := Validate(workflow); err != nil {
 		return Workflow{}, err
 	}
