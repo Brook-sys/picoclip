@@ -196,6 +196,7 @@ Rules:
 | 14 | `add_continuous_task_columns` | Continuous task mode, delay, counters and next run time. |
 | 15 | `create_webhook_tables` | Webhook subscriptions and delivery retry state. |
 | 16 | `create_completion_audits_table` | Durable semantic completion-audit records and task/timestamp index. |
+| 17 | `create_budget_accounting_tables` | Additive policy, account, reservation and versioned pricing schema for transactional budget enforcement; repositories are delivered separately. |
 
 ## Current tables
 
@@ -220,6 +221,12 @@ Runtime/reliability/operations tables:
 - `webhook_subscriptions`
 - `webhook_deliveries`
 - `completion_audits`
+- `budget_policies`
+- `budget_accounts`
+- `budget_reservations`
+- `pricing_catalog`
+
+`BudgetReservationRepository` implements transactional SQLite policy upsert, account lookup, idempotent `TryReserve`, and idempotent `Settle` over the budgeting-accounting tables. Every reserve/settle mutation uses one SQLite transaction: a rejected hard-limit request rolls back every account mutation, and the conditional account update prevents concurrent reservations from exceeding a configured hard limit. Runner wiring and backup/restore mapping remain outside this repository scope.
 
 Important indexes cover common UI, Agent API and scheduler paths:
 

@@ -147,6 +147,14 @@ type BudgetRepository interface {
 	Delete(ctx context.Context, id string) error
 }
 
+type BudgetReservationRepository interface {
+	UpsertPolicy(ctx context.Context, policy domain.BudgetPolicy) (domain.BudgetPolicy, error)
+	GetAccount(ctx context.Context, policyID string) (domain.BudgetAccount, error)
+	GetReservation(ctx context.Context, id string) (domain.BudgetReservation, error)
+	TryReserve(ctx context.Context, request domain.BudgetReservationRequest) (domain.BudgetReservation, error)
+	Settle(ctx context.Context, settlement domain.BudgetReservationSettlement) (domain.BudgetReservation, error)
+}
+
 type WebhookRepository interface {
 	CreateSubscription(ctx context.Context, subscription domain.WebhookSubscription) error
 	GetSubscription(ctx context.Context, id string) (domain.WebhookSubscription, error)
