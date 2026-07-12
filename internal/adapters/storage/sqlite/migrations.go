@@ -487,5 +487,97 @@ func migrations() []migration {
 				CREATE INDEX IF NOT EXISTS idx_completion_audits_task_requested ON completion_audits(task_id, requested_at DESC);
 			`,
 		},
+		{
+			version: 17,
+			name:    "create_budget_accounting_tables",
+			sql: `
+				CREATE TABLE IF NOT EXISTS budget_policies (
+					id TEXT PRIMARY KEY,
+					scope_type TEXT NOT NULL CHECK (scope_type IN ('global', 'workspace', 'agent')),
+					scope_id TEXT NOT NULL DEFAULT '',
+					period_kind TEXT NOT NULL CHECK (period_kind IN ('lifetime')),
+					period_start TIMESTAMP NOT NULL,
+					period_end TIMESTAMP,
+					currency TEXT NOT NULL DEFAULT 'USD',
+					token_limit INTEGER NOT NULL DEFAULT 0 CHECK (token_limit >= 0),
+					cost_limit_micros INTEGER NOT NULL DEFAULT 0 CHECK (cost_limit_micros >= 0),
+					enforcement TEXT NOT NULL CHECK (enforcement IN ('hard', 'warn')),
+					enabled BOOLEAN NOT NULL DEFAULT 1,
+					version INTEGER NOT NULL DEFAULT 1,
+					created_at TIMESTAMP NOT NULL,
+					updated_at TIMESTAMP NOT NULL,
+					CHECK ((scope_type = 'global' AND scope_id = '') OR (scope_type IN ('workspace', 'agent') AND scope_id <> '')),
+					CHECK (period_end IS NULL OR period_end > period_start),
+					CHECK (token_limit > 0 OR cost_limit_micros > 0)
+				);
+				CREATE UNIQUE INDEX IF NOT EXISTS idx_budget_policies_active_hard_scope_period
+					ON budget_policies(scope_type, scope_id, period_kind, period_start)
+					WHERE enabled = 1 AND enforcement = 'hard';
+				CREATE INDEX IF NOT EXISTS idx_budget_policies_scope_period
+					ON budget_policies(scope_type, scope_id, period_kind, period_start);
+
+				CREATE TABLE IF NOT EXISTS budget_accounts (
+					policy_id TEXT PRIMARY KEY REFERENCES budget_policies(id) ON DELETE CASCADE,
+					settled_tokens INTEGER NOT NULL DEFAULT 0 CHECK (settled_tokens >= 0),
+					reserved_tokens INTEGER NOT NULL DEFAULT 0 CHECK (reserved_tokens >= 0),
+					settled_cost_micros INTEGER NOT NULL DEFAULT 0 CHECK (settled_cost_micros >= 0),
+					reserved_cost_micros INTEGER NOT NULL DEFAULT 0 CHECK (reserved_cost_micros >= 0),
+					status TEXT NOT NULL CHECK (status IN ('active', 'suspended', 'exhausted', 'reconciling', 'disabled')),
+					suspension_reason TEXT NOT NULL DEFAULT '',
+					version INTEGER NOT NULL DEFAULT 1,
+					created_at TIMESTAMP NOT NULL,
+					updated_at TIMESTAMP NOT NULL
+				);
+				CREATE INDEX IF NOT EXISTS idx_budget_accounts_status ON budget_accounts(status);
+
+				CREATE TABLE IF NOT EXISTS budget_reservations (
+					id TEXT PRIMARY KEY,
+					request_id TEXT NOT NULL UNIQUE,
+					task_id TEXT NOT NULL DEFAULT '',
+					run_id TEXT NOT NULL DEFAULT '',
+					agent_id TEXT NOT NULL DEFAULT '',
+					workspace_id TEXT NOT NULL DEFAULT '',
+					provider TEXT NOT NULL DEFAULT '',
+					model TEXT NOT NULL DEFAULT '',
+					pricing_version TEXT NOT NULL DEFAULT '',
+					currency TEXT NOT NULL DEFAULT 'USD',
+					reserved_tokens INTEGER NOT NULL DEFAULT 0 CHECK (reserved_tokens >= 0),
+					reserved_cost_micros INTEGER NOT NULL DEFAULT 0 CHECK (reserved_cost_micros >= 0),
+					settled_tokens INTEGER NOT NULL DEFAULT 0 CHECK (settled_tokens >= 0),
+					settled_cost_micros INTEGER NOT NULL DEFAULT 0 CHECK (settled_cost_micros >= 0),
+					status TEXT NOT NULL CHECK (status IN ('reserved', 'sent', 'settled', 'aborted_before_send', 'reconcile_required', 'charged_conservatively')),
+					provider_request_id TEXT NOT NULL DEFAULT '',
+					lease_expires_at TIMESTAMP,
+					settlement_deadline_at TIMESTAMP,
+					created_at TIMESTAMP NOT NULL,
+					updated_at TIMESTAMP NOT NULL,
+					settled_at TIMESTAMP,
+					CHECK (reserved_tokens > 0 OR reserved_cost_micros > 0)
+				);
+				CREATE INDEX IF NOT EXISTS idx_budget_reservations_status_deadline
+					ON budget_reservations(status, settlement_deadline_at, created_at);
+				CREATE INDEX IF NOT EXISTS idx_budget_reservations_scope_created
+					ON budget_reservations(workspace_id, agent_id, created_at);
+
+				CREATE TABLE IF NOT EXISTS pricing_catalog (
+					id TEXT PRIMARY KEY,
+					provider TEXT NOT NULL,
+					model TEXT NOT NULL,
+					version TEXT NOT NULL,
+					currency TEXT NOT NULL DEFAULT 'USD',
+					input_cost_micros_per_million INTEGER NOT NULL DEFAULT 0 CHECK (input_cost_micros_per_million >= 0),
+					output_cost_micros_per_million INTEGER NOT NULL DEFAULT 0 CHECK (output_cost_micros_per_million >= 0),
+					cached_cost_micros_per_million INTEGER NOT NULL DEFAULT 0 CHECK (cached_cost_micros_per_million >= 0),
+					valid_from TIMESTAMP NOT NULL,
+					valid_until TIMESTAMP,
+					created_at TIMESTAMP NOT NULL,
+					updated_at TIMESTAMP NOT NULL,
+					UNIQUE (provider, model, version),
+					CHECK (valid_until IS NULL OR valid_until > valid_from)
+				);
+				CREATE INDEX IF NOT EXISTS idx_pricing_catalog_lookup
+					ON pricing_catalog(provider, model, currency, valid_from);
+			`,
+		},
 	}
 }
