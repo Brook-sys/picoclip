@@ -226,7 +226,7 @@ Runtime/reliability/operations tables:
 - `budget_reservations`
 - `pricing_catalog`
 
-The four budgeting-accounting tables are schema-only in the current migration: no repository, backup/restore mapping, or runtime enforcement is included until their dedicated follow-up work lands.
+`BudgetReservationRepository` implements transactional SQLite policy upsert, account lookup, idempotent `TryReserve`, and idempotent `Settle` over the budgeting-accounting tables. Every reserve/settle mutation uses one SQLite transaction: a rejected hard-limit request rolls back every account mutation, and the conditional account update prevents concurrent reservations from exceeding a configured hard limit. Runner wiring and backup/restore mapping remain outside this repository scope.
 
 Important indexes cover common UI, Agent API and scheduler paths:
 

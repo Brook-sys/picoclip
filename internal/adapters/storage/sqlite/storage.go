@@ -98,6 +98,10 @@ func (s *Storage) Budgets() ports.BudgetRepository {
 	return &BudgetRepository{db: s.db}
 }
 
+func (s *Storage) BudgetReservations() ports.BudgetReservationRepository {
+	return &BudgetReservationRepository{db: s.db}
+}
+
 func (s *Storage) Webhooks() ports.WebhookRepository {
 	return &WebhookRepository{db: s.db}
 }
