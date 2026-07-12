@@ -196,6 +196,7 @@ Rules:
 | 14 | `add_continuous_task_columns` | Continuous task mode, delay, counters and next run time. |
 | 15 | `create_webhook_tables` | Webhook subscriptions and delivery retry state. |
 | 16 | `create_completion_audits_table` | Durable semantic completion-audit records and task/timestamp index. |
+| 17 | `create_budget_accounting_tables` | Additive policy, account, reservation and versioned pricing schema for transactional budget enforcement; repositories are delivered separately. |
 
 ## Current tables
 
@@ -220,6 +221,12 @@ Runtime/reliability/operations tables:
 - `webhook_subscriptions`
 - `webhook_deliveries`
 - `completion_audits`
+- `budget_policies`
+- `budget_accounts`
+- `budget_reservations`
+- `pricing_catalog`
+
+The four budgeting-accounting tables are schema-only in the current migration: no repository, backup/restore mapping, or runtime enforcement is included until their dedicated follow-up work lands.
 
 Important indexes cover common UI, Agent API and scheduler paths:
 
