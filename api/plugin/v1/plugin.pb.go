@@ -301,7 +301,7 @@ const file_api_plugin_v1_plugin_proto_rawDesc = "" +
 	"\bis_error\x18\x02 \x01(\bR\aisError2\xc1\x01\n" +
 	"\rPluginService\x12Z\n" +
 	"\tDiscovery\x12$.picoclip.plugin.v1.DiscoveryRequest\x1a%.picoclip.plugin.v1.DiscoveryResponse\"\x00\x12T\n" +
-	"\aExecute\x12\".picoclip.plugin.v1.ExecuteRequest\x1a#.picoclip.plugin.v1.ExecuteResponse\"\x00B5Z3github.com/picoclip/picoclip/api/plugin/v1;pluginv1b\x06proto3"
+	"\aExecute\x12\".picoclip.plugin.v1.ExecuteRequest\x1a#.picoclip.plugin.v1.ExecuteResponse\"\x00B!Z\x1fpicoclip/api/plugin/v1;pluginv1b\x06proto3"
 
 var (
 	file_api_plugin_v1_plugin_proto_rawDescOnce sync.Once

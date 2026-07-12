@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package picoclip.plugin.v1;
 
-option go_package = "github.com/picoclip/picoclip/api/plugin/v1;pluginv1";
+option go_package = "picoclip/api/plugin/v1;pluginv1";
 
 // PluginService é o serviço gRPC que todo plugin do PicoClip deve implementar.
 service PluginService {

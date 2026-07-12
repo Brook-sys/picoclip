@@ -51,7 +51,7 @@ check-docs:
 	python3 scripts/check_markdown_links.py .
 
 proto-generate:
-	go run github.com/bufbuild/buf/cmd/buf@latest generate
+	go run github.com/bufbuild/buf/cmd/buf@v1.32.0 generate
 
 build: proto-generate
 	go build -o $(APP) cmd/picoclip/main.go
