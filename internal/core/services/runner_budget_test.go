@@ -93,3 +93,45 @@ func TestRunnerRecordTokenUsageCreatesLedgerEventOnce(t *testing.T) {
 		t.Fatalf("expected agent total 20, got %d", gotAgent.TotalTokens)
 	}
 }
+
+func TestRunnerUsesModelGatewayForRuntimeCalls(t *testing.T) {
+	ctx := context.Background()
+	st := memory.NewStorage()
+	clock := fixedClock{t: time.Date(2026, 7, 12, 20, 0, 0, 0, time.UTC)}
+	idgen := &seqID{}
+	runtimes := NewRuntimeManager(st, t.TempDir(), clock)
+	runtimes.Register(livenessRuntimeAdapter{id: "crush"})
+	if err := st.Runtimes().Save(ctx, domain.RuntimeState{ID: "runtime_crush", RuntimeID: "crush", Mode: domain.InstallModeExisting, Enabled: true, SettingsJSON: "{}", MetadataJSON: "{}"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.BudgetReservations().UpsertPolicy(ctx, domain.BudgetPolicy{ID: "policy_global", Scope: domain.BudgetPolicyScopeGlobal, TokenLimit: 300, Enforcement: domain.BudgetPolicyEnforcementHard, Enabled: true, CreatedAt: clock.t, UpdatedAt: clock.t}); err != nil {
+		t.Fatal(err)
+	}
+	agent := domain.Agent{ID: "agent_gateway", Name: "agent", Type: "crush", Enabled: true, CreatedAt: clock.t, UpdatedAt: clock.t}
+	if err := st.Agents().Create(ctx, agent); err != nil {
+		t.Fatal(err)
+	}
+	task := domain.Task{ID: "task_gateway", AgentID: agent.ID, Title: "gateway", Prompt: "run", Status: domain.TaskStatusTodo, NeedsRun: true, CreatedAt: clock.t, UpdatedAt: clock.t}
+	if err := st.Tasks().Create(ctx, task); err != nil {
+		t.Fatal(err)
+	}
+	runner := NewRunner(st, clock, idgen, noopBus{}, runtimes, NoopMemoryProvider{}, testLogger{}, Config{TaskTimeout: time.Minute})
+	runner.SetModelGateway(NewBudgetModelGateway(st.BudgetReservations(), runtimes, clock))
+
+	runner.Run(ctx, task)
+
+	runs, err := st.Runs().ListByTask(ctx, task.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(runs) != 1 {
+		t.Fatalf("expected one run, got %#v", runs)
+	}
+	account, err := st.BudgetReservations().GetAccount(ctx, "policy_global")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if account.ReservedTokens != 0 || account.SettledTokens == 0 {
+		t.Fatalf("expected settled gateway budget usage, got %#v", account)
+	}
+}

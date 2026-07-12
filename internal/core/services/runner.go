@@ -13,14 +13,15 @@ import (
 )
 
 type Runner struct {
-	storage  ports.Storage
-	clock    ports.Clock
-	idGen    ports.IDGenerator
-	bus      ports.EventBus
-	runtimes *RuntimeManager
-	memory   ports.MemoryProvider
-	logger   ports.Logger
-	config   Config
+	storage      ports.Storage
+	clock        ports.Clock
+	idGen        ports.IDGenerator
+	bus          ports.EventBus
+	runtimes     *RuntimeManager
+	modelGateway ports.ModelGateway
+	memory       ports.MemoryProvider
+	logger       ports.Logger
+	config       Config
 }
 
 func NewRunner(storage ports.Storage, clock ports.Clock, idGen ports.IDGenerator, bus ports.EventBus, runtimes *RuntimeManager, memory ports.MemoryProvider, logger ports.Logger, config Config) *Runner {
@@ -34,6 +35,10 @@ func NewRunner(storage ports.Storage, clock ports.Clock, idGen ports.IDGenerator
 		logger:   logger,
 		config:   config,
 	}
+}
+
+func (r *Runner) SetModelGateway(gateway ports.ModelGateway) {
+	r.modelGateway = gateway
 }
 
 func (r *Runner) emitEvent(ctx context.Context, ev domain.Event) {
@@ -193,7 +198,7 @@ func (r *Runner) Run(ctx context.Context, task domain.Task) {
 	if agent.Type == "noop" {
 		result = ports.RuntimeExecutionResult{Output: "noop driver executed"}
 	} else {
-		result, err = r.runtimes.Execute(runCtx, domain.RuntimeID(agent.Type), ports.RuntimeExecutionInput{
+		execution := ports.RuntimeExecutionInput{
 			Agent:     agent,
 			Task:      task,
 			Run:       run,
@@ -224,7 +229,25 @@ func (r *Runner) Run(ctx context.Context, task domain.Task) {
 					CreatedAt: now,
 				})
 			},
-		})
+		}
+		if r.modelGateway != nil {
+			result, err = r.modelGateway.Execute(runCtx, ports.ModelRequest{
+				RuntimeID: domain.RuntimeID(agent.Type),
+				Execution: execution,
+				Reservation: domain.BudgetReservationRequest{
+					ReservationID: r.idGen.NewID("budget_reservation"),
+					RequestID:     "model_" + run.ID,
+					TaskID:        task.ID,
+					RunID:         run.ID,
+					AgentID:       agent.ID,
+					WorkspaceID:   task.WorkspaceID,
+					Tokens:        run.InputTokens,
+					CreatedAt:     r.clock.Now(),
+				},
+			})
+		} else {
+			result, err = r.runtimes.Execute(runCtx, domain.RuntimeID(agent.Type), execution)
+		}
 	}
 	finishedAt := r.clock.Now()
 	run.FinishedAt = &finishedAt

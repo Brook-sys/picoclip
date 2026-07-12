@@ -37,6 +37,7 @@ type Storage interface {
 	Wakeups() WakeupRepository
 	Usage() UsageRepository
 	Budgets() BudgetRepository
+	BudgetReservations() BudgetReservationRepository
 	Webhooks() WebhookRepository
 	CompletionAudits() CompletionAuditRepository
 	ResetAllData(ctx context.Context) error

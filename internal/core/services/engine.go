@@ -18,6 +18,7 @@ func NewEngine(storage ports.Storage, bus ports.EventBus, runtimes *RuntimeManag
 	clock := SystemClock{}
 	idGen := &TimeIDGenerator{}
 	runner := NewRunner(storage, clock, idGen, bus, runtimes, memory, logger, config)
+	runner.SetModelGateway(NewBudgetModelGateway(storage.BudgetReservations(), runtimes, clock))
 	dispatcher := NewDispatcher(storage, runner, logger, config.MaxConcurrentRuns)
 	reconciler := NewReconciler(storage, clock, bus, idGen, logger)
 	reconciler.SetCanceler(runtimes)

@@ -35,8 +35,8 @@ Fluxo simplificado atual:
 4. O dispatcher aguarda um slot de concorrência.
 5. Só depois que um slot está disponível, o dispatcher reivindica uma task executável de forma atômica.
 6. `ClaimNextRunnable` cria um run e grava metadata de checkout/lock na task.
-7. O runner recarrega contexto de task e agent, verifica budgets e runtime, monta o prompt e executa o runtime.
-8. Output do runtime atualiza output do run e metadata de heartbeat.
+7. O runner recarrega contexto de task e agent, verifica budgets e runtime, monta o prompt, reserva os tokens de entrada estimados e executa o runtime pelo model gateway.
+8. O model gateway liquida a reserva com os tokens de entrada/saída observados após chamada bem-sucedida ou com erro; reserva rejeitada impede execução. Output do runtime atualiza output do run e metadata de heartbeat.
 9. O runner finaliza run/task, bloqueia a task, agenda retry ou agenda o próximo ciclo contínuo.
 10. Passagens posteriores do reconciler reparam locks antigos, runs travados, runs órfãos e wakeups vencidos.
 

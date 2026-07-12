@@ -10,22 +10,23 @@ import (
 )
 
 type Storage struct {
-	mu               sync.RWMutex
-	agents           map[string]domain.Agent
-	tasks            map[string]domain.Task
-	runs             map[string]domain.Run
-	events           map[string]domain.Event
-	runtimes         map[string]domain.RuntimeState
-	messages         map[string]domain.Message
-	skills           map[string]domain.Skill
-	workspaces       map[string]domain.Workspace
-	settings         map[string]string
-	wakeups          map[string]domain.WakeupRequest
-	usage            map[string]domain.UsageEvent
-	budgets          map[string]domain.Budget
-	webhooks         map[string]domain.WebhookSubscription
-	deliveries       map[string]domain.WebhookDelivery
-	completionAudits map[string]domain.CompletionAudit
+	mu                 sync.RWMutex
+	agents             map[string]domain.Agent
+	tasks              map[string]domain.Task
+	runs               map[string]domain.Run
+	events             map[string]domain.Event
+	runtimes           map[string]domain.RuntimeState
+	messages           map[string]domain.Message
+	skills             map[string]domain.Skill
+	workspaces         map[string]domain.Workspace
+	settings           map[string]string
+	wakeups            map[string]domain.WakeupRequest
+	usage              map[string]domain.UsageEvent
+	budgets            map[string]domain.Budget
+	budgetReservations *budgetReservationRepository
+	webhooks           map[string]domain.WebhookSubscription
+	deliveries         map[string]domain.WebhookDelivery
+	completionAudits   map[string]domain.CompletionAudit
 }
 
 type agentRepository struct{ storage *Storage }
@@ -43,21 +44,22 @@ type completionAuditRepository struct{ storage *Storage }
 
 func NewStorage() *Storage {
 	return &Storage{
-		agents:           make(map[string]domain.Agent),
-		tasks:            make(map[string]domain.Task),
-		runs:             make(map[string]domain.Run),
-		events:           make(map[string]domain.Event),
-		runtimes:         make(map[string]domain.RuntimeState),
-		messages:         make(map[string]domain.Message),
-		skills:           make(map[string]domain.Skill),
-		workspaces:       make(map[string]domain.Workspace),
-		settings:         make(map[string]string),
-		wakeups:          make(map[string]domain.WakeupRequest),
-		usage:            make(map[string]domain.UsageEvent),
-		budgets:          make(map[string]domain.Budget),
-		webhooks:         make(map[string]domain.WebhookSubscription),
-		deliveries:       make(map[string]domain.WebhookDelivery),
-		completionAudits: make(map[string]domain.CompletionAudit),
+		agents:             make(map[string]domain.Agent),
+		tasks:              make(map[string]domain.Task),
+		runs:               make(map[string]domain.Run),
+		events:             make(map[string]domain.Event),
+		runtimes:           make(map[string]domain.RuntimeState),
+		messages:           make(map[string]domain.Message),
+		skills:             make(map[string]domain.Skill),
+		workspaces:         make(map[string]domain.Workspace),
+		settings:           make(map[string]string),
+		wakeups:            make(map[string]domain.WakeupRequest),
+		usage:              make(map[string]domain.UsageEvent),
+		budgets:            make(map[string]domain.Budget),
+		budgetReservations: NewBudgetReservationRepository(),
+		webhooks:           make(map[string]domain.WebhookSubscription),
+		deliveries:         make(map[string]domain.WebhookDelivery),
+		completionAudits:   make(map[string]domain.CompletionAudit),
 	}
 }
 
@@ -72,7 +74,10 @@ func (s *Storage) Settings() ports.SettingsRepository    { return settingsReposi
 func (s *Storage) Wakeups() ports.WakeupRepository       { return wakeupRepository{storage: s} }
 func (s *Storage) Usage() ports.UsageRepository          { return usageRepository{storage: s} }
 func (s *Storage) Budgets() ports.BudgetRepository       { return budgetRepository{storage: s} }
-func (s *Storage) Webhooks() ports.WebhookRepository     { return webhookRepository{storage: s} }
+func (s *Storage) BudgetReservations() ports.BudgetReservationRepository {
+	return s.budgetReservations
+}
+func (s *Storage) Webhooks() ports.WebhookRepository { return webhookRepository{storage: s} }
 func (s *Storage) CompletionAudits() ports.CompletionAuditRepository {
 	return completionAuditRepository{storage: s}
 }

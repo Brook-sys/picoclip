@@ -35,8 +35,8 @@ The current simplified execution flow is:
 4. The dispatcher waits for a concurrency slot.
 5. Only after a slot is available, the dispatcher claims one runnable task atomically.
 6. `ClaimNextRunnable` creates a run and writes task checkout/lock metadata.
-7. The runner reloads task and agent context, checks budgets and runtime availability, builds the prompt and executes the runtime.
-8. Runtime output updates run output and heartbeat metadata.
+7. The runner reloads task and agent context, checks budgets and runtime availability, builds the prompt, reserves the estimated input tokens, and executes the runtime through the model gateway.
+8. The model gateway settles the reservation with observed input/output tokens after either a successful or failed runtime call; a rejected reservation prevents execution. Runtime output updates run output and heartbeat metadata.
 9. The runner finalizes the run/task, blocks it, schedules retry, or schedules the next continuous cycle.
 10. Later reconciler passes repair stale locks, stalled runs, orphaned runs and due wakeups.
 
