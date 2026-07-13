@@ -17,6 +17,13 @@ import (
 	"picoclip/internal/core/services"
 )
 
+func resolveBind(configured string) string {
+	if configured == "" {
+		return "127.0.0.1"
+	}
+	return configured
+}
+
 func main() {
 	ctx := context.Background()
 	debugMode := os.Getenv("PICOCLIP_DEBUG") == "true" || os.Getenv("PICOCLIP_DEBUG") == "1"
@@ -139,10 +146,7 @@ func main() {
 	if addr == "" {
 		addr = "8080"
 	}
-	bind := os.Getenv("BIND")
-	if bind == "" {
-		bind = "0.0.0.0"
-	}
+	bind := resolveBind(os.Getenv("BIND"))
 
 	listenAddr := bind + ":" + addr
 	appLogger.Info("server.start", "addr", listenAddr, "debug", debugMode, "log_level", logLevel, "runtime_path", runtimeBase, "workspace_path", workspaceBase)

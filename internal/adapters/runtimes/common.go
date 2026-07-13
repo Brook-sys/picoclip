@@ -34,6 +34,45 @@ func userBinDir() string {
 	return filepath.Join(home, ".local", "bin")
 }
 
+func resolveConfiguredExecutable(binary string) (string, error) {
+	binary = strings.TrimSpace(binary)
+	if binary == "" {
+		return "", fmt.Errorf("runtime binary is not configured")
+	}
+	if !filepath.IsAbs(binary) {
+		if strings.ContainsRune(binary, filepath.Separator) {
+			absolute, err := filepath.Abs(binary)
+			if err != nil {
+				return "", fmt.Errorf("resolve runtime binary path: %w", err)
+			}
+			binary = absolute
+		} else {
+			resolved, err := exec.LookPath(binary)
+			if err != nil {
+				return "", fmt.Errorf("resolve runtime binary: %w", err)
+			}
+			binary = resolved
+		}
+	}
+	canonical, err := filepath.EvalSymlinks(binary)
+	if err != nil {
+		return "", fmt.Errorf("resolve runtime binary: %w", err)
+	}
+	file, err := os.Open(canonical)
+	if err != nil {
+		return "", fmt.Errorf("open runtime binary: %w", err)
+	}
+	defer file.Close()
+	info, err := file.Stat()
+	if err != nil {
+		return "", fmt.Errorf("inspect runtime binary: %w", err)
+	}
+	if !info.Mode().IsRegular() || (runtime.GOOS != "windows" && info.Mode().Perm()&0o111 == 0) {
+		return "", fmt.Errorf("runtime binary is not an executable regular file: %q", canonical)
+	}
+	return canonical, nil
+}
+
 func commandVersion(ctx context.Context, bin string, args ...string) (string, error) {
 	cmd := exec.CommandContext(ctx, bin, args...)
 	out, err := cmd.CombinedOutput()

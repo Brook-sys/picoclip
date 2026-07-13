@@ -4,7 +4,6 @@ import (
 	"context"
 	"io"
 	"net/http"
-	"net/http/httptest"
 	"net/netip"
 	"net/url"
 	"strings"
@@ -65,13 +64,8 @@ func TestSkillServiceImportRemoteYAMLRejectsInvalidDocument(t *testing.T) {
 }
 
 func TestSkillServiceImportRemoteYAMLRejectsPrivateAddress(t *testing.T) {
-	remote := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		t.Fatal("private remote address must not be fetched")
-	}))
-	defer remote.Close()
-
 	service := NewSkillService(memory.NewStorage(), fixedClock{t: time.Now().UTC()}, &TimeIDGenerator{})
-	_, err := service.ImportRemoteYAML(context.Background(), "", remote.URL)
+	_, err := service.ImportRemoteYAML(context.Background(), "", "http://127.0.0.1/skill.yaml")
 	if err == nil || !strings.Contains(err.Error(), "non-public address") {
 		t.Fatalf("ImportRemoteYAML error = %v, want rejected private address", err)
 	}
@@ -103,6 +97,35 @@ func TestRemoteSkillURLValidationRejectsCredentialsAndUnsafeRedirects(t *testing
 	}
 }
 
+func TestRemoteSkillURLValidationRejectsArbitraryPorts(t *testing.T) {
+	for _, rawURL := range []string{
+		"http://example.com:22/skill.yaml",
+		"https://example.com:8443/skill.yaml",
+	} {
+		parsed, err := url.Parse(rawURL)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := validateRemoteSkillURL(parsed); err == nil {
+			t.Fatalf("validateRemoteSkillURL(%q) accepted arbitrary port", rawURL)
+		}
+	}
+	for _, rawURL := range []string{
+		"http://example.com/skill.yaml",
+		"http://example.com:80/skill.yaml",
+		"https://example.com/skill.yaml",
+		"https://example.com:443/skill.yaml",
+	} {
+		parsed, err := url.Parse(rawURL)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := validateRemoteSkillURL(parsed); err != nil {
+			t.Fatalf("validateRemoteSkillURL(%q): %v", rawURL, err)
+		}
+	}
+}
+
 func TestPublicRemoteSkillIPPolicy(t *testing.T) {
 	tests := []struct {
 		address string
@@ -114,9 +137,18 @@ func TestPublicRemoteSkillIPPolicy(t *testing.T) {
 		{address: "10.0.0.1", public: false},
 		{address: "169.254.169.254", public: false},
 		{address: "100.64.0.1", public: false},
+		{address: "0.0.0.1", public: false},
+		{address: "192.0.0.170", public: false},
+		{address: "192.0.2.1", public: false},
+		{address: "198.18.0.1", public: false},
+		{address: "198.51.100.1", public: false},
+		{address: "203.0.113.1", public: false},
+		{address: "240.0.0.1", public: false},
 		{address: "::1", public: false},
 		{address: "fc00::1", public: false},
 		{address: "fe80::1", public: false},
+		{address: "2001:db8::1", public: false},
+		{address: "100::1", public: false},
 	}
 	for _, test := range tests {
 		t.Run(test.address, func(t *testing.T) {
