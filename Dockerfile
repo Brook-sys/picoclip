@@ -17,7 +17,7 @@ COPY . .
 RUN --mount=type=cache,target=/go/pkg/mod --mount=type=cache,target=/root/.cache/go-build templ generate
 RUN --mount=type=cache,target=/go/pkg/mod --mount=type=cache,target=/root/.cache/go-build CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/picoclip cmd/picoclip/main.go
 
-FROM alpine:3.20
+FROM alpine:3.24
 
 LABEL org.opencontainers.image.description="Default Alpine/musl PicoClip image. Claurst official Linux binaries require glibc; use the Debian image variant when Claurst is required."
 
