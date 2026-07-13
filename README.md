@@ -120,7 +120,7 @@ Then open:
 http://127.0.0.1:8088
 ```
 
-By default PicoClip listens on `0.0.0.0:8088`. You can change it with:
+By default PicoClip listens on `127.0.0.1:8088`. To expose it on another interface, set `BIND` explicitly and place authentication or a trusted access proxy in front of the administrative API:
 
 ```sh
 BIND=127.0.0.1 PORT=9090 ./picoclip-v0.0.1-linux-amd64
@@ -184,7 +184,7 @@ Useful runtime configuration:
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
-| `BIND` | `0.0.0.0` | HTTP bind address. Use `127.0.0.1` for local-only access. |
+| `BIND` | `127.0.0.1` | HTTP bind address. Containers set `0.0.0.0`; external exposure requires a trusted authentication/access layer. |
 | `PORT` | `8080` in the binary, `8088` in the Makefile | HTTP port. |
 | `PICOCLIP_STORAGE` | `sqlite` | `sqlite` or `memory`. Use `memory` only for temporary sessions/tests. |
 | `PICOCLIP_DB_PATH` | `data/picoclip.db` | SQLite database path. |

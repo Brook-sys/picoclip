@@ -34,6 +34,26 @@ func userBinDir() string {
 	return filepath.Join(home, ".local", "bin")
 }
 
+func resolveConfiguredExecutable(binary string) (string, error) {
+	binary = strings.TrimSpace(binary)
+	if binary == "" {
+		return "", fmt.Errorf("runtime binary is not configured")
+	}
+	resolved, err := exec.LookPath(binary)
+	if err != nil {
+		return "", fmt.Errorf("resolve runtime binary: %w", err)
+	}
+	absolute, err := filepath.Abs(resolved)
+	if err != nil {
+		return "", fmt.Errorf("resolve runtime binary path: %w", err)
+	}
+	canonical, err := filepath.EvalSymlinks(absolute)
+	if err != nil {
+		return "", fmt.Errorf("resolve runtime binary: %w", err)
+	}
+	return canonical, nil
+}
+
 func commandVersion(ctx context.Context, bin string, args ...string) (string, error) {
 	cmd := exec.CommandContext(ctx, bin, args...)
 	out, err := cmd.CombinedOutput()

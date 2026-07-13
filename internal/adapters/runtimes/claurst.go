@@ -80,7 +80,7 @@ func (a *ClaurstAdapter) Resolve(ctx context.Context, state domain.RuntimeState)
 	if bin == "" {
 		bin = a.FallbackBinary
 	}
-	_, err := os.Stat(bin)
+	_, err := resolveConfiguredExecutable(bin)
 	return err
 }
 
@@ -91,12 +91,14 @@ func (a *ClaurstAdapter) Health(ctx context.Context, state domain.RuntimeState) 
 	}
 	now := time.Now().UTC()
 	health := domain.RuntimeHealth{Status: "ok", CheckedAt: now}
-	if _, err := os.Stat(bin); err != nil {
+	canonical, err := resolveConfiguredExecutable(bin)
+	if err != nil {
 		health.Status = "error"
 		health.Errors = append(health.Errors, err.Error())
 		health.Checks = append(health.Checks, domain.DiagnosticCheck{Name: "binary_exists", Status: "error", Message: err.Error(), CheckedAt: now})
 		return health
 	}
+	bin = canonical
 	health.Checks = append(health.Checks, domain.DiagnosticCheck{Name: "binary_exists", Status: "ok", Message: bin, CheckedAt: now})
 	testCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
@@ -149,6 +151,11 @@ func (a *ClaurstAdapter) Execute(ctx context.Context, state domain.RuntimeState,
 	if bin == "" {
 		bin = a.FallbackBinary
 	}
+	canonical, err := resolveConfiguredExecutable(bin)
+	if err != nil {
+		return ports.RuntimeExecutionResult{}, err
+	}
+	bin = canonical
 	args := []string{"-p", input.Task.Prompt}
 	args = append(args, input.ExtraArgs...)
 	cmd := exec.CommandContext(ctx, bin, args...)

@@ -115,13 +115,13 @@ Erros usam `error.code` estável, por exemplo `invalid_input`, `not_found`, `dri
 
 ### Importação remota de skills YAML
 
-`POST /api/v1/skills/import` faz fetch síncrono de um único arquivo YAML e persiste a skill custom resultante imediatamente; portanto, workers que carregam skills a cada execução podem usá-la sem reiniciar o Dispatcher. O payload exige `source_url` absoluto com esquema `http` ou `https`; `project_id` é opcional.
+`POST /api/v1/skills/import` faz fetch síncrono de um único arquivo YAML e persiste a skill custom resultante imediatamente; portanto, workers que carregam skills a cada execução podem usá-la sem reiniciar o Dispatcher. O payload exige `source_url` absoluto com esquema `http` ou `https`, usando somente a porta padrão do esquema (`80` ou `443`); `project_id` é opcional.
 
 ```json
 {"source_url":"https://example.com/skills/release.yaml","project_id":"prj_123"}
 ```
 
-O YAML precisa ter `name` e `instructions`; pode conter `description`, `version` e `files` (`path` e `content`). A resposta usa o envelope v1, preserva a URL em `data.source` e a versão declarada em `data.version`. O fetch tem timeout de 15 segundos e tamanho máximo de 1 MiB. A URL e cada redirect devem resolver somente para endereços públicos; endereços privados, loopback, link-local, multicast, não especificados e a faixa compartilhada `100.64.0.0/10` são rejeitados. Respostas não-2xx, YAML inválido e arquivos sem os campos obrigatórios retornam erro; importação não agenda polling nem atualização automática e não permite credenciais embutidas na URL.
+O YAML precisa ter `name` e `instructions`; pode conter `description`, `version` e `files` (`path` e `content`). A resposta usa o envelope v1, preserva a URL em `data.source` e a versão declarada em `data.version`. O fetch tem timeout de 15 segundos e tamanho máximo de 1 MiB. A URL e cada redirect devem resolver somente para endereços públicos; endereços privados, loopback, link-local, multicast, não especificados, compartilhados, de documentação, benchmarking, protocolo ou reservados são rejeitados. Respostas não-2xx, YAML inválido e arquivos sem os campos obrigatórios retornam erro; importação não agenda polling nem atualização automática e não permite credenciais embutidas na URL.
 
 Exemplo:
 
@@ -588,7 +588,7 @@ Estas rotas são a interface humana principal. Elas podem retornar HTML completo
 | `POST` | `/settings/import` | Importa backup. |
 | `POST` | `/settings/reset` | Factory reset. |
 | `POST` | `/runtimes/{id}/install` | Instala runtime. |
-| `POST` | `/runtimes/{id}/existing` | Usa binário existente. |
+| `POST` | `/runtimes/{id}/existing` | Usa binário existente; nomes no `PATH`, paths relativos, absolutos e symlinks são canonicalizados, e diretórios, arquivos especiais ou não executáveis são rejeitados. |
 | `POST` | `/runtimes/{id}/test` | Testa runtime. |
 | `POST` | `/runtimes/{id}/test-ai` | Teste AI do runtime. |
 | `POST` | `/runtimes/{id}/uninstall` | Remove runtime. |

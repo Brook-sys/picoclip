@@ -66,7 +66,7 @@ Isso ajuda o agente diagnosticador a ver os limites que o agente de operação d
 make run
 ```
 
-Padrão do Makefile: `0.0.0.0:8088`.
+Padrão do Makefile: `127.0.0.1:8088`. A exposição em `0.0.0.0` deve ser explícita e protegida por autenticação ou um proxy de acesso confiável.
 
 Rodar manualmente:
 
@@ -107,7 +107,7 @@ curl -s 'http://127.0.0.1:8088/api/tasks'
 
 | Variável | Padrão | Quando conferir |
 | --- | --- | --- |
-| `BIND` | `0.0.0.0` | Servidor inacessível ou exposto demais. |
+| `BIND` | `127.0.0.1` | Servidor inacessível ou exposto demais. Use `0.0.0.0` somente atrás de autenticação/proxy confiável. |
 | `PORT` | `8080` binário / `8088` Makefile | Conflito de porta ou URL errada. |
 | `PICOCLIP_STORAGE` | `sqlite` | Dados sumindo ou modo temporário acidental. |
 | `PICOCLIP_DB_PATH` | `data/picoclip.db` | Banco errado, restore ou debug SQLite. |
