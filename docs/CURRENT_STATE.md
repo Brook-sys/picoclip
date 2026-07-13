@@ -110,7 +110,7 @@ Variáveis principais:
 
 | Variável | Padrão | Observação |
 | --- | --- | --- |
-| `BIND` | `0.0.0.0` | Interface HTTP. |
+| `BIND` | `127.0.0.1` | Interface HTTP local por padrão; exposição externa deve ser explícita e protegida. |
 | `PORT` | `8080` no binário, `8088` no Makefile | Porta HTTP. |
 | `PICOCLIP_STORAGE` | `sqlite` | `sqlite` ou `memory`. |
 | `PICOCLIP_DB_PATH` | `data/picoclip.db` | Caminho SQLite. |
