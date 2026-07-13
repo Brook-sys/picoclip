@@ -211,24 +211,9 @@ func canonicalExecutable(path string, allowedRoots []string) (string, *os.File, 
 }
 
 func canonicalBinary(binary string) (string, error) {
-	binary = strings.TrimSpace(binary)
-	if binary == "" {
-		return "", fmt.Errorf("sandbox unavailable: bwrap binary is not configured")
-	}
-	if !filepath.IsAbs(binary) {
-		resolved, err := exec.LookPath(binary)
-		if err != nil {
-			return "", fmt.Errorf("sandbox unavailable: bwrap binary: %w", err)
-		}
-		binary = resolved
-	}
-	canonical, err := filepath.EvalSymlinks(binary)
+	canonical, err := resolveConfiguredExecutable(binary)
 	if err != nil {
 		return "", fmt.Errorf("sandbox unavailable: bwrap binary: %w", err)
-	}
-	info, err := os.Stat(canonical)
-	if err != nil || info.IsDir() || info.Mode().Perm()&0o111 == 0 {
-		return "", fmt.Errorf("sandbox unavailable: bwrap binary is not executable: %q", canonical)
 	}
 	return canonical, nil
 }

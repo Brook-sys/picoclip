@@ -109,7 +109,7 @@ npx playwright install chromium
 make run
 ```
 
-Padrão do Makefile: `0.0.0.0:8088`.
+Padrão do Makefile: `127.0.0.1:8088`; exposição externa deve ser configurada explicitamente e protegida.
 
 Configuração manual:
 
