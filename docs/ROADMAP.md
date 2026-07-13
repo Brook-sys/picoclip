@@ -330,7 +330,7 @@ Depois:
 
 - Sem SPA pesada.
 - Sem banco externo obrigatório.
-- Sem Redis obrigatório.
+- Sem Redis ou mensageria externa; qualquer nova dependência de infraestrutura exige aprovação explícita.
 - Sem dependências globais pesadas.
 - Runtimes e storage como adaptadores.
 - Prompts compactos por padrão.

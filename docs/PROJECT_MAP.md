@@ -15,7 +15,6 @@ Para chegar produtivo no projeto:
    - `docs/ROBUSTNESS.md` para recovery, retry, locks e cancelamento.
    - `docs/STORAGE.md` para SQLite, migrations e restore.
    - `docs/PLUGINS.md` para arquitetura de plugins gRPC.
-   - docs/ADR_EVENT_BUS_REDIS.md para a decisão de Redis Pub/Sub como adapter opcional de Event Bus.
    - `docs/DESIGN.md` para UI, HTMX e componentes.
    - `docs/DOCUMENTATION_POLICY.md` para manter documentação atualizada.
 
@@ -118,11 +117,9 @@ Diretório: `internal/core/domain/`
 Estado atual:
 
 - `internal/core/ports/event_bus.go` define publish/subscribe de `domain.Event`;
-- `internal/adapters/events/inmemory.go` é o único adapter e continua sendo o default;
+- `internal/adapters/events/inmemory.go` é o único adapter;
 - o outbox SQLite tenta publicar eventos persistidos e alimenta também webhook deliveries;
-- Redis Pub/Sub não está implementado nem é dependência do PicoClip.
-
-A decisão proposta para um adapter Redis opcional, incluindo tópicos, envelope v1, configuração, falhas, migração e rollback, está em [ADR: Redis Pub/Sub como adapter opcional de Event Bus](ADR_EVENT_BUS_REDIS.md). Não trate esse ADR como comportamento entregue enquanto seu status for “Proposto; não implementado”.
+- o projeto não possui nem planeja automaticamente adapters externos de Event Bus. Qualquer expansão desse escopo exige aprovação explícita do responsável pelo produto.
 
 ## Ports
 

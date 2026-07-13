@@ -17,13 +17,19 @@ O ciclo autônomo deve permitir que agentes do Hermes melhorem o PicoClip sem de
 O ciclo deve:
 
 1. consultar o board Hermes Kanban do PicoClip;
-2. descobrir novas demandas reais quando houver lacunas;
-3. criar cards pequenos, objetivos e verificáveis;
-4. executar no máximo uma melhoria por rodada;
+2. executar somente cards previamente aprovados pelo responsável pelo produto;
+3. diagnosticar lacunas sem transformá-las automaticamente em cards, épicos ou implementação;
+4. executar no máximo uma melhoria aprovada por rodada;
 5. validar, commitar e pushar somente quando tudo passar;
-6. atualizar o Kanban com início, resultado, bloqueios e follow-ups;
-7. evitar duplicação entre execuções manuais e o cron de 30 minutos;
+6. atualizar apenas o card aprovado com início, resultado e bloqueios;
+7. evitar duplicação entre execuções manuais e automáticas;
 8. manter o PicoClip rodando localmente em `8088` quando a rodada terminar.
+
+## Aprovação obrigatória de escopo
+
+Nenhuma feature, épico, mudança de arquitetura, dependência externa ou card de implementação pode ser criado, decomposto, atribuído ou executado sem aprovação explícita prévia do responsável pelo produto.
+
+Diagnósticos autônomos podem produzir relatórios e recomendações. Eles não autorizam alteração de roadmap, criação de backlog nem implementação. Na ausência de aprovação registrada, o agente deve parar e reportar a proposta fora da fila executável.
 
 ## Fonte de verdade
 
@@ -50,15 +56,19 @@ Cada rodada deve ter escopo pequeno e vertical.
 
 Permitido:
 
-- criar até 3 cards novos quando encontrar lacunas reais;
-- executar exatamente 1 card `ready` por rodada;
-- atualizar documentação proporcional;
-- adicionar ou ajustar testes;
+- executar exatamente 1 card que contenha aprovação explícita registrada;
+- atualizar documentação proporcional ao card aprovado;
+- adicionar ou ajustar testes necessários ao card aprovado;
 - commitar e pushar quando a validação passar;
-- bloquear um card quando houver impedimento real.
+- bloquear um card quando houver impedimento real;
+- relatar oportunidades fora do Kanban para decisão humana.
 
 Não permitido:
 
+- criar cards ou épicos automaticamente;
+- decompor propostas em subtarefas sem aprovação;
+- implementar ou pesquisar arquitetura de feature não aprovada;
+- adicionar dependências, serviços ou integrações externas sem aprovação;
 - executar redesign amplo em uma única rodada;
 - misturar várias demandas independentes no mesmo commit;
 - commitar workspace sujo de outro trabalho;
@@ -194,8 +204,8 @@ Cada execução autônoma deve respeitar estes limites:
 
 | Limite | Regra |
 | --- | --- |
-| Cards novos | Até 3 por rodada, salvo descoberta crítica. |
-| Cards executados | Exatamente 1 card por rodada. |
+| Cards novos | Zero sem aprovação explícita do responsável pelo produto. |
+| Cards executados | Exatamente 1 card previamente aprovado por rodada. |
 | Commits | Normalmente 1 commit por card. |
 | Escopo | Uma fatia vertical verificável. |
 | Validação | Teste focado + validação canônica proporcional. |

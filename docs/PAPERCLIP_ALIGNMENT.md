@@ -982,7 +982,7 @@ PicoClip should preserve these constraints while growing:
 
 - No heavy frontend framework.
 - No required external database server.
-- No Redis/message queue dependency.
+- No Redis/message queue dependency; external messaging is out of scope unless explicitly approved.
 - No hidden global SaaS assumptions.
 - No bloated prompts by default.
 - No integration-specific concepts in core domain.

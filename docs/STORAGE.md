@@ -105,7 +105,7 @@ supports:
 - idempotent extraction of durable memory from a run, keyed by run ID.
 
 `MemoryDocument.Embedding` is optional. Lightweight local adapters may perform
-lexical search when no embedding model is configured; Redis/Postgres/vector
+lexical search when no embedding model is configured; approved vector-storage
 adapters may persist and compare embeddings. Vector callers identify the vector
 space through `EmbeddingModel`; adapters must not compare vectors from different
 non-empty model/version spaces. The port definition does not make an adapter
@@ -238,11 +238,11 @@ Important indexes cover common UI, Agent API and scheduler paths:
 
 No estado atual, eventos de domínio podem ser gravados em `events` e em `outbox_events` na mesma transação de aplicação. O `OutboxWorker` seleciona até 50 entradas due, cria deliveries de webhook, publica no `EventBus` e só então remove a entrada. Falhas incrementam `attempts`, registram `last_error` e adiam nova tentativa em 5 segundos; a query SQLite deixa de selecionar entradas após 10 tentativas.
 
-O único event bus implementado hoje é o adapter em memória. Redis Pub/Sub permanece uma proposta e não altera o storage padrão. O contrato planejado de entrega best-effort alimentada pelo outbox, incluindo a necessidade de tornar tentativas terminais observáveis e reprocessáveis, está em [ADR: Redis Pub/Sub como adapter opcional de Event Bus](ADR_EVENT_BUS_REDIS.md).
+O único event bus implementado é o adapter em memória. O projeto não depende de serviço externo de mensageria.
 
 Limitações atuais relevantes:
 
-- Redis não está implementado nem configurável;
+- não existe transporte de Event Bus entre processos; qualquer novo adapter exige aprovação explícita antes de planejamento ou implementação;
 - o outbox do memory storage é no-op, portanto testes do fluxo durável devem usar SQLite;
 - a entrada que alcança o limite atual de tentativas deixa de ser selecionada, mas ainda não possui uma superfície dedicada de health/reprocessamento;
 - sucesso do bus seguido de falha ao deletar pode causar publicação duplicada com o mesmo event ID.

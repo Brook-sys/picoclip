@@ -43,7 +43,9 @@ Ele não deve listar todos os cards atuais. Para isso, consulte o Kanban.
 
 ## Descoberta de demandas
 
-Novas demandas devem nascer de lacunas reais observadas em documentação, código, testes, UI ou operação local.
+Agentes podem identificar lacunas reais em documentação, código, testes, UI ou operação local, mas devem apresentá-las como recomendações para decisão humana.
+
+A descoberta não autoriza criar card, épico, subtarefa, roadmap ou implementação. A entrada no backlog exige aprovação explícita do responsável pelo produto. O registro da aprovação deve constar no card antes de qualquer atribuição ou execução.
 
 Fontes comuns:
 

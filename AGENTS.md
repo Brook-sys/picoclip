@@ -176,14 +176,16 @@ Principais grupos:
 
 ## Ciclo autônomo de melhorias
 
-Melhorias recorrentes do PicoClip podem ser geridas pelo Hermes Kanban no board `picoclip` e executadas por cron/autonomia. Quando trabalhar nesse fluxo:
+Melhorias recorrentes do PicoClip só podem ser executadas quando o card já possuir aprovação explícita do responsável pelo produto. Agentes e crons podem diagnosticar e recomendar, mas não podem criar features, épicos, subtarefas de implementação, mudanças de arquitetura ou dependências externas por iniciativa própria.
+
+Melhorias aprovadas podem ser geridas pelo Hermes Kanban no board `picoclip`. Quando trabalhar nesse fluxo:
 
 - leia `docs/AUTONOMOUS_IMPROVEMENT.md`;
 - consulte o Kanban antes de escolher trabalho;
 - execute no máximo uma melhoria por rodada;
 - use `docs/IMPROVEMENT_BACKLOG.md` para formato de cards, categorias, deduplicação, priorização e critérios de conclusão;
-- crie cards novos apenas quando forem específicos, pequenos e verificáveis;
-- antes de criar cards, deduplique contra itens `ready`, `blocked` e `done`, reutilize uma `--idempotency-key` estável e comente card existente quando a lacuna for apenas follow-up pequeno;
+- não crie cards novos sem aprovação explícita; apresente descobertas como recomendações fora da fila executável;
+- antes de executar, confirme que a aprovação está registrada no card e deduplique contra itens existentes;
 - comente início/fim, validações e commit no card;
 - use o formato de relatório operacional de `docs/AUTONOMOUS_IMPROVEMENT.md` ao finalizar ciclos cron;
 - pause o cron autônomo durante execução manual no mesmo workspace e reative ao final.
