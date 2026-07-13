@@ -30,21 +30,58 @@ type githubRelease struct {
 	} `json:"assets"`
 }
 
+var githubHTTPClient = &http.Client{Timeout: 10 * time.Second}
+
+type githubAPIError struct {
+	Status  string
+	Message string
+	Reset   string
+}
+
+func (e *githubAPIError) Error() string {
+	message := strings.TrimSpace(e.Message)
+	if message == "" {
+		message = "GitHub API request failed"
+	}
+	if e.Reset != "" {
+		return fmt.Sprintf("%s: %s (rate limit resets at %s)", e.Status, message, e.Reset)
+	}
+	return fmt.Sprintf("%s: %s", e.Status, message)
+}
+
+func prepareGitHubRequest(req *http.Request) {
+	req.Header.Set("Accept", "application/vnd.github+json")
+	req.Header.Set("User-Agent", "picoclip-runtime-installer")
+	token := strings.TrimSpace(os.Getenv("GH_TOKEN"))
+	if token == "" {
+		token = strings.TrimSpace(os.Getenv("GITHUB_TOKEN"))
+	}
+	if token != "" {
+		req.Header.Set("Authorization", "Bearer "+token)
+	}
+}
+
+func githubResponseError(resp *http.Response) error {
+	var payload struct {
+		Message string `json:"message"`
+	}
+	_ = json.NewDecoder(io.LimitReader(resp.Body, 64*1024)).Decode(&payload)
+	return &githubAPIError{Status: resp.Status, Message: payload.Message, Reset: resp.Header.Get("X-RateLimit-Reset")}
+}
+
 func listGitHubVersions(ctx context.Context, owner, repo string, limit int) ([]domain.RuntimeVersion, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, fmt.Sprintf("https://api.github.com/repos/%s/%s/releases?per_page=%d", owner, repo, limit), nil)
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Set("Accept", "application/vnd.github+json")
-	req.Header.Set("User-Agent", "picoclip-runtime-installer")
-	client := http.Client{Timeout: 10 * time.Second}
-	resp, err := client.Do(req)
+	prepareGitHubRequest(req)
+	resp, err := githubHTTPClient.Do(req)
 	if err != nil {
 		return nil, err
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("github list releases failed: %s", resp.Status)
+		return nil, githubResponseError(resp)
 	}
 
 	var releases []githubRelease
@@ -89,10 +126,8 @@ func fetchGitHubRelease(ctx context.Context, owner, repo, versionAlias string) (
 	if err != nil {
 		return githubRelease{}, err
 	}
-	req.Header.Set("Accept", "application/vnd.github+json")
-	req.Header.Set("User-Agent", "picoclip-runtime-installer")
-	client := http.Client{Timeout: 10 * time.Second}
-	resp, err := client.Do(req)
+	prepareGitHubRequest(req)
+	resp, err := githubHTTPClient.Do(req)
 	if err != nil {
 		return githubRelease{}, err
 	}
@@ -102,7 +137,7 @@ func fetchGitHubRelease(ctx context.Context, owner, repo, versionAlias string) (
 		return githubRelease{}, fmt.Errorf("Version tag %q was not found for %s. Check the tag name or choose one from the suggestions.", versionAlias, repo)
 	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return githubRelease{}, fmt.Errorf("github release request failed: %s", resp.Status)
+		return githubRelease{}, githubResponseError(resp)
 	}
 
 	if versionAlias == "nightly" {

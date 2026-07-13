@@ -91,6 +91,10 @@ func copyExistingBinary(src, dst string) error {
 	return os.WriteFile(dst, input, 0755)
 }
 
+func runtimeInstallError(downloadErr, fallbackErr error) error {
+	return fmt.Errorf("runtime release install failed: %v; fallback copy failed: %w", downloadErr, fallbackErr)
+}
+
 func nowState(id domain.RuntimeID, mode domain.InstallMode, binPath, configPath, homePath, dataPath, logsPath string) domain.RuntimeState {
 	now := time.Now().UTC()
 	return domain.RuntimeState{

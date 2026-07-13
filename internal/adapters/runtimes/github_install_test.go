@@ -1,9 +1,41 @@
 package runtimes
 
 import (
+	"context"
+	"io"
+	"net/http"
 	"strings"
 	"testing"
 )
+
+type roundTripFunc func(*http.Request) (*http.Response, error)
+
+func (f roundTripFunc) RoundTrip(req *http.Request) (*http.Response, error) { return f(req) }
+
+func TestFetchGitHubReleaseUsesConfiguredToken(t *testing.T) {
+	t.Setenv("GH_TOKEN", "gh-test-token")
+	oldClient := githubHTTPClient
+	t.Cleanup(func() { githubHTTPClient = oldClient })
+	githubHTTPClient = &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		if got := req.Header.Get("Authorization"); got != "Bearer gh-test-token" {
+			t.Fatalf("authorization = %q", got)
+		}
+		return &http.Response{StatusCode: http.StatusOK, Status: "200 OK", Body: io.NopCloser(strings.NewReader(`{"tag_name":"v1.0.0","assets":[]}`)), Header: make(http.Header)}, nil
+	})}
+	if _, err := fetchGitHubRelease(context.Background(), "owner", "repo", "latest"); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestRuntimeInstallPreservesGitHubRateLimitErrorWhenFallbackFails(t *testing.T) {
+	downloadErr := &githubAPIError{Status: "403 Forbidden", Message: "API rate limit exceeded", Reset: "tomorrow"}
+	err := runtimeInstallError(downloadErr, io.ErrUnexpectedEOF)
+	for _, want := range []string{"API rate limit exceeded", "403 Forbidden", "fallback", "unexpected EOF"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Fatalf("error %q missing %q", err, want)
+		}
+	}
+}
 
 func TestRuntimeAssetNamesIncludeVersionedAndUnversionedForms(t *testing.T) {
 	names := runtimeAssetNames("crush", "v0.79.1")

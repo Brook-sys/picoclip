@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -240,6 +241,14 @@ func (m *RuntimeManager) Install(ctx context.Context, id domain.RuntimeID, mode 
 	state, err := adapter.Install(ctx, mode, filepath.Join(m.baseDir, string(id)), versionAlias)
 	if err != nil {
 		return domain.RuntimeState{}, err
+	}
+	health := adapter.Health(ctx, state)
+	if health.Status == "error" {
+		message := "runtime binary failed its health check"
+		if len(health.Errors) > 0 && strings.TrimSpace(health.Errors[0]) != "" {
+			message = health.Errors[0]
+		}
+		return domain.RuntimeState{}, fmt.Errorf("runtime install validation failed: %s", message)
 	}
 	state.ID = "runtime_" + string(id)
 	state.RuntimeID = id

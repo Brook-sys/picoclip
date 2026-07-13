@@ -56,8 +56,9 @@ func (a *CrushAdapter) Install(ctx context.Context, mode domain.InstallMode, des
 
 	version, sourceURL, err := installFromGitHubRelease(ctx, "charmbracelet", "crush", "crush", "crush", versionAlias, binPath)
 	if err != nil {
-		if err := copyExistingBinary(a.FallbackBinary, binPath); err != nil {
-			return domain.RuntimeState{}, fmt.Errorf("failed to download release and fallback failed: %w", err)
+		downloadErr := err
+		if fallbackErr := copyExistingBinary(a.FallbackBinary, binPath); fallbackErr != nil {
+			return domain.RuntimeState{}, runtimeInstallError(downloadErr, fallbackErr)
 		}
 	}
 

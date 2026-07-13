@@ -6,6 +6,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"picoclip/internal/adapters/storage/memory"
@@ -14,10 +15,11 @@ import (
 )
 
 type fakeRuntimeAdapter struct {
-	id     domain.RuntimeID
-	out    string
-	err    error
-	health domain.RuntimeHealth
+	id           domain.RuntimeID
+	out          string
+	err          error
+	health       domain.RuntimeHealth
+	installState domain.RuntimeState
 }
 
 func (a fakeRuntimeAdapter) ID() domain.RuntimeID                        { return a.id }
@@ -28,7 +30,7 @@ func (a fakeRuntimeAdapter) ListVersions(context.Context, int) ([]domain.Runtime
 	return nil, nil
 }
 func (a fakeRuntimeAdapter) Install(context.Context, domain.InstallMode, string, string) (domain.RuntimeState, error) {
-	return domain.RuntimeState{}, nil
+	return a.installState, nil
 }
 func (a fakeRuntimeAdapter) Resolve(context.Context, domain.RuntimeState) error { return nil }
 func (a fakeRuntimeAdapter) Health(context.Context, domain.RuntimeState) domain.RuntimeHealth {
@@ -45,6 +47,25 @@ func (a fakeRuntimeAdapter) Execute(ctx context.Context, state domain.RuntimeSta
 }
 func (a fakeRuntimeAdapter) Cancel(ctx context.Context, state domain.RuntimeState, run domain.Run) error {
 	return nil
+}
+
+func TestRuntimeManagerInstallRejectsUnhealthyBinaryBeforeSaving(t *testing.T) {
+	ctx := context.Background()
+	storage := memory.NewStorage()
+	manager := NewRuntimeManager(storage, t.TempDir(), SystemClock{})
+	manager.Register(fakeRuntimeAdapter{
+		id:           "claurst",
+		installState: domain.RuntimeState{BinPath: "/tmp/claurst"},
+		health:       domain.RuntimeHealth{Status: "error", Errors: []string{"Incompatible binary: glibc/musl mismatch"}},
+	})
+
+	_, err := manager.Install(ctx, "claurst", domain.InstallModeExclusive, "latest")
+	if err == nil || !strings.Contains(err.Error(), "Incompatible binary") {
+		t.Fatalf("expected health error, got %v", err)
+	}
+	if _, err := storage.Runtimes().GetByRuntimeID(ctx, "claurst"); !errors.Is(err, domain.ErrNotFound) {
+		t.Fatalf("unhealthy runtime was saved: %v", err)
+	}
 }
 
 func TestRuntimeManagerTestAISavesMetadataAndHandlesError(t *testing.T) {
