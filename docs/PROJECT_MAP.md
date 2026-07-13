@@ -241,7 +241,7 @@ Principais páginas web:
 | Runs | `/runs`, `/runs/{id}` |
 | Skills | `/skills`, `/skills/{id}` |
 | Activity/live streams | `/activity`, `/sse/activity`, `/sse/tasks/{id}`, `/sse/runs/{id}/logs` |
-| Settings | `/settings`, `/settings/adapters`, webhook/settings/runtime actions |
+| Settings | `/settings`, `/settings/adapters`, webhook/settings/runtime actions, `RUNTIME_PROVIDER_QUICK_SETUP.md` |
 
 ## Fluxo de execução de task
 

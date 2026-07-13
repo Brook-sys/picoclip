@@ -118,6 +118,7 @@ func (s *Server) Mount(mux *http.ServeMux) {
 	mux.HandleFunc("POST /runtimes/{id}/test-ai", s.handleWebPostRuntimeTestAI)
 	mux.HandleFunc("POST /runtimes/{id}/uninstall", s.handleWebPostRuntimeUninstall)
 	mux.HandleFunc("POST /runtimes/{id}/config", s.handleWebPostRuntimeConfig)
+	mux.HandleFunc("POST /runtimes/{id}/quick-setup", s.handleWebPostRuntimeQuickSetup)
 	mux.HandleFunc("POST /runtimes/{id}/toggle", s.handleWebPostRuntimeToggle)
 	mux.HandleFunc("POST /settings/environment", s.handleWebPostSettingsEnvironment)
 	mux.HandleFunc("POST /settings/budgets", s.handleWebPostSettingsBudgets)

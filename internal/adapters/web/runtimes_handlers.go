@@ -2,34 +2,42 @@ package web
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
+	"path/filepath"
 	"strings"
 
+	"gopkg.in/yaml.v3"
 	"picoclip/internal/core/domain"
+	"picoclip/internal/core/ports"
 	"picoclip/internal/core/services"
 )
 
 type RuntimeCardView struct {
-	ID          domain.RuntimeID
-	Name        string
-	Description string
-	Kind        string
-	Repo        string
-	DocsURL     string
-	State       domain.RuntimeState
-	Configured  bool
-	Health      domain.RuntimeHealth
-	ConfigFiles []domain.RuntimeConfigFile
-	Versions    []domain.RuntimeVersion
-	Tested      bool
-	TestedAt    string
-	Functional  bool
-	Checks      []domain.DiagnosticCheck
-	AITested    bool
-	AITestedAt  string
-	AIOk        bool
-	AIMessage   string
-	AIOutput    string
+	ID                  domain.RuntimeID
+	Name                string
+	Description         string
+	Kind                string
+	Repo                string
+	DocsURL             string
+	State               domain.RuntimeState
+	Configured          bool
+	Health              domain.RuntimeHealth
+	ConfigFiles         []domain.RuntimeConfigFile
+	Versions            []domain.RuntimeVersion
+	Tested              bool
+	TestedAt            string
+	Functional          bool
+	Checks              []domain.DiagnosticCheck
+	AITested            bool
+	AITestedAt          string
+	AIOk                bool
+	AIMessage           string
+	AIOutput            string
+	QuickSetupSupported bool
+	QuickSetupSchema    domain.RuntimeQuickSetupSchema
+	QuickSetup          domain.RuntimeQuickSetupView
+	QuickSetupError     string
 }
 
 func (s *Server) runtimeCards(r *http.Request) []RuntimeCardView {
@@ -40,6 +48,10 @@ func (s *Server) runtimeCards(r *http.Request) []RuntimeCardView {
 		health := domain.RuntimeHealth{Status: "not_configured"}
 		var configFiles []domain.RuntimeConfigFile
 		var versions []domain.RuntimeVersion
+		var quickSchema domain.RuntimeQuickSetupSchema
+		var quickSetup domain.RuntimeQuickSetupView
+		var quickSetupError string
+		quickSupported := false
 		tested, testedAt, functional, checks, savedHealth := runtimeHealthSummary(state)
 		aiTested, aiTestedAt, aiOK, aiMessage, aiOutput := runtimeAITestSummary(state)
 		if configured {
@@ -48,6 +60,18 @@ func (s *Server) runtimeCards(r *http.Request) []RuntimeCardView {
 			}
 			if adapter, ok := s.runtimes.Adapter(manifest.ID); ok {
 				configFiles, _ = adapter.ReadConfig(r.Context(), state)
+				for i := range configFiles {
+					configFiles[i].Revision = runtimeConfigRevision(configFiles[i].Content)
+					configFiles[i].Content = redactRuntimeConfig(configFiles[i])
+				}
+				if _, ok := adapter.(ports.RuntimeQuickConfigurator); ok {
+					quickSupported = true
+					var err error
+					quickSchema, quickSetup, err = s.runtimes.QuickSetup(r.Context(), manifest.ID)
+					if err != nil {
+						quickSetupError = err.Error()
+					}
+				}
 			}
 		} else {
 			if adapter, ok := s.runtimes.Adapter(manifest.ID); ok {
@@ -55,26 +79,30 @@ func (s *Server) runtimeCards(r *http.Request) []RuntimeCardView {
 			}
 		}
 		cards = append(cards, RuntimeCardView{
-			ID:          manifest.ID,
-			Name:        manifest.Name,
-			Description: manifest.Description,
-			Kind:        string(manifest.Kind),
-			Repo:        manifest.Repo,
-			DocsURL:     manifest.DocsURL,
-			State:       state,
-			Configured:  configured,
-			Health:      health,
-			ConfigFiles: configFiles,
-			Versions:    versions,
-			Tested:      tested,
-			TestedAt:    testedAt,
-			Functional:  functional,
-			Checks:      checks,
-			AITested:    aiTested,
-			AITestedAt:  aiTestedAt,
-			AIOk:        aiOK,
-			AIMessage:   aiMessage,
-			AIOutput:    aiOutput,
+			ID:                  manifest.ID,
+			Name:                manifest.Name,
+			Description:         manifest.Description,
+			Kind:                string(manifest.Kind),
+			Repo:                manifest.Repo,
+			DocsURL:             manifest.DocsURL,
+			State:               state,
+			Configured:          configured,
+			Health:              health,
+			ConfigFiles:         configFiles,
+			Versions:            versions,
+			Tested:              tested,
+			TestedAt:            testedAt,
+			Functional:          functional,
+			Checks:              checks,
+			AITested:            aiTested,
+			AITestedAt:          aiTestedAt,
+			AIOk:                aiOK,
+			AIMessage:           aiMessage,
+			AIOutput:            aiOutput,
+			QuickSetupSupported: quickSupported,
+			QuickSetupSchema:    quickSchema,
+			QuickSetup:          quickSetup,
+			QuickSetupError:     quickSetupError,
 		})
 	}
 	return cards
@@ -187,8 +215,9 @@ func (s *Server) handleWebPostRuntimeConfig(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	runtimeID := domain.RuntimeID(r.PathValue("id"))
-	fileName := r.FormValue("file_name")
+	fileName := strings.TrimSpace(r.FormValue("file_name"))
 	content := []byte(r.FormValue("content"))
+	revision := strings.TrimSpace(r.FormValue("revision"))
 	state, err := s.runtimes.State(r.Context(), runtimeID)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -199,8 +228,43 @@ func (s *Server) handleWebPostRuntimeConfig(w http.ResponseWriter, r *http.Reque
 		http.Error(w, "runtime unavailable", http.StatusBadRequest)
 		return
 	}
+	files, err := adapter.ReadConfig(r.Context(), state)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	allowed := false
+	var original domain.RuntimeConfigFile
+	for _, file := range files {
+		if file.Editable && file.Name == fileName && filepath.Base(fileName) == fileName {
+			allowed = true
+			original = file
+			break
+		}
+	}
+	if !allowed {
+		http.Error(w, "unknown runtime config file", http.StatusBadRequest)
+		return
+	}
+	if revision == "" || revision != runtimeConfigRevision(original.Content) {
+		w.Header().Set("HX-Refresh", "true")
+		http.Error(w, "runtime configuration changed; reload before saving", http.StatusConflict)
+		return
+	}
 	if strings.HasSuffix(fileName, ".json") && !json.Valid(content) {
 		http.Error(w, "invalid json", http.StatusBadRequest)
+		return
+	}
+	if strings.HasSuffix(fileName, ".yml") || strings.HasSuffix(fileName, ".yaml") {
+		var parsed any
+		if err := yaml.Unmarshal(content, &parsed); err != nil {
+			http.Error(w, "invalid yaml", http.StatusBadRequest)
+			return
+		}
+	}
+	content, err = restoreRedactedRuntimeConfig(original, content)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 	if err := adapter.WriteConfig(r.Context(), state, fileName, content); err != nil {
@@ -208,6 +272,35 @@ func (s *Server) handleWebPostRuntimeConfig(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	_, _ = s.runtimes.Test(r.Context(), runtimeID)
+	s.handleWebSettings(w, r)
+}
+
+func (s *Server) handleWebPostRuntimeQuickSetup(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	input := domain.RuntimeQuickSetupInput{
+		ProfileID: strings.TrimSpace(r.FormValue("profile_id")),
+		Values: map[string]string{
+			"base_url": strings.TrimSpace(r.FormValue("base_url")),
+			"model":    strings.TrimSpace(r.FormValue("model")),
+		},
+		APIKey:      r.FormValue("api_key"),
+		ClearAPIKey: r.FormValue("clear_api_key") == "true",
+		Revision:    r.FormValue("revision"),
+	}
+	_, err := s.runtimes.ApplyQuickSetup(r.Context(), domain.RuntimeID(r.PathValue("id")), input)
+	if err != nil {
+		status := http.StatusBadRequest
+		if errors.Is(err, domain.ErrConfigurationChanged) {
+			status = http.StatusConflict
+			w.Header().Set("HX-Refresh", "true")
+		}
+		http.Error(w, err.Error(), status)
+		return
+	}
+	w.Header().Set("HX-Trigger", `{"picoclip-toast":{"message":"Provider configuration saved.","type":"success"}}`)
 	s.handleWebSettings(w, r)
 }
 

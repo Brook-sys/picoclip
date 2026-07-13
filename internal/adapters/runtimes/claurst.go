@@ -61,7 +61,7 @@ func (a *ClaurstAdapter) Install(ctx context.Context, mode domain.InstallMode, d
 		}
 	}
 
-	if err := writeFileIfMissing(configPath, []byte("{\n  \"theme\": \"default\",\n  \"auto_update\": false\n}\n"), 0644); err != nil {
+	if err := writeFileIfMissing(configPath, claurstDefaultConfig, 0644); err != nil {
 		return domain.RuntimeState{}, err
 	}
 	_ = os.MkdirAll(logsPath, 0755)

@@ -592,6 +592,7 @@ Estas rotas são a interface humana principal. Elas podem retornar HTML completo
 | `POST` | `/runtimes/{id}/test` | Testa runtime. |
 | `POST` | `/runtimes/{id}/test-ai` | Teste AI do runtime. |
 | `POST` | `/runtimes/{id}/uninstall` | Remove runtime. |
+| `POST` | `/runtimes/{id}/quick-setup` | Salva configuração rápida de provider. |
 | `POST` | `/runtimes/{id}/config` | Salva config de runtime. |
 | `POST` | `/runtimes/{id}/toggle` | Ativa/desativa runtime. |
 | `POST` | `/settings/webhooks` | Cria webhook. |

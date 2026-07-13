@@ -61,7 +61,7 @@ func (a *PicoClawAdapter) Install(ctx context.Context, mode domain.InstallMode, 
 		}
 	}
 
-	if err := writeFileIfMissing(configPath, []byte("{\n  \"agents\": {\n    \"defaults\": {\n      \"workspace\": \""+filepath.ToSlash(filepath.Join(homePath, "workspace"))+"\",\n      \"restrict_to_workspace\": true\n    }\n  },\n  \"tools\": {\n    \"exec\": {\n      \"enabled\": true,\n      \"enable_deny_patterns\": true\n    },\n    \"mcp\": {\n      \"enabled\": false,\n      \"servers\": {}\n    }\n  }\n}\n"), 0644); err != nil {
+	if err := writeFileIfMissing(configPath, []byte("{\n  \"version\": 3,\n  \"agents\": {\n    \"defaults\": {\n      \"workspace\": \""+filepath.ToSlash(filepath.Join(homePath, "workspace"))+"\",\n      \"restrict_to_workspace\": true\n    }\n  },\n  \"tools\": {\n    \"exec\": {\n      \"enabled\": true,\n      \"enable_deny_patterns\": true\n    },\n    \"mcp\": {\n      \"enabled\": false,\n      \"servers\": {}\n    }\n  }\n}\n"), 0644); err != nil {
 		return domain.RuntimeState{}, err
 	}
 	_ = writeFileIfMissing(filepath.Join(filepath.Dir(configPath), ".security.yml"), []byte("# Sensitive PicoClaw values managed by PicoClip.\n"), 0600)

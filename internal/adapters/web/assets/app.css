@@ -1699,10 +1699,22 @@ pc-tag-multiselect { position: relative; display: flex; flex-wrap: wrap; align-i
 .runtime-danger-action { margin-left: auto; color: var(--bad); }
 .runtime-danger-action:hover { background: var(--bad-bg); color: var(--bad); }
 
-.runtime-config-editor { display: grid; gap: 8px; padding: 16px; margin-top: 16px; border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface); box-shadow: var(--shadow-sm); }
+.runtime-quick-setup { display: grid; gap: 12px; padding: 16px; margin-top: 16px; border: 1px solid color-mix(in srgb, var(--accent) 24%, var(--border)); border-radius: var(--radius-lg); background: color-mix(in srgb, var(--accent) 4%, var(--surface)); box-shadow: var(--shadow-sm); }
+.runtime-quick-setup-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.runtime-quick-setup-header strong { font-size: 15px; }
+.runtime-quick-setup-header p { margin: 3px 0 0; color: var(--muted); font-size: 12px; line-height: 1.45; }
+.runtime-quick-setup-form { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.runtime-quick-setup-form label { display: grid; gap: 5px; color: var(--muted); font-size: 12px; font-weight: 700; }
+.runtime-quick-setup-form .form-help, .runtime-quick-setup-form button { grid-column: 1 / -1; }
+.runtime-secret-state { grid-column: 1 / -1; display: flex !important; grid-template-columns: none !important; align-items: center; gap: 7px !important; font-weight: 600 !important; }
+.runtime-quick-setup-error { padding: 10px 12px; border: 1px solid color-mix(in srgb, var(--bad) 28%, var(--border)); border-radius: var(--radius-md); background: var(--bad-bg); color: var(--bad); font-size: 12px; }
+.runtime-advanced-config { margin-top: 16px; border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface); box-shadow: var(--shadow-sm); }
+.runtime-advanced-config > summary { padding: 13px 16px; color: var(--muted); font-size: 13px; font-weight: 700; cursor: pointer; }
+.runtime-advanced-config-body { display: grid; gap: 12px; padding: 0 16px 16px; }
+.runtime-config-editor { display: grid; gap: 8px; padding: 12px; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface-soft); }
 .runtime-config-header { display: flex; align-items: center; justify-content: space-between; }
 .runtime-config-header strong { font-size: 14px; font-family: monospace; }
-.runtime-config-editor textarea { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 12px; min-height: 140px; white-space: pre; resize: vertical; border: 1px solid var(--border); border-radius: var(--radius-md); padding: 8px 10px; background: var(--surface-soft); color: var(--text); }
+.runtime-config-editor textarea { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 12px; min-height: 140px; white-space: pre; resize: vertical; border: 1px solid var(--border); border-radius: var(--radius-md); padding: 8px 10px; background: var(--surface); color: var(--text); }
 .runtime-config-editor textarea:focus { outline: none; border-color: var(--a2-focus-color); box-shadow: 0 0 0 3px color-mix(in srgb, var(--a2-focus-color) 24%, transparent); }
 
 .agent-profile-card { display: flex; flex-direction: column; gap: 20px; padding: 20px; border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface); box-shadow: var(--shadow-sm); }
@@ -1957,6 +1969,7 @@ pc-tag-multiselect { position: relative; display: flex; flex-wrap: wrap; align-i
   .issue-list-meta, .issue-list-status { grid-column: 2; align-items: flex-start; }
   .page-header { flex-direction: column; }
   .runtime-status-grid { grid-template-columns: 1fr; }
+  .runtime-quick-setup-form { grid-template-columns: 1fr; }
   .agent-overview-grid { grid-template-columns: 1fr; }
   .agent-profile-header { flex-direction: column; }
   .agent-config-grid { grid-template-columns: 1fr; }
