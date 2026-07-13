@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -31,6 +32,12 @@ type githubRelease struct {
 }
 
 var githubHTTPClient = &http.Client{Timeout: 10 * time.Second}
+var githubRedirectHTTPClient = &http.Client{
+	Timeout: 10 * time.Second,
+	CheckRedirect: func(_ *http.Request, _ []*http.Request) error {
+		return http.ErrUseLastResponse
+	},
+}
 
 type githubAPIError struct {
 	Status  string
@@ -67,6 +74,41 @@ func githubResponseError(resp *http.Response) error {
 	}
 	_ = json.NewDecoder(io.LimitReader(resp.Body, 64*1024)).Decode(&payload)
 	return &githubAPIError{Status: resp.Status, Message: payload.Message, Reset: resp.Header.Get("X-RateLimit-Reset")}
+}
+
+func resolveGitHubReleaseTag(ctx context.Context, owner, repo, versionAlias string) (string, error) {
+	versionAlias = strings.TrimSpace(versionAlias)
+	if versionAlias != "" && versionAlias != "latest" {
+		return versionAlias, nil
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, fmt.Sprintf("https://github.com/%s/%s/releases/latest", url.PathEscape(owner), url.PathEscape(repo)), nil)
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("User-Agent", "picoclip-runtime-installer")
+	resp, err := githubRedirectHTTPClient.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < 300 || resp.StatusCode >= 400 {
+		return "", fmt.Errorf("github latest release redirect failed: %s", resp.Status)
+	}
+	location := resp.Header.Get("Location")
+	parsed, err := url.Parse(location)
+	if err != nil {
+		return "", fmt.Errorf("invalid github latest release redirect: %w", err)
+	}
+	const marker = "/releases/tag/"
+	index := strings.Index(parsed.Path, marker)
+	if index < 0 {
+		return "", fmt.Errorf("github latest release redirect did not contain a tag")
+	}
+	tag, err := url.PathUnescape(strings.TrimPrefix(parsed.Path[index:], marker))
+	if err != nil || strings.TrimSpace(tag) == "" {
+		return "", fmt.Errorf("github latest release redirect contained an invalid tag")
+	}
+	return tag, nil
 }
 
 func listGitHubVersions(ctx context.Context, owner, repo string, limit int) ([]domain.RuntimeVersion, error) {
@@ -161,6 +203,24 @@ func fetchGitHubRelease(ctx context.Context, owner, repo, versionAlias string) (
 }
 
 func installFromGitHubRelease(ctx context.Context, owner string, repo string, assetPrefix string, binaryName string, versionAlias string, dst string) (string, string, error) {
+	if versionAlias != "nightly" {
+		tag, err := resolveGitHubReleaseTag(ctx, owner, repo, versionAlias)
+		if err != nil {
+			return "", "", err
+		}
+		assetNames := runtimeAssetNames(assetPrefix, tag)
+		var failures []string
+		for _, assetName := range assetNames {
+			downloadURL := fmt.Sprintf("https://github.com/%s/%s/releases/download/%s/%s", url.PathEscape(owner), url.PathEscape(repo), url.PathEscape(tag), url.PathEscape(assetName))
+			if err := downloadAndExtract(ctx, downloadURL, assetName, binaryName, dst); err == nil {
+				return tag, downloadURL, nil
+			} else {
+				failures = append(failures, assetName+": "+err.Error())
+			}
+		}
+		return "", "", fmt.Errorf("release asset download failed; tried %s", strings.Join(failures, "; "))
+	}
+
 	release, err := fetchGitHubRelease(ctx, owner, repo, versionAlias)
 	if err != nil {
 		return "", "", err

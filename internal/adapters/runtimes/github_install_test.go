@@ -12,6 +12,50 @@ type roundTripFunc func(*http.Request) (*http.Response, error)
 
 func (f roundTripFunc) RoundTrip(req *http.Request) (*http.Response, error) { return f(req) }
 
+func TestResolveGitHubReleaseTagUsesPublicLatestRedirect(t *testing.T) {
+	oldClient := githubRedirectHTTPClient
+	t.Cleanup(func() { githubRedirectHTTPClient = oldClient })
+	githubRedirectHTTPClient = &http.Client{
+		Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+			if req.URL.String() != "https://github.com/charmbracelet/crush/releases/latest" {
+				t.Fatalf("unexpected URL %s", req.URL)
+			}
+			return &http.Response{
+				StatusCode: http.StatusFound,
+				Status:     "302 Found",
+				Header:     http.Header{"Location": []string{"https://github.com/charmbracelet/crush/releases/tag/v0.84.1"}},
+				Body:       io.NopCloser(strings.NewReader("")),
+			}, nil
+		}),
+		CheckRedirect: func(_ *http.Request, _ []*http.Request) error { return http.ErrUseLastResponse },
+	}
+
+	tag, err := resolveGitHubReleaseTag(context.Background(), "charmbracelet", "crush", "latest")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if tag != "v0.84.1" {
+		t.Fatalf("tag = %q", tag)
+	}
+}
+
+func TestResolveGitHubReleaseTagUsesExplicitTagWithoutNetwork(t *testing.T) {
+	oldClient := githubRedirectHTTPClient
+	t.Cleanup(func() { githubRedirectHTTPClient = oldClient })
+	githubRedirectHTTPClient = &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		t.Fatalf("unexpected network request to %s", req.URL)
+		return nil, nil
+	})}
+
+	tag, err := resolveGitHubReleaseTag(context.Background(), "charmbracelet", "crush", "v0.84.1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if tag != "v0.84.1" {
+		t.Fatalf("tag = %q", tag)
+	}
+}
+
 func TestFetchGitHubReleaseUsesConfiguredToken(t *testing.T) {
 	t.Setenv("GH_TOKEN", "gh-test-token")
 	oldClient := githubHTTPClient
