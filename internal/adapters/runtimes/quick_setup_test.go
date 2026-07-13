@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -30,6 +31,13 @@ func TestCrushTestQuickSetupUsesUnsavedValuesWithoutWritingConfig(t *testing.T) 
 		_, _ = w.Write([]byte(`{"choices":[{"message":{"content":"PONG"}}]}`))
 	}))
 	defer provider.Close()
+	oldClient, oldValidator := modelTestHTTPClient, modelTestURLValidator
+	modelTestHTTPClient = provider.Client()
+	modelTestURLValidator = func(*url.URL) error { return nil }
+	t.Cleanup(func() {
+		modelTestHTTPClient = oldClient
+		modelTestURLValidator = oldValidator
+	})
 
 	path := filepath.Join(t.TempDir(), "crush.json")
 	mustWrite(t, path, `{"providers":{"picoclip-openai":{"type":"openai-compat","base_url":"https://saved.invalid/v1","api_key":"saved-secret","models":[{"id":"saved-model"}]}}}`, 0600)
@@ -54,6 +62,13 @@ func TestCrushTestQuickSetupUsesConfiguredSecretWhenFieldIsBlank(t *testing.T) {
 		_, _ = w.Write([]byte(`{"choices":[{"message":{"content":"PONG"}}]}`))
 	}))
 	defer provider.Close()
+	oldClient, oldValidator := modelTestHTTPClient, modelTestURLValidator
+	modelTestHTTPClient = provider.Client()
+	modelTestURLValidator = func(*url.URL) error { return nil }
+	t.Cleanup(func() {
+		modelTestHTTPClient = oldClient
+		modelTestURLValidator = oldValidator
+	})
 	path := filepath.Join(t.TempDir(), "crush.json")
 	mustWrite(t, path, `{"providers":{"picoclip-openai":{"api_key":"saved-secret"}}}`, 0600)
 	_, err := NewCrushAdapter("").TestQuickSetup(context.Background(), domain.RuntimeState{ConfigPath: path}, quickInput("ignored", provider.URL, "model", "", false))
@@ -62,6 +77,18 @@ func TestCrushTestQuickSetupUsesConfiguredSecretWhenFieldIsBlank(t *testing.T) {
 	}
 	if gotAuthorization != "Bearer saved-secret" {
 		t.Fatalf("authorization=%q", gotAuthorization)
+	}
+}
+
+func TestModelQuickSetupRejectsPrivateEndpoint(t *testing.T) {
+	provider := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Fatal("private endpoint must not be reached")
+	}))
+	defer provider.Close()
+
+	result, err := testOpenAICompatibleModel(context.Background(), provider.URL, "secret", "model")
+	if err == nil || result.Status != "" || !strings.Contains(err.Error(), "public") {
+		t.Fatalf("result=%#v err=%v", result, err)
 	}
 }
 

@@ -2,7 +2,6 @@ package web
 
 import (
 	"context"
-	"encoding/json"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -61,16 +60,9 @@ func TestRuntimeQuickSetupSettingsRedactsSecretAndPrecedesAdvanced(t *testing.T)
 	}
 }
 
-func TestRuntimeQuickSetupTestModelUsesCurrentFormWithoutSaving(t *testing.T) {
-	var gotModel, gotAuthorization string
+func TestRuntimeQuickSetupTestModelRejectsPrivateEndpointWithoutSaving(t *testing.T) {
 	provider := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		gotAuthorization = r.Header.Get("Authorization")
-		var request struct {
-			Model string `json:"model"`
-		}
-		_ = json.NewDecoder(r.Body).Decode(&request)
-		gotModel = request.Model
-		_, _ = w.Write([]byte(`{"choices":[{"message":{"content":"PONG"}}]}`))
+		t.Fatal("private model endpoint must not be reached")
 	}))
 	defer provider.Close()
 
@@ -84,15 +76,12 @@ func TestRuntimeQuickSetupTestModelUsesCurrentFormWithoutSaving(t *testing.T) {
 	}
 	body, _ := io.ReadAll(res.Body)
 	res.Body.Close()
-	if res.StatusCode != http.StatusOK || !strings.Contains(string(body), "Model responded successfully") || !strings.Contains(string(body), "PONG") {
+	if res.StatusCode != http.StatusBadRequest || !strings.Contains(string(body), "public HTTP(S) endpoint") {
 		t.Fatalf("status=%d body=%s", res.StatusCode, body)
-	}
-	if gotModel != "unsaved-model" || gotAuthorization != "Bearer unsaved-secret" {
-		t.Fatalf("model=%q authorization=%q", gotModel, gotAuthorization)
 	}
 	after, _ := os.ReadFile(config)
 	if string(after) != string(before) {
-		t.Fatal("test model saved the quick setup form")
+		t.Fatal("rejected test model request saved the quick setup form")
 	}
 }
 

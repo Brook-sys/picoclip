@@ -9,7 +9,9 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
+	"net/netip"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -21,6 +23,90 @@ import (
 )
 
 const quickSetupProfileID = "openai-compatible"
+
+var modelTestHTTPClient = newModelTestHTTPClient(
+	net.DefaultResolver.LookupNetIP,
+	(&net.Dialer{}).DialContext,
+)
+var modelTestURLValidator = validatePublicModelTestURL
+
+type modelTestLookupFunc func(context.Context, string, string) ([]netip.Addr, error)
+type modelTestDialFunc func(context.Context, string, string) (net.Conn, error)
+
+func newModelTestHTTPClient(lookup modelTestLookupFunc, dial modelTestDialFunc) *http.Client {
+	return &http.Client{
+		Timeout: 20 * time.Second,
+		Transport: &http.Transport{
+			Proxy: nil,
+			DialContext: func(ctx context.Context, network, address string) (net.Conn, error) {
+				return dialPublicModelTestHost(ctx, network, address, lookup, dial)
+			},
+		},
+		CheckRedirect: func(request *http.Request, via []*http.Request) error {
+			if len(via) >= 5 {
+				return fmt.Errorf("model test exceeded redirect limit")
+			}
+			return validatePublicModelTestURL(request.URL)
+		},
+	}
+}
+
+func validatePublicModelTestURL(endpoint *url.URL) error {
+	if endpoint == nil || (endpoint.Scheme != "http" && endpoint.Scheme != "https") || endpoint.Host == "" || endpoint.User != nil {
+		return fmt.Errorf("model test endpoint must be an absolute public HTTP(S) URL without credentials")
+	}
+	if port := endpoint.Port(); port != "" && !((endpoint.Scheme == "http" && port == "80") || (endpoint.Scheme == "https" && port == "443")) {
+		return fmt.Errorf("model test endpoint must use port 80 or 443")
+	}
+	return nil
+}
+
+func dialPublicModelTestHost(ctx context.Context, network, address string, lookup modelTestLookupFunc, dial modelTestDialFunc) (net.Conn, error) {
+	host, port, err := net.SplitHostPort(address)
+	if err != nil {
+		return nil, err
+	}
+	addresses, err := lookup(ctx, "ip", host)
+	if err != nil {
+		return nil, err
+	}
+	for _, resolved := range addresses {
+		if !isPublicModelTestIP(resolved) {
+			return nil, fmt.Errorf("model test endpoint must resolve to a public address")
+		}
+		connection, err := dial(ctx, network, net.JoinHostPort(resolved.String(), port))
+		if err == nil {
+			return connection, nil
+		}
+	}
+	return nil, fmt.Errorf("connect to model test endpoint: no public address accepted the connection")
+}
+
+var blockedModelTestPrefixes = []netip.Prefix{
+	netip.MustParsePrefix("0.0.0.0/8"),
+	netip.MustParsePrefix("100.64.0.0/10"),
+	netip.MustParsePrefix("192.0.0.0/24"),
+	netip.MustParsePrefix("192.0.2.0/24"),
+	netip.MustParsePrefix("198.18.0.0/15"),
+	netip.MustParsePrefix("198.51.100.0/24"),
+	netip.MustParsePrefix("203.0.113.0/24"),
+	netip.MustParsePrefix("240.0.0.0/4"),
+	netip.MustParsePrefix("100::/64"),
+	netip.MustParsePrefix("2001:db8::/32"),
+}
+
+func isPublicModelTestIP(address netip.Addr) bool {
+	address = address.Unmap()
+	if !address.IsValid() || !address.IsGlobalUnicast() || address.IsPrivate() || address.IsLoopback() || address.IsLinkLocalUnicast() || address.IsMulticast() || address.IsUnspecified() {
+		return false
+	}
+	for _, blocked := range blockedModelTestPrefixes {
+		if blocked.Contains(address) {
+			return false
+		}
+	}
+	return true
+}
 
 func openAIQuickSetupSchema() domain.RuntimeQuickSetupSchema {
 	return domain.RuntimeQuickSetupSchema{
@@ -235,6 +321,10 @@ func testOpenAICompatibleModel(ctx context.Context, baseURL, apiKey, model strin
 	if err := validateOpenAICompatibleInput(baseURL, model); err != nil {
 		return domain.RuntimeModelTestResult{}, err
 	}
+	parsedBaseURL, err := url.Parse(strings.TrimSpace(baseURL))
+	if err != nil || modelTestURLValidator(parsedBaseURL) != nil {
+		return domain.RuntimeModelTestResult{}, fmt.Errorf("%w: Test Model requires a public HTTP(S) endpoint on port 80 or 443", domain.ErrInvalidInput)
+	}
 	payload, err := json.Marshal(map[string]any{
 		"model":      strings.TrimSpace(model),
 		"messages":   []map[string]string{{"role": "user", "content": "Say exactly and only the word PONG"}},
@@ -255,7 +345,7 @@ func testOpenAICompatibleModel(ctx context.Context, baseURL, apiKey, model strin
 		req.Header.Set("Authorization", "Bearer "+apiKey)
 	}
 	started := time.Now()
-	response, err := http.DefaultClient.Do(req)
+	response, err := modelTestHTTPClient.Do(req)
 	latency := time.Since(started)
 	checkedAt := time.Now().UTC()
 	if err != nil {
