@@ -48,6 +48,8 @@ internal/adapters/logger/             # logging estruturado
 internal/adapters/web/                # servidor HTTP, APIs, HTML, Templ, HTMX, SSE
 internal/adapters/web/assets/         # CSS e assets estáticos
 docs/                                 # documentação canônica
+.github/                              # CI, Dependabot, CODEOWNERS e templates
+SECURITY.md                           # política de reporte privado de vulnerabilidades
 scripts/seed/                         # seed de dados demo via API
 scripts/run-e2e.sh                    # runner E2E Playwright
 scripts/dev-local.sh                  # helper local não versionado neste ambiente

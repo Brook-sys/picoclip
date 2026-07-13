@@ -158,6 +158,20 @@ make seed
 
 Isso executa `scripts/seed/main.go` usando `scripts/seed/scenarios/full.json` contra `BASE_URL`.
 
+## Segurança do repositório
+
+O repositório público usa controles versionados e configurações do GitHub em conjunto:
+
+- `.github/dependabot.yml` mantém dependências Go, npm, GitHub Actions e Docker atualizadas;
+- `SECURITY.md` direciona vulnerabilidades para reporte privado;
+- `.github/CODEOWNERS`, templates de PR e de issue formalizam revisão e triagem;
+- `CONTRIBUTING.md` descreve o fluxo de contribuição e deixa explícito que features e mudanças de arquitetura exigem aprovação prévia;
+- o repositório ainda não declara licença; a escolha deve ser feita pelo mantenedor antes de conceder permissões claras de reutilização;
+- o ruleset `Protect main` exige pull request, o check `Check`, branch atualizada e conversas resolvidas, além de bloquear force-push e exclusão da `main`;
+- Secret Scanning, Push Protection, Dependabot Security Updates e CodeQL devem permanecer habilitados.
+
+Para mudanças em workflows ou políticas, preserve permissões mínimas do `GITHUB_TOKEN`, não inclua segredos e valide YAML mais `make check-docs`. Alertas CodeQL e Dependabot precisam ser triados; um scanner verde não substitui revisão da fronteira de confiança.
+
 ## Workflow de templates Templ
 
 O projeto usa `github.com/a-h/templ`.

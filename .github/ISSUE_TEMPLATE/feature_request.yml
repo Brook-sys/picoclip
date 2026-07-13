@@ -1,0 +1,38 @@
+name: Feature proposal
+description: Propose a change for maintainer review before implementation
+title: "proposal: "
+labels:
+  - enhancement
+body:
+  - type: markdown
+    attributes:
+      value: |
+        PicoClip requires explicit maintainer approval before implementation of new features, epics, architecture changes, or dependencies. This form is for discussion and does not authorize implementation.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or use case
+      description: Describe the user or operational problem without prescribing a large solution.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed approach
+      description: Explain the smallest useful change and alternatives considered.
+    validations:
+      required: true
+  - type: textarea
+    id: risks
+    attributes:
+      label: Risks and validation
+      description: Note security, compatibility, resource, migration, and testing considerations.
+  - type: checkboxes
+    id: approval
+    attributes:
+      label: Scope acknowledgement
+      options:
+        - label: I understand this proposal requires explicit maintainer approval before implementation begins.
+          required: true
+        - label: I removed secrets, tokens, private paths, and personal data.
+          required: true

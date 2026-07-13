@@ -1,0 +1,10 @@
+# Repository-wide ownership. Keep this file simple while PicoClip has one maintainer.
+* @Brook-sys
+
+# Security-sensitive automation and policy.
+/.github/ @Brook-sys
+/SECURITY.md @Brook-sys
+
+# Runtime execution and sandbox boundaries.
+/internal/adapters/runtimes/ @Brook-sys
+/internal/core/services/ @Brook-sys
