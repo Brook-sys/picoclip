@@ -21,19 +21,31 @@ import (
 
 const maxRemoteSkillYAMLBytes = 1 << 20
 
-var remoteSkillHTTPClient = &http.Client{
-	Timeout: 15 * time.Second,
-	Transport: &http.Transport{
-		Proxy:       nil,
-		DialContext: dialPublicRemoteSkillHost,
-	},
-	CheckRedirect: func(request *http.Request, via []*http.Request) error {
-		if len(via) >= 10 {
-			return fmt.Errorf("remote skill fetch exceeded redirect limit")
-		}
-		return validateRemoteSkillURL(request.URL)
-	},
+type remoteSkillLookupFunc func(context.Context, string, string) ([]netip.Addr, error)
+type remoteSkillDialFunc func(context.Context, string, string) (net.Conn, error)
+
+func newRemoteSkillHTTPClient(lookup remoteSkillLookupFunc, dial remoteSkillDialFunc) *http.Client {
+	return &http.Client{
+		Timeout: 15 * time.Second,
+		Transport: &http.Transport{
+			Proxy: nil,
+			DialContext: func(ctx context.Context, network, address string) (net.Conn, error) {
+				return dialPublicRemoteSkillHostWith(ctx, network, address, lookup, dial)
+			},
+		},
+		CheckRedirect: func(request *http.Request, via []*http.Request) error {
+			if len(via) >= 10 {
+				return fmt.Errorf("remote skill fetch exceeded redirect limit")
+			}
+			return validateRemoteSkillURL(request.URL)
+		},
+	}
 }
+
+var remoteSkillHTTPClient = newRemoteSkillHTTPClient(
+	net.DefaultResolver.LookupNetIP,
+	(&net.Dialer{}).DialContext,
+)
 
 type remoteSkillYAML struct {
 	Name         string             `yaml:"name"`
@@ -214,21 +226,20 @@ func validateRemoteSkillURL(remoteURL *url.URL) error {
 	return nil
 }
 
-func dialPublicRemoteSkillHost(ctx context.Context, network, address string) (net.Conn, error) {
+func dialPublicRemoteSkillHostWith(ctx context.Context, network, address string, lookup remoteSkillLookupFunc, dial remoteSkillDialFunc) (net.Conn, error) {
 	host, port, err := net.SplitHostPort(address)
 	if err != nil {
 		return nil, err
 	}
-	addresses, err := net.DefaultResolver.LookupNetIP(ctx, "ip", host)
+	addresses, err := lookup(ctx, "ip", host)
 	if err != nil {
 		return nil, err
 	}
-	dialer := &net.Dialer{}
 	for _, resolved := range addresses {
 		if !isPublicRemoteSkillIP(resolved) {
 			return nil, fmt.Errorf("%w: remote skill URL resolves to a non-public address", domain.ErrInvalidInput)
 		}
-		connection, err := dialer.DialContext(ctx, network, net.JoinHostPort(resolved.String(), port))
+		connection, err := dial(ctx, network, net.JoinHostPort(resolved.String(), port))
 		if err == nil {
 			return connection, nil
 		}

@@ -2,11 +2,14 @@ package services
 
 import (
 	"context"
+	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/netip"
 	"net/url"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -71,7 +74,7 @@ func TestSkillServiceImportRemoteYAMLRejectsPrivateAddress(t *testing.T) {
 	}
 }
 
-func TestRemoteSkillURLValidationRejectsCredentialsAndUnsafeRedirects(t *testing.T) {
+func TestRemoteSkillURLValidationRejectsCredentialsAndInvalidURLs(t *testing.T) {
 	for _, rawURL := range []string{
 		"file:///etc/passwd",
 		"https://user:password@example.com/skill.yaml",
@@ -85,15 +88,59 @@ func TestRemoteSkillURLValidationRejectsCredentialsAndUnsafeRedirects(t *testing
 			t.Fatalf("validateRemoteSkillURL(%q) accepted unsafe URL", rawURL)
 		}
 	}
+}
 
-	redirect := &http.Request{URL: &url.URL{Scheme: "http", Host: "127.0.0.1", Path: "/private"}}
-	if err := remoteSkillHTTPClient.CheckRedirect(redirect, []*http.Request{{}}); err != nil {
-		// The redirect hook validates URL shape; the custom dialer rejects the private target
-		// after resolution, including redirects and DNS rebinding attempts.
-		return
+func TestRemoteSkillHTTPClientRejectsRedirectToPrivateAddress(t *testing.T) {
+	lookup := func(_ context.Context, _, host string) ([]netip.Addr, error) {
+		switch host {
+		case "public.example.test":
+			return []netip.Addr{netip.MustParseAddr("8.8.8.8")}, nil
+		case "private.example.test":
+			return []netip.Addr{netip.MustParseAddr("127.0.0.1")}, nil
+		default:
+			return nil, fmt.Errorf("unexpected DNS lookup for %q", host)
+		}
 	}
-	if isPublicRemoteSkillIP(netip.MustParseAddr("127.0.0.1")) {
-		t.Fatal("loopback redirect target was considered public")
+
+	publicClient, publicServer := net.Pipe()
+	t.Cleanup(func() {
+		_ = publicClient.Close()
+		_ = publicServer.Close()
+	})
+	go func() {
+		defer publicServer.Close()
+		buffer := make([]byte, 4096)
+		_, _ = publicServer.Read(buffer)
+		_, _ = io.WriteString(publicServer, "HTTP/1.1 302 Found\r\nLocation: http://private.example.test/private\r\nContent-Length: 0\r\n\r\n")
+	}()
+
+	var privateDialed atomic.Bool
+	dial := func(_ context.Context, _, address string) (net.Conn, error) {
+		switch address {
+		case "8.8.8.8:80":
+			return publicClient, nil
+		case "127.0.0.1:80":
+			privateDialed.Store(true)
+			return nil, fmt.Errorf("private redirect target was dialed")
+		}
+		return nil, fmt.Errorf("unexpected dial address %q", address)
+	}
+
+	client := newRemoteSkillHTTPClient(lookup, dial)
+	t.Cleanup(client.CloseIdleConnections)
+	request, err := http.NewRequest(http.MethodGet, "http://public.example.test/skill.yaml", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	response, err := client.Do(request)
+	if response != nil {
+		response.Body.Close()
+	}
+	if err == nil || !strings.Contains(err.Error(), "non-public address") {
+		t.Fatalf("client.Do error = %v, want private redirect rejection", err)
+	}
+	if privateDialed.Load() {
+		t.Fatal("private redirect target was dialed")
 	}
 }
 
