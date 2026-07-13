@@ -39,36 +39,17 @@ func resolveConfiguredExecutable(binary string) (string, error) {
 	if binary == "" {
 		return "", fmt.Errorf("runtime binary is not configured")
 	}
-	if !filepath.IsAbs(binary) {
-		if strings.ContainsRune(binary, filepath.Separator) {
-			absolute, err := filepath.Abs(binary)
-			if err != nil {
-				return "", fmt.Errorf("resolve runtime binary path: %w", err)
-			}
-			binary = absolute
-		} else {
-			resolved, err := exec.LookPath(binary)
-			if err != nil {
-				return "", fmt.Errorf("resolve runtime binary: %w", err)
-			}
-			binary = resolved
-		}
-	}
-	canonical, err := filepath.EvalSymlinks(binary)
+	resolved, err := exec.LookPath(binary)
 	if err != nil {
 		return "", fmt.Errorf("resolve runtime binary: %w", err)
 	}
-	file, err := os.Open(canonical)
+	absolute, err := filepath.Abs(resolved)
 	if err != nil {
-		return "", fmt.Errorf("open runtime binary: %w", err)
+		return "", fmt.Errorf("resolve runtime binary path: %w", err)
 	}
-	defer file.Close()
-	info, err := file.Stat()
+	canonical, err := filepath.EvalSymlinks(absolute)
 	if err != nil {
-		return "", fmt.Errorf("inspect runtime binary: %w", err)
-	}
-	if !info.Mode().IsRegular() || (runtime.GOOS != "windows" && info.Mode().Perm()&0o111 == 0) {
-		return "", fmt.Errorf("runtime binary is not an executable regular file: %q", canonical)
+		return "", fmt.Errorf("resolve runtime binary: %w", err)
 	}
 	return canonical, nil
 }
