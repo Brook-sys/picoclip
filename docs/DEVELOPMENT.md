@@ -73,7 +73,7 @@ Mapa completo: [Project Map](PROJECT_MAP.md).
 Defaults principais:
 
 ```sh
-BIND=0.0.0.0
+BIND=127.0.0.1
 PORT=8080      # padrão do binário
 PORT=8088      # padrão dos comandos do Makefile
 PICOCLIP_STORAGE=sqlite
@@ -88,7 +88,7 @@ BWRAP_PATH=bwrap  # Bubblewrap para o runtime sandbox opt-in
 Rodar manualmente:
 
 ```sh
-BIND=0.0.0.0 PORT=8088 go run cmd/picoclip/main.go
+BIND=127.0.0.1 PORT=8088 go run cmd/picoclip/main.go
 ```
 
 Runtimes podem ser sobrescritos com:
@@ -131,7 +131,7 @@ make run
 Equivalente:
 
 ```sh
-BIND=0.0.0.0 PORT=8088 go run cmd/picoclip/main.go
+BIND=127.0.0.1 PORT=8088 go run cmd/picoclip/main.go
 ```
 
 ### Live reload
@@ -143,7 +143,7 @@ make dev
 Equivalente:
 
 ```sh
-BIND=0.0.0.0 PORT=8088 ./bin/air -c .air.toml
+BIND=127.0.0.1 PORT=8088 ./bin/air -c .air.toml
 ```
 
 Air builda em `tmp/picoclip` e reinicia quando Go, CSS, JS, HTML ou Templ mudam.

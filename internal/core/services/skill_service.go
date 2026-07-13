@@ -137,7 +137,7 @@ func (s *SkillService) CreateWithFiles(ctx context.Context, projectID, name, des
 func (s *SkillService) ImportRemoteYAML(ctx context.Context, projectID, sourceURL string) (domain.Skill, error) {
 	parsedURL, err := url.ParseRequestURI(sourceURL)
 	if err != nil || validateRemoteSkillURL(parsedURL) != nil {
-		return domain.Skill{}, fmt.Errorf("%w: source_url must be an absolute http or https URL without credentials", domain.ErrInvalidInput)
+		return domain.Skill{}, fmt.Errorf("%w: source_url must be an absolute http or https URL without credentials and use port 80 or 443", domain.ErrInvalidInput)
 	}
 
 	request, err := http.NewRequestWithContext(ctx, http.MethodGet, sourceURL, nil)
@@ -208,6 +208,9 @@ func validateRemoteSkillURL(remoteURL *url.URL) error {
 	if remoteURL == nil || (remoteURL.Scheme != "http" && remoteURL.Scheme != "https") || remoteURL.Host == "" || remoteURL.User != nil {
 		return fmt.Errorf("remote skill URL must be an absolute http or https URL without credentials")
 	}
+	if port := remoteURL.Port(); port != "" && !((remoteURL.Scheme == "http" && port == "80") || (remoteURL.Scheme == "https" && port == "443")) {
+		return fmt.Errorf("remote skill URL must use the default port for its scheme")
+	}
 	return nil
 }
 
@@ -233,12 +236,30 @@ func dialPublicRemoteSkillHost(ctx context.Context, network, address string) (ne
 	return nil, fmt.Errorf("connect to remote skill URL: no public address accepted the connection")
 }
 
+var blockedRemoteSkillPrefixes = []netip.Prefix{
+	netip.MustParsePrefix("0.0.0.0/8"),
+	netip.MustParsePrefix("100.64.0.0/10"),
+	netip.MustParsePrefix("192.0.0.0/24"),
+	netip.MustParsePrefix("192.0.2.0/24"),
+	netip.MustParsePrefix("198.18.0.0/15"),
+	netip.MustParsePrefix("198.51.100.0/24"),
+	netip.MustParsePrefix("203.0.113.0/24"),
+	netip.MustParsePrefix("240.0.0.0/4"),
+	netip.MustParsePrefix("100::/64"),
+	netip.MustParsePrefix("2001:db8::/32"),
+}
+
 func isPublicRemoteSkillIP(address netip.Addr) bool {
 	address = address.Unmap()
 	if !address.IsValid() || !address.IsGlobalUnicast() || address.IsPrivate() || address.IsLoopback() || address.IsLinkLocalUnicast() || address.IsMulticast() || address.IsUnspecified() {
 		return false
 	}
-	return !(address.Is4() && address.As4()[0] == 100 && address.As4()[1]&0xc0 == 0x40)
+	for _, blocked := range blockedRemoteSkillPrefixes {
+		if blocked.Contains(address) {
+			return false
+		}
+	}
+	return true
 }
 
 func (s *SkillService) List(ctx context.Context, projectID string) ([]domain.Skill, error) {

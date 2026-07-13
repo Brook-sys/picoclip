@@ -1,7 +1,7 @@
 SHELL := /bin/sh
 
 APP := picoclip
-BIND ?= 0.0.0.0
+BIND ?= 127.0.0.1
 PORT ?= 8088
 BASE_URL ?= http://127.0.0.1:$(PORT)
 TMP_DIR := tmp
