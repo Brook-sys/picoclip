@@ -171,6 +171,25 @@ func (m *RuntimeManager) ApplyQuickSetup(ctx context.Context, id domain.RuntimeI
 	return configurator.ReadQuickSetup(ctx, state)
 }
 
+func (m *RuntimeManager) TestQuickSetup(ctx context.Context, id domain.RuntimeID, input domain.RuntimeQuickSetupInput) (domain.RuntimeModelTestResult, error) {
+	state, err := m.State(ctx, id)
+	if err != nil {
+		return domain.RuntimeModelTestResult{}, err
+	}
+	adapter, ok := m.Adapter(id)
+	if !ok {
+		return domain.RuntimeModelTestResult{}, domain.ErrDriverUnavailable
+	}
+	configurator, ok := adapter.(ports.RuntimeQuickConfigurator)
+	if !ok {
+		return domain.RuntimeModelTestResult{}, domain.ErrQuickSetupUnsupported
+	}
+	if input.ProfileID != configurator.QuickSetupSchema().ProfileID {
+		return domain.RuntimeModelTestResult{}, fmt.Errorf("%w: unsupported quick setup profile", domain.ErrInvalidInput)
+	}
+	return configurator.TestQuickSetup(ctx, state, input)
+}
+
 func (m *RuntimeManager) Install(ctx context.Context, id domain.RuntimeID, mode domain.InstallMode, versionAlias string) (domain.RuntimeState, error) {
 	adapter, ok := m.Adapter(id)
 	if !ok {

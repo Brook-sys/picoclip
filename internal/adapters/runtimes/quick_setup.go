@@ -1,15 +1,20 @@
 package runtimes
 
 import (
+	"bytes"
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
+	"net/http"
 	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"gopkg.in/yaml.v3"
 	"picoclip/internal/core/domain"
@@ -183,6 +188,65 @@ func secretUpdate(target map[string]any, key string, input domain.RuntimeQuickSe
 	} else if input.APIKey != "" {
 		target[key] = input.APIKey
 	}
+}
+
+func testOpenAICompatibleModel(ctx context.Context, baseURL, apiKey, model string) (domain.RuntimeModelTestResult, error) {
+	if err := validateOpenAICompatibleInput(baseURL, model); err != nil {
+		return domain.RuntimeModelTestResult{}, err
+	}
+	payload, err := json.Marshal(map[string]any{
+		"model":      strings.TrimSpace(model),
+		"messages":   []map[string]string{{"role": "user", "content": "Say exactly and only the word PONG"}},
+		"max_tokens": 8,
+	})
+	if err != nil {
+		return domain.RuntimeModelTestResult{}, err
+	}
+	endpoint := strings.TrimRight(strings.TrimSpace(baseURL), "/") + "/chat/completions"
+	testCtx, cancel := context.WithTimeout(ctx, 20*time.Second)
+	defer cancel()
+	req, err := http.NewRequestWithContext(testCtx, http.MethodPost, endpoint, bytes.NewReader(payload))
+	if err != nil {
+		return domain.RuntimeModelTestResult{}, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	if apiKey != "" {
+		req.Header.Set("Authorization", "Bearer "+apiKey)
+	}
+	started := time.Now()
+	response, err := http.DefaultClient.Do(req)
+	latency := time.Since(started)
+	checkedAt := time.Now().UTC()
+	if err != nil {
+		return domain.RuntimeModelTestResult{Status: "error", Message: "Model request failed", Latency: latency, CheckedAt: checkedAt}, nil
+	}
+	defer response.Body.Close()
+	body, err := io.ReadAll(io.LimitReader(response.Body, 1<<20))
+	if err != nil {
+		return domain.RuntimeModelTestResult{Status: "error", Message: "Could not read model response", Latency: latency, CheckedAt: checkedAt}, nil
+	}
+	if response.StatusCode < 200 || response.StatusCode >= 300 {
+		return domain.RuntimeModelTestResult{Status: "error", Message: fmt.Sprintf("Provider returned HTTP %d", response.StatusCode), Latency: latency, CheckedAt: checkedAt}, nil
+	}
+	var decoded struct {
+		Choices []struct {
+			Message struct {
+				Content string `json:"content"`
+			} `json:"message"`
+			Text string `json:"text"`
+		} `json:"choices"`
+	}
+	if err := json.Unmarshal(body, &decoded); err != nil || len(decoded.Choices) == 0 {
+		return domain.RuntimeModelTestResult{Status: "error", Message: "Provider returned an invalid OpenAI-compatible response", Latency: latency, CheckedAt: checkedAt}, nil
+	}
+	output := strings.TrimSpace(decoded.Choices[0].Message.Content)
+	if output == "" {
+		output = strings.TrimSpace(decoded.Choices[0].Text)
+	}
+	if len(output) > 500 {
+		output = output[:500]
+	}
+	return domain.RuntimeModelTestResult{Status: "ok", Message: "Model responded successfully", Output: output, Latency: latency, CheckedAt: checkedAt}, nil
 }
 
 func existingHome() string { home, _ := os.UserHomeDir(); return home }

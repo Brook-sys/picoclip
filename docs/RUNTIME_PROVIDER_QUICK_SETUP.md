@@ -30,7 +30,7 @@ For runtimes added through **Use Existing**, PicoClip derives the native configu
 - The advanced editor displays secret-shaped values as `[REDACTED]` and restores their stored values when the placeholder is submitted unchanged.
 - PicoClaw keeps model API keys in `.security.yml` with file mode `0600`.
 
-Saving configuration does not contact an AI provider and does not consume tokens. **Test AI** remains a separate action and asks for confirmation before sending a real request.
+Saving configuration does not contact an AI provider and does not consume tokens. **Test Model** sends a small OpenAI-compatible chat-completions request using the values currently entered in the Quick Setup form, including unsaved values, after an explicit confirmation. The test does not write runtime files or persist the API key, model, endpoint, response, or result. A blank API-key field reuses the configured managed key for the request; selecting the explicit removal option tests without that key.
 
 Conflict responses use HTTP `409` and set `HX-Refresh: true` so HTMX reloads the Settings page with the latest revision instead of leaving a stale form stuck.
 

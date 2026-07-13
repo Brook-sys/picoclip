@@ -18,6 +18,9 @@ func (quickConfiguratorContract) ReadQuickSetup(context.Context, domain.RuntimeS
 func (quickConfiguratorContract) ApplyQuickSetup(context.Context, domain.RuntimeState, domain.RuntimeQuickSetupInput) error {
 	return nil
 }
+func (quickConfiguratorContract) TestQuickSetup(context.Context, domain.RuntimeState, domain.RuntimeQuickSetupInput) (domain.RuntimeModelTestResult, error) {
+	return domain.RuntimeModelTestResult{}, nil
+}
 
 func TestRuntimeQuickConfiguratorIsOptionalCapability(t *testing.T) {
 	var capability RuntimeQuickConfigurator = quickConfiguratorContract{}

@@ -44,6 +44,7 @@ type RuntimeQuickConfigurator interface {
 	QuickSetupSchema() domain.RuntimeQuickSetupSchema
 	ReadQuickSetup(ctx context.Context, state domain.RuntimeState) (domain.RuntimeQuickSetupView, error)
 	ApplyQuickSetup(ctx context.Context, state domain.RuntimeState, input domain.RuntimeQuickSetupInput) error
+	TestQuickSetup(ctx context.Context, state domain.RuntimeState, input domain.RuntimeQuickSetupInput) (domain.RuntimeModelTestResult, error)
 }
 
 type RuntimeExistingPathsResolver interface {

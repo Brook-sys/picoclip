@@ -35,7 +35,10 @@ func (a *PicoClawAdapter) ResolveExistingPaths(binPath string) domain.RuntimeSta
 		home := filepath.Dir(config)
 		return domain.RuntimeState{BinPath: binPath, ConfigPath: config, HomePath: home, DataPath: home, LogsPath: filepath.Join(home, "logs")}
 	}
-	home := filepath.Join(existingHome(), ".picoclaw")
+	home := strings.TrimSpace(os.Getenv("PICOCLAW_HOME"))
+	if home == "" {
+		home = filepath.Join(existingHome(), ".picoclaw")
+	}
 	return domain.RuntimeState{BinPath: binPath, ConfigPath: filepath.Join(home, "config.json"), HomePath: home, DataPath: home, LogsPath: filepath.Join(home, "logs")}
 }
 func (a *ClaurstAdapter) ResolveExistingPaths(binPath string) domain.RuntimeState {
@@ -160,6 +163,26 @@ func (a *CrushAdapter) ApplyQuickSetup(ctx context.Context, state domain.Runtime
 		return err
 	}
 	return atomicWriteFile(state.ConfigPath, result, secureConfigMode(state.ConfigPath))
+}
+
+func (a *CrushAdapter) TestQuickSetup(ctx context.Context, state domain.RuntimeState, input domain.RuntimeQuickSetupInput) (domain.RuntimeModelTestResult, error) {
+	apiKey := input.APIKey
+	if apiKey == "" && !input.ClearAPIKey {
+		content, err := readConfigOrDefault(state.ConfigPath, crushDefaultConfig)
+		if err != nil {
+			return domain.RuntimeModelTestResult{}, err
+		}
+		root, err := decodeJSONObject(content)
+		if err != nil {
+			return domain.RuntimeModelTestResult{}, err
+		}
+		providers, _ := optionalObject(root, "providers")
+		provider, _ := optionalObject(providers, "picoclip-openai")
+		if provider != nil {
+			apiKey, _ = stringValue(provider, "api_key")
+		}
+	}
+	return testOpenAICompatibleModel(ctx, input.Values["base_url"], apiKey, input.Values["model"])
 }
 
 func (a *PicoClawAdapter) ReadQuickSetup(ctx context.Context, state domain.RuntimeState) (domain.RuntimeQuickSetupView, error) {
@@ -326,6 +349,33 @@ func (a *PicoClawAdapter) ApplyQuickSetup(ctx context.Context, state domain.Runt
 	return atomicWritePairWithRollback(state.ConfigPath, newConfig, secureConfigMode(state.ConfigPath), securityPath, newSecurity, 0600, config)
 }
 
+func (a *PicoClawAdapter) TestQuickSetup(ctx context.Context, state domain.RuntimeState, input domain.RuntimeQuickSetupInput) (domain.RuntimeModelTestResult, error) {
+	apiKey := input.APIKey
+	if apiKey == "" && !input.ClearAPIKey {
+		securityPath := filepath.Join(filepath.Dir(state.ConfigPath), ".security.yml")
+		security, err := readConfigOrDefault(securityPath, picoClawDefaultSecurity)
+		if err != nil {
+			return domain.RuntimeModelTestResult{}, err
+		}
+		sec, err := decodeYAMLMap(security)
+		if err != nil {
+			return domain.RuntimeModelTestResult{}, err
+		}
+		if modelList, ok := sec["model_list"].(map[string]any); ok {
+			credential, _ := modelList["picoclip-default:0"].(map[string]any)
+			if credential == nil {
+				credential, _ = modelList["picoclip-default"].(map[string]any)
+			}
+			if credential != nil {
+				if keys, ok := credential["api_keys"].([]any); ok && len(keys) > 0 {
+					apiKey, _ = keys[0].(string)
+				}
+			}
+		}
+	}
+	return testOpenAICompatibleModel(ctx, input.Values["base_url"], apiKey, input.Values["model"])
+}
+
 func (a *ClaurstAdapter) ReadQuickSetup(ctx context.Context, state domain.RuntimeState) (domain.RuntimeQuickSetupView, error) {
 	content, err := readConfigOrDefault(state.ConfigPath, claurstDefaultConfig)
 	if err != nil {
@@ -415,6 +465,32 @@ func (a *ClaurstAdapter) ApplyQuickSetup(ctx context.Context, state domain.Runti
 		return err
 	}
 	return atomicWriteFile(state.ConfigPath, result, secureConfigMode(state.ConfigPath))
+}
+
+func (a *ClaurstAdapter) TestQuickSetup(ctx context.Context, state domain.RuntimeState, input domain.RuntimeQuickSetupInput) (domain.RuntimeModelTestResult, error) {
+	apiKey := input.APIKey
+	if apiKey == "" && !input.ClearAPIKey {
+		content, err := readConfigOrDefault(state.ConfigPath, claurstDefaultConfig)
+		if err != nil {
+			return domain.RuntimeModelTestResult{}, err
+		}
+		root, err := decodeJSONObject(content)
+		if err != nil {
+			return domain.RuntimeModelTestResult{}, err
+		}
+		config, _ := optionalObject(root, "config")
+		if config != nil {
+			apiKey, _ = stringValue(config, "api_key")
+		}
+		if apiKey == "" {
+			providers, _ := optionalObject(root, "providers")
+			openai, _ := optionalObject(providers, "openai")
+			if openai != nil {
+				apiKey, _ = stringValue(openai, "api_key")
+			}
+		}
+	}
+	return testOpenAICompatibleModel(ctx, input.Values["base_url"], apiKey, input.Values["model"])
 }
 
 func optionalObject(parent map[string]any, key string) (map[string]any, error) {

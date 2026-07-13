@@ -2,6 +2,7 @@ package web
 
 import (
 	"context"
+	"encoding/json"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -28,7 +29,7 @@ func TestRuntimeQuickSetupSettingsRedactsSecretAndPrecedesAdvanced(t *testing.T)
 	body, _ := io.ReadAll(res.Body)
 	res.Body.Close()
 	html := string(body)
-	for _, expected := range []string{"Quick Setup", "Base URL", "API key", "Model", "Save Quick Setup", "Advanced configuration", `type="password"`, `autocomplete="new-password"`, "Configured"} {
+	for _, expected := range []string{"Quick Setup", "Base URL", "API key", "Model", "Test Model", "Save Quick Setup", "Advanced configuration", `type="password"`, `autocomplete="new-password"`, "Configured"} {
 		if !strings.Contains(html, expected) {
 			t.Fatalf("missing %q", expected)
 		}
@@ -57,6 +58,41 @@ func TestRuntimeQuickSetupSettingsRedactsSecretAndPrecedesAdvanced(t *testing.T)
 	after, _ := os.ReadFile(config)
 	if string(before) != string(after) {
 		t.Fatal("stale form changed config")
+	}
+}
+
+func TestRuntimeQuickSetupTestModelUsesCurrentFormWithoutSaving(t *testing.T) {
+	var gotModel, gotAuthorization string
+	provider := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotAuthorization = r.Header.Get("Authorization")
+		var request struct {
+			Model string `json:"model"`
+		}
+		_ = json.NewDecoder(r.Body).Decode(&request)
+		gotModel = request.Model
+		_, _ = w.Write([]byte(`{"choices":[{"message":{"content":"PONG"}}]}`))
+	}))
+	defer provider.Close()
+
+	server, config := newRuntimeQuickSetupServer(t)
+	defer server.Close()
+	before, _ := os.ReadFile(config)
+	form := url.Values{"profile_id": {"openai-compatible"}, "base_url": {provider.URL + "/v1"}, "model": {"unsaved-model"}, "api_key": {"unsaved-secret"}}
+	res, err := server.Client().Post(server.URL+"/runtimes/crush/test-model", "application/x-www-form-urlencoded", strings.NewReader(form.Encode()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	body, _ := io.ReadAll(res.Body)
+	res.Body.Close()
+	if res.StatusCode != http.StatusOK || !strings.Contains(string(body), "Model responded successfully") || !strings.Contains(string(body), "PONG") {
+		t.Fatalf("status=%d body=%s", res.StatusCode, body)
+	}
+	if gotModel != "unsaved-model" || gotAuthorization != "Bearer unsaved-secret" {
+		t.Fatalf("model=%q authorization=%q", gotModel, gotAuthorization)
+	}
+	after, _ := os.ReadFile(config)
+	if string(after) != string(before) {
+		t.Fatal("test model saved the quick setup form")
 	}
 }
 

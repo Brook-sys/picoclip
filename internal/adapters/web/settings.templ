@@ -190,7 +190,7 @@ templ RuntimeQuickSetup(r RuntimeCardView) {
 			if r.QuickSetupError != "" {
 				<div class="runtime-quick-setup-error">{ r.QuickSetupError }</div>
 			} else {
-				<form hx-post={ "/runtimes/" + string(r.ID) + "/quick-setup" } hx-target="body" hx-swap="outerHTML" class="runtime-quick-setup-form">
+				<form id={ "runtime-quick-setup-" + string(r.ID) } hx-post={ "/runtimes/" + string(r.ID) + "/quick-setup" } hx-target="body" hx-swap="outerHTML" class="runtime-quick-setup-form">
 					<input type="hidden" name="profile_id" value={ r.QuickSetupSchema.ProfileID } />
 					<input type="hidden" name="revision" value={ r.QuickSetup.Revision } />
 					<label>Base URL<input class="pc-input" type="url" name="base_url" required value={ r.QuickSetup.Values["base_url"] } placeholder="https://provider.example/v1" /></label>
@@ -199,8 +199,12 @@ templ RuntimeQuickSetup(r RuntimeCardView) {
 						<label class="runtime-secret-state"><input type="checkbox" name="clear_api_key" value="true" /> Remove configured API key</label>
 					}
 					<label>Model<input class="pc-input" type="text" name="model" required value={ r.QuickSetup.Values["model"] } placeholder="model-id" /></label>
-					<p class="form-help">Saving does not contact the provider or consume tokens. Use Test AI separately when you are ready.</p>
-					<button class="pc-btn pc-btn-primary" type="submit">@Icon("check", 16) Save Quick Setup</button>
+					<p class="form-help">Test Model uses the values currently entered without saving them. It sends a small real request that may consume tokens.</p>
+					<div id={ "runtime-model-test-" + string(r.ID) }></div>
+					<div class="runtime-action-bar">
+						<button class="pc-btn pc-btn-secondary" type="button" hx-post={ "/runtimes/" + string(r.ID) + "/test-model" } hx-include={ "#runtime-quick-setup-" + string(r.ID) } hx-target={ "#runtime-model-test-" + string(r.ID) } hx-swap="innerHTML" hx-confirm="This sends a real request to the entered provider and may consume tokens. Continue?" data-loading-text="Testing model...">@Icon("zap", 16) Test Model</button>
+						<button class="pc-btn pc-btn-primary" type="submit">@Icon("check", 16) Save Quick Setup</button>
+					</div>
 				</form>
 			}
 		</section>

@@ -1,5 +1,7 @@
 package domain
 
+import "time"
+
 type RuntimeQuickSetupField struct {
 	Name        string `json:"name"`
 	Label       string `json:"label"`
@@ -30,4 +32,12 @@ type RuntimeQuickSetupInput struct {
 	APIKey      string            `json:"-"`
 	ClearAPIKey bool              `json:"clear_api_key"`
 	Revision    string            `json:"revision"`
+}
+
+type RuntimeModelTestResult struct {
+	Status    string        `json:"status"`
+	Message   string        `json:"message"`
+	Output    string        `json:"output,omitempty"`
+	Latency   time.Duration `json:"latency"`
+	CheckedAt time.Time     `json:"checked_at"`
 }

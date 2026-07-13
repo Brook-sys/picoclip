@@ -4,6 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -12,6 +15,55 @@ import (
 	"gopkg.in/yaml.v3"
 	"picoclip/internal/core/domain"
 )
+
+func TestCrushTestQuickSetupUsesUnsavedValuesWithoutWritingConfig(t *testing.T) {
+	var gotAuthorization, gotModel string
+	provider := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotAuthorization = r.Header.Get("Authorization")
+		body, _ := io.ReadAll(r.Body)
+		var request struct {
+			Model string `json:"model"`
+		}
+		_ = json.Unmarshal(body, &request)
+		gotModel = request.Model
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"choices":[{"message":{"content":"PONG"}}]}`))
+	}))
+	defer provider.Close()
+
+	path := filepath.Join(t.TempDir(), "crush.json")
+	mustWrite(t, path, `{"providers":{"picoclip-openai":{"type":"openai-compat","base_url":"https://saved.invalid/v1","api_key":"saved-secret","models":[{"id":"saved-model"}]}}}`, 0600)
+	before, _ := os.ReadFile(path)
+	result, err := NewCrushAdapter("").TestQuickSetup(context.Background(), domain.RuntimeState{ConfigPath: path}, quickInput("ignored", provider.URL+"/v1", "unsaved-model", "unsaved-secret", false))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Status != "ok" || result.Output != "PONG" || gotAuthorization != "Bearer unsaved-secret" || gotModel != "unsaved-model" {
+		t.Fatalf("result=%#v auth=%q model=%q", result, gotAuthorization, gotModel)
+	}
+	after, _ := os.ReadFile(path)
+	if string(after) != string(before) {
+		t.Fatal("test model changed runtime configuration")
+	}
+}
+
+func TestCrushTestQuickSetupUsesConfiguredSecretWhenFieldIsBlank(t *testing.T) {
+	var gotAuthorization string
+	provider := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotAuthorization = r.Header.Get("Authorization")
+		_, _ = w.Write([]byte(`{"choices":[{"message":{"content":"PONG"}}]}`))
+	}))
+	defer provider.Close()
+	path := filepath.Join(t.TempDir(), "crush.json")
+	mustWrite(t, path, `{"providers":{"picoclip-openai":{"api_key":"saved-secret"}}}`, 0600)
+	_, err := NewCrushAdapter("").TestQuickSetup(context.Background(), domain.RuntimeState{ConfigPath: path}, quickInput("ignored", provider.URL, "model", "", false))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if gotAuthorization != "Bearer saved-secret" {
+		t.Fatalf("authorization=%q", gotAuthorization)
+	}
+}
 
 func TestValidateOpenAICompatibleInput(t *testing.T) {
 	for _, tc := range []struct {
@@ -179,6 +231,15 @@ func TestExistingPathsHonorRuntimeOverrides(t *testing.T) {
 	}
 	if got := NewClaurstAdapter("").ResolveExistingPaths("/bin/claurst"); got.ConfigPath != "/custom/claurst/settings.json" || got.HomePath != "/custom/claurst" {
 		t.Fatalf("claurst=%#v", got)
+	}
+}
+
+func TestPicoClawExistingPathsHonorHomeOverride(t *testing.T) {
+	t.Setenv("PICOCLAW_CONFIG", "")
+	t.Setenv("PICOCLAW_HOME", "/custom/picoclaw-home")
+	got := NewPicoClawAdapter("").ResolveExistingPaths("/bin/picoclaw")
+	if got.ConfigPath != "/custom/picoclaw-home/config.json" || got.HomePath != "/custom/picoclaw-home" {
+		t.Fatalf("picoclaw=%#v", got)
 	}
 }
 

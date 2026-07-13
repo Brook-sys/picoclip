@@ -3,9 +3,12 @@ package web
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
+	"html"
 	"net/http"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"gopkg.in/yaml.v3"
 	"picoclip/internal/core/domain"
@@ -280,17 +283,7 @@ func (s *Server) handleWebPostRuntimeQuickSetup(w http.ResponseWriter, r *http.R
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	input := domain.RuntimeQuickSetupInput{
-		ProfileID: strings.TrimSpace(r.FormValue("profile_id")),
-		Values: map[string]string{
-			"base_url": strings.TrimSpace(r.FormValue("base_url")),
-			"model":    strings.TrimSpace(r.FormValue("model")),
-		},
-		APIKey:      r.FormValue("api_key"),
-		ClearAPIKey: r.FormValue("clear_api_key") == "true",
-		Revision:    r.FormValue("revision"),
-	}
-	_, err := s.runtimes.ApplyQuickSetup(r.Context(), domain.RuntimeID(r.PathValue("id")), input)
+	_, err := s.runtimes.ApplyQuickSetup(r.Context(), domain.RuntimeID(r.PathValue("id")), runtimeQuickSetupInput(r))
 	if err != nil {
 		status := http.StatusBadRequest
 		if errors.Is(err, domain.ErrConfigurationChanged) {
@@ -302,6 +295,38 @@ func (s *Server) handleWebPostRuntimeQuickSetup(w http.ResponseWriter, r *http.R
 	}
 	w.Header().Set("HX-Trigger", `{"picoclip-toast":{"message":"Provider configuration saved.","type":"success"}}`)
 	s.handleWebSettings(w, r)
+}
+
+func runtimeQuickSetupInput(r *http.Request) domain.RuntimeQuickSetupInput {
+	return domain.RuntimeQuickSetupInput{
+		ProfileID: strings.TrimSpace(r.FormValue("profile_id")),
+		Values: map[string]string{
+			"base_url": strings.TrimSpace(r.FormValue("base_url")),
+			"model":    strings.TrimSpace(r.FormValue("model")),
+		},
+		APIKey:      r.FormValue("api_key"),
+		ClearAPIKey: r.FormValue("clear_api_key") == "true",
+		Revision:    r.FormValue("revision"),
+	}
+}
+
+func (s *Server) handleWebPostRuntimeTestModel(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "invalid form", http.StatusBadRequest)
+		return
+	}
+	result, err := s.runtimes.TestQuickSetup(r.Context(), domain.RuntimeID(r.PathValue("id")), runtimeQuickSetupInput(r))
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	latency := result.Latency.Round(time.Millisecond).String()
+	if result.Status == "ok" {
+		_, _ = fmt.Fprintf(w, `<div class="runtime-ai-result runtime-ai-success"><strong>%s</strong><p>%s</p><small>%s</small></div>`, html.EscapeString(result.Message), html.EscapeString(result.Output), html.EscapeString(latency))
+		return
+	}
+	_, _ = fmt.Fprintf(w, `<div class="runtime-ai-result runtime-ai-error"><strong>%s</strong><small>%s</small></div>`, html.EscapeString(result.Message), html.EscapeString(latency))
 }
 
 func (s *Server) handleWebPostRuntimeTest(w http.ResponseWriter, r *http.Request) {

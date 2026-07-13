@@ -6,6 +6,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 	"time"
 
@@ -17,6 +18,7 @@ import (
 type quickRuntimeAdapter struct {
 	fakeRuntimeAdapter
 	applied domain.RuntimeQuickSetupInput
+	tested  domain.RuntimeQuickSetupInput
 }
 
 func (a *quickRuntimeAdapter) QuickSetupSchema() domain.RuntimeQuickSetupSchema {
@@ -28,6 +30,10 @@ func (a *quickRuntimeAdapter) ReadQuickSetup(context.Context, domain.RuntimeStat
 func (a *quickRuntimeAdapter) ApplyQuickSetup(_ context.Context, _ domain.RuntimeState, input domain.RuntimeQuickSetupInput) error {
 	a.applied = input
 	return nil
+}
+func (a *quickRuntimeAdapter) TestQuickSetup(_ context.Context, _ domain.RuntimeState, input domain.RuntimeQuickSetupInput) (domain.RuntimeModelTestResult, error) {
+	a.tested = input
+	return domain.RuntimeModelTestResult{Status: "ok", Message: "Model responded successfully", Output: "PONG"}, nil
 }
 func (a *quickRuntimeAdapter) ResolveExistingPaths(bin string) domain.RuntimeState {
 	return domain.RuntimeState{BinPath: bin, ConfigPath: "/native/config.json", HomePath: "/native"}
@@ -88,6 +94,92 @@ func TestRuntimeManagerQuickSetupRejectsUnsupportedAndMissing(t *testing.T) {
 	}
 	if _, _, err := m.QuickSetup(ctx, "crush"); !errors.Is(err, domain.ErrQuickSetupUnsupported) {
 		t.Fatalf("unsupported err=%v", err)
+	}
+}
+
+type revisionRuntimeAdapter struct {
+	fakeRuntimeAdapter
+	mu       sync.Mutex
+	revision string
+}
+
+func (a *revisionRuntimeAdapter) QuickSetupSchema() domain.RuntimeQuickSetupSchema {
+	return domain.RuntimeQuickSetupSchema{ProfileID: "openai-compatible"}
+}
+func (a *revisionRuntimeAdapter) ReadQuickSetup(context.Context, domain.RuntimeState) (domain.RuntimeQuickSetupView, error) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return domain.RuntimeQuickSetupView{ProfileID: "openai-compatible", Revision: a.revision}, nil
+}
+func (a *revisionRuntimeAdapter) ApplyQuickSetup(_ context.Context, _ domain.RuntimeState, input domain.RuntimeQuickSetupInput) error {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if input.Revision != a.revision {
+		return domain.ErrConfigurationChanged
+	}
+	a.revision = "next"
+	return nil
+}
+func (a *revisionRuntimeAdapter) TestQuickSetup(context.Context, domain.RuntimeState, domain.RuntimeQuickSetupInput) (domain.RuntimeModelTestResult, error) {
+	return domain.RuntimeModelTestResult{}, nil
+}
+
+func TestRuntimeManagerConcurrentQuickSetupWithSameRevisionCommitsOnce(t *testing.T) {
+	ctx := context.Background()
+	st := memory.NewStorage()
+	m := NewRuntimeManager(st, t.TempDir(), fixedClock{t: time.Now()})
+	adapter := &revisionRuntimeAdapter{fakeRuntimeAdapter: fakeRuntimeAdapter{id: "crush"}, revision: "same"}
+	m.Register(adapter)
+	if err := st.Runtimes().Save(ctx, domain.RuntimeState{ID: "runtime_crush", RuntimeID: "crush", Enabled: true, SettingsJSON: "{}", MetadataJSON: "{}"}); err != nil {
+		t.Fatal(err)
+	}
+	input := domain.RuntimeQuickSetupInput{ProfileID: "openai-compatible", Values: map[string]string{}, Revision: "same"}
+	errs := make(chan error, 2)
+	var start sync.WaitGroup
+	start.Add(1)
+	for range 2 {
+		go func() {
+			start.Wait()
+			_, err := m.ApplyQuickSetup(ctx, "crush", input)
+			errs <- err
+		}()
+	}
+	start.Done()
+	var succeeded, conflicted int
+	for range 2 {
+		err := <-errs
+		if err == nil {
+			succeeded++
+		} else if errors.Is(err, domain.ErrConfigurationChanged) {
+			conflicted++
+		} else {
+			t.Fatalf("unexpected error: %v", err)
+		}
+	}
+	if succeeded != 1 || conflicted != 1 {
+		t.Fatalf("succeeded=%d conflicted=%d", succeeded, conflicted)
+	}
+}
+
+func TestRuntimeManagerTestQuickSetupDoesNotPersistInput(t *testing.T) {
+	ctx := context.Background()
+	st := memory.NewStorage()
+	m := NewRuntimeManager(st, t.TempDir(), fixedClock{t: time.Now()})
+	adapter := &quickRuntimeAdapter{fakeRuntimeAdapter: fakeRuntimeAdapter{id: "crush"}}
+	m.Register(adapter)
+	state := domain.RuntimeState{ID: "runtime_crush", RuntimeID: "crush", Enabled: true, SettingsJSON: "{}", MetadataJSON: "{}"}
+	if err := st.Runtimes().Save(ctx, state); err != nil {
+		t.Fatal(err)
+	}
+	input := domain.RuntimeQuickSetupInput{ProfileID: "openai-compatible", Values: map[string]string{"base_url": "https://unsaved.example/v1", "model": "unsaved-model"}, APIKey: "unsaved-" + "secret"}
+	result, err := m.TestQuickSetup(ctx, "crush", input)
+	if err != nil || result.Status != "ok" || adapter.tested.Values["model"] != "unsaved-model" {
+		t.Fatalf("result=%#v tested=%#v err=%v", result, adapter.tested, err)
+	}
+	saved, _ := m.State(ctx, "crush")
+	serialized, _ := json.Marshal(saved)
+	if contains(string(serialized), "unsaved-secret") || contains(string(serialized), "unsaved-model") {
+		t.Fatalf("test input persisted: %s", serialized)
 	}
 }
 
