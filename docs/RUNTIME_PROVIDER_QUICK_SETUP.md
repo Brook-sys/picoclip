@@ -18,7 +18,9 @@ Bubblewrap is a sandbox runtime and does not expose provider Quick Setup.
 
 ## Preservation and concurrency
 
-Quick Setup merges only the PicoClip-managed entry. Existing providers, models, MCP servers, tools, and advanced options are preserved. A revision fingerprint covers every native file touched by the form; a stale form is rejected with HTTP `409 Conflict` instead of overwriting concurrent advanced edits.
+Quick Setup merges only the PicoClip-managed entry. Existing providers, models, MCP servers, tools, and advanced options are preserved. Crush model records are deduplicated without discarding existing tuning or friendly names. PicoClaw migrates legacy managed credentials to its canonical security entry. Claurst synchronizes its top-level and `config.provider_configs` OpenAI entries so higher-precedence values cannot silently override the form.
+
+Quick Setup and the advanced editor share one mutation lock. Their revision check and write happen in the same critical section; a stale form is rejected with HTTP `409 Conflict` instead of overwriting concurrent edits. Native writes are atomic and restrictive (`0600` for credential-bearing configuration). PicoClaw snapshots both managed files and restores their prior content, mode, and existence if its second write fails.
 
 For runtimes added through **Use Existing**, PicoClip derives the native configuration paths when no stored `ConfigPath` exists.
 

@@ -146,13 +146,54 @@ func secureConfigMode(path string) os.FileMode {
 	return 0600
 }
 
-func atomicWritePairWithRollback(firstPath string, first []byte, firstMode os.FileMode, secondPath string, second []byte, secondMode os.FileMode, oldFirst []byte) error {
+type fileSnapshot struct {
+	content []byte
+	mode    os.FileMode
+	exists  bool
+}
+
+func snapshotFile(path string) (fileSnapshot, error) {
+	content, err := os.ReadFile(path)
+	if errors.Is(err, os.ErrNotExist) {
+		return fileSnapshot{}, nil
+	}
+	if err != nil {
+		return fileSnapshot{}, err
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		return fileSnapshot{}, err
+	}
+	return fileSnapshot{content: content, mode: info.Mode().Perm(), exists: true}, nil
+}
+
+func restoreFile(path string, snapshot fileSnapshot) error {
+	if !snapshot.exists {
+		if err := os.Remove(path); err != nil && !errors.Is(err, os.ErrNotExist) {
+			return err
+		}
+		return nil
+	}
+	return atomicWriteFile(path, snapshot.content, snapshot.mode)
+}
+
+func atomicWritePairWithRollback(firstPath string, first []byte, firstMode os.FileMode, secondPath string, second []byte, secondMode os.FileMode) error {
+	firstBefore, err := snapshotFile(firstPath)
+	if err != nil {
+		return err
+	}
+	secondBefore, err := snapshotFile(secondPath)
+	if err != nil {
+		return err
+	}
 	if err := atomicWriteFile(firstPath, first, firstMode); err != nil {
 		return err
 	}
 	if err := atomicWriteFile(secondPath, second, secondMode); err != nil {
-		if rollbackErr := atomicWriteFile(firstPath, oldFirst, firstMode); rollbackErr != nil {
-			return fmt.Errorf("second config write failed: %v; rollback failed: %w", err, rollbackErr)
+		firstRollback := restoreFile(firstPath, firstBefore)
+		secondRollback := restoreFile(secondPath, secondBefore)
+		if firstRollback != nil || secondRollback != nil {
+			return fmt.Errorf("second config write failed: %v; rollback failed: first=%v second=%v", err, firstRollback, secondRollback)
 		}
 		return err
 	}

@@ -74,7 +74,7 @@ func redactRuntimeSecrets(value any, inherited bool) {
 func runtimeSecretKey(key string) bool {
 	compact := strings.ToLower(key)
 	compact = strings.NewReplacer("-", "", "_", "", " ", "", ".", "").Replace(compact)
-	return strings.Contains(compact, "apikey") || strings.Contains(compact, "accesstoken") || strings.Contains(compact, "clientsecret") || strings.Contains(compact, "authorization") || strings.Contains(compact, "credential") || strings.Contains(compact, "password") || strings.Contains(compact, "passwd") || strings.Contains(compact, "cookie") || compact == "token" || compact == "tokens" || compact == "secret" || compact == "secrets"
+	return strings.Contains(compact, "apikey") || strings.HasSuffix(compact, "token") || strings.Contains(compact, "clientsecret") || strings.Contains(compact, "authorization") || strings.Contains(compact, "credential") || strings.Contains(compact, "password") || strings.Contains(compact, "passwd") || strings.Contains(compact, "cookie") || compact == "tokens" || compact == "secret" || compact == "secrets"
 }
 
 func restoreRedactedRuntimeConfig(original domain.RuntimeConfigFile, submitted []byte) ([]byte, error) {

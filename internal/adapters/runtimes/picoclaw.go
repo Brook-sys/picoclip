@@ -144,12 +144,10 @@ func (a *PicoClawAdapter) WriteConfig(ctx context.Context, state domain.RuntimeS
 		return fmt.Errorf("config path is not configured")
 	}
 	path := state.ConfigPath
-	mode := os.FileMode(0644)
 	if fileName == ".security.yml" {
 		path = filepath.Join(filepath.Dir(state.ConfigPath), ".security.yml")
-		mode = 0600
 	}
-	return os.WriteFile(path, content, mode)
+	return atomicWriteFile(path, content, secureConfigMode(path))
 }
 
 func (a *PicoClawAdapter) Execute(ctx context.Context, state domain.RuntimeState, input ports.RuntimeExecutionInput) (ports.RuntimeExecutionResult, error) {

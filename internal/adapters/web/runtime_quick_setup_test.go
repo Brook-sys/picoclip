@@ -154,9 +154,9 @@ func TestRuntimeConfigRedactionFailsClosedAndRecognizesCommonSecretNames(t *test
 	if got := string(redactRuntimeConfig(invalid)); strings.Contains(got, "leak") {
 		t.Fatalf("invalid config leaked: %q", got)
 	}
-	valid := domain.RuntimeConfigFile{Language: "json", Content: []byte(`{"apiKey":"a","access_token":"b","clientSecret":"c","extra_headers":{"Authorization":"Bearer d","X-API-Key":"e"},"OPENAI_API_KEY":"f"}`)}
+	valid := domain.RuntimeConfigFile{Language: "json", Content: []byte(`{"apiKey":"a","access_token":"b","refresh_token":"refresh-value","id_token":"identity-value","bearer_token":"bearer-value","clientSecret":"c","extra_headers":{"Authorization":"Bearer d","Proxy-Authorization":"proxy-value","X-API-Key":"e"},"OPENAI_API_KEY":"f"}`)}
 	got := string(redactRuntimeConfig(valid))
-	for _, secret := range []string{`"a"`, `"b"`, `"c"`, "Bearer d", `"e"`, `"f"`} {
+	for _, secret := range []string{`"a"`, `"b"`, "refresh-value", "identity-value", "bearer-value", `"c"`, "Bearer d", "proxy-value", `"e"`, `"f"`} {
 		if strings.Contains(got, secret) {
 			t.Fatalf("secret %q leaked: %s", secret, got)
 		}

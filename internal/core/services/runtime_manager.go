@@ -2,6 +2,7 @@ package services
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -188,6 +189,44 @@ func (m *RuntimeManager) TestQuickSetup(ctx context.Context, id domain.RuntimeID
 		return domain.RuntimeModelTestResult{}, fmt.Errorf("%w: unsupported quick setup profile", domain.ErrInvalidInput)
 	}
 	return configurator.TestQuickSetup(ctx, state, input)
+}
+
+func (m *RuntimeManager) UpdateConfig(ctx context.Context, id domain.RuntimeID, fileName, revision string, update func(domain.RuntimeConfigFile) ([]byte, error)) error {
+	m.mutationMu.Lock()
+	defer m.mutationMu.Unlock()
+	state, err := m.State(ctx, id)
+	if err != nil {
+		return err
+	}
+	adapter, ok := m.Adapter(id)
+	if !ok {
+		return domain.ErrDriverUnavailable
+	}
+	files, err := adapter.ReadConfig(ctx, state)
+	if err != nil {
+		return err
+	}
+	var original domain.RuntimeConfigFile
+	found := false
+	for _, file := range files {
+		if file.Editable && file.Name == fileName {
+			original = file
+			found = true
+			break
+		}
+	}
+	if !found {
+		return fmt.Errorf("%w: unknown runtime config file", domain.ErrInvalidInput)
+	}
+	current := fmt.Sprintf("%x", sha256.Sum256(original.Content))
+	if revision == "" || revision != current {
+		return domain.ErrConfigurationChanged
+	}
+	content, err := update(original)
+	if err != nil {
+		return err
+	}
+	return adapter.WriteConfig(ctx, state, fileName, content)
 }
 
 func (m *RuntimeManager) Install(ctx context.Context, id domain.RuntimeID, mode domain.InstallMode, versionAlias string) (domain.RuntimeState, error) {

@@ -2,8 +2,10 @@ package services
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"sync"
@@ -142,6 +144,62 @@ func TestRuntimeManagerConcurrentQuickSetupWithSameRevisionCommitsOnce(t *testin
 			start.Wait()
 			_, err := m.ApplyQuickSetup(ctx, "crush", input)
 			errs <- err
+		}()
+	}
+	start.Done()
+	var succeeded, conflicted int
+	for range 2 {
+		err := <-errs
+		if err == nil {
+			succeeded++
+		} else if errors.Is(err, domain.ErrConfigurationChanged) {
+			conflicted++
+		} else {
+			t.Fatalf("unexpected error: %v", err)
+		}
+	}
+	if succeeded != 1 || conflicted != 1 {
+		t.Fatalf("succeeded=%d conflicted=%d", succeeded, conflicted)
+	}
+}
+
+type configRuntimeAdapter struct {
+	fakeRuntimeAdapter
+	mu      sync.Mutex
+	content []byte
+}
+
+func (a *configRuntimeAdapter) ReadConfig(context.Context, domain.RuntimeState) ([]domain.RuntimeConfigFile, error) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return []domain.RuntimeConfigFile{{Name: "config.json", Content: append([]byte(nil), a.content...), Editable: true}}, nil
+}
+func (a *configRuntimeAdapter) WriteConfig(_ context.Context, _ domain.RuntimeState, _ string, content []byte) error {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.content = append([]byte(nil), content...)
+	return nil
+}
+
+func TestRuntimeManagerConcurrentAdvancedConfigWithSameRevisionCommitsOnce(t *testing.T) {
+	ctx := context.Background()
+	st := memory.NewStorage()
+	m := NewRuntimeManager(st, t.TempDir(), fixedClock{t: time.Now()})
+	adapter := &configRuntimeAdapter{fakeRuntimeAdapter: fakeRuntimeAdapter{id: "crush"}, content: []byte(`{"value":"old"}`)}
+	m.Register(adapter)
+	if err := st.Runtimes().Save(ctx, domain.RuntimeState{ID: "runtime_crush", RuntimeID: "crush", Enabled: true}); err != nil {
+		t.Fatal(err)
+	}
+	revision := fmt.Sprintf("%x", sha256.Sum256(adapter.content))
+	errs := make(chan error, 2)
+	var start sync.WaitGroup
+	start.Add(1)
+	for _, value := range []string{"one", "two"} {
+		go func() {
+			start.Wait()
+			errs <- m.UpdateConfig(ctx, "crush", "config.json", revision, func(domain.RuntimeConfigFile) ([]byte, error) {
+				return []byte(value), nil
+			})
 		}()
 	}
 	start.Done()

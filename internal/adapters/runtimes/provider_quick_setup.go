@@ -130,22 +130,52 @@ func (a *CrushAdapter) ApplyQuickSetup(ctx context.Context, state domain.Runtime
 	provider["type"] = "openai-compat"
 	provider["base_url"] = strings.TrimSpace(input.Values["base_url"])
 	secretUpdate(provider, "api_key", input)
+	requestedModel := strings.TrimSpace(input.Values["model"])
 	models, _ := provider["models"].([]any)
-	updated := false
+	var selected map[string]any
 	for _, raw := range models {
-		if m, ok := raw.(map[string]any); ok {
-			id, _ := stringValue(m, "id")
-			if !updated && (id == previousModel || id == input.Values["model"]) {
-				m["id"] = strings.TrimSpace(input.Values["model"])
-				m["name"] = strings.TrimSpace(input.Values["model"])
-				updated = true
-			}
+		m, ok := raw.(map[string]any)
+		if !ok {
+			continue
+		}
+		id, _ := stringValue(m, "id")
+		if id == requestedModel {
+			selected = m
+			break
+		}
+		if selected == nil && id == previousModel {
+			selected = m
 		}
 	}
-	if !updated {
-		models = append(models, map[string]any{"id": strings.TrimSpace(input.Values["model"]), "name": strings.TrimSpace(input.Values["model"])})
+	if selected == nil {
+		selected = map[string]any{"name": requestedModel}
 	}
-	provider["models"] = models
+	selected["id"] = requestedModel
+	if _, ok := selected["name"]; !ok {
+		selected["name"] = requestedModel
+	}
+	filteredModels := make([]any, 0, len(models)+1)
+	selectedAdded := false
+	for _, raw := range models {
+		m, ok := raw.(map[string]any)
+		if !ok {
+			filteredModels = append(filteredModels, raw)
+			continue
+		}
+		id, _ := stringValue(m, "id")
+		if id == requestedModel || id == previousModel {
+			if !selectedAdded {
+				filteredModels = append(filteredModels, selected)
+				selectedAdded = true
+			}
+			continue
+		}
+		filteredModels = append(filteredModels, m)
+	}
+	if !selectedAdded {
+		filteredModels = append(filteredModels, selected)
+	}
+	provider["models"] = filteredModels
 	aliases, err := object(root, "models")
 	if err != nil {
 		return err
@@ -326,6 +356,18 @@ func (a *PicoClawAdapter) ApplyQuickSetup(ctx context.Context, state domain.Runt
 	if err != nil {
 		return err
 	}
+	var existingKeys []any
+	if canonical, ok := modelList["picoclip-default:0"].(map[string]any); ok {
+		existingKeys, _ = canonical["api_keys"].([]any)
+	}
+	if len(existingKeys) == 0 {
+		if base, ok := modelList["picoclip-default"].(map[string]any); ok {
+			existingKeys, _ = base["api_keys"].([]any)
+		}
+	}
+	if len(existingKeys) == 0 {
+		existingKeys = legacyKeys
+	}
 	credential, err := mapObject(modelList, "picoclip-default:0")
 	if err != nil {
 		return err
@@ -334,8 +376,8 @@ func (a *PicoClawAdapter) ApplyQuickSetup(ctx context.Context, state domain.Runt
 		delete(credential, "api_keys")
 	} else if input.APIKey != "" {
 		credential["api_keys"] = []any{input.APIKey}
-	} else if _, exists := credential["api_keys"]; !exists && len(legacyKeys) > 0 {
-		credential["api_keys"] = legacyKeys
+	} else if len(existingKeys) > 0 {
+		credential["api_keys"] = existingKeys
 	}
 	delete(modelList, "picoclip-default")
 	newConfig, err := marshalJSONObject(root)
@@ -346,7 +388,7 @@ func (a *PicoClawAdapter) ApplyQuickSetup(ctx context.Context, state domain.Runt
 	if err != nil {
 		return err
 	}
-	return atomicWritePairWithRollback(state.ConfigPath, newConfig, secureConfigMode(state.ConfigPath), securityPath, newSecurity, 0600, config)
+	return atomicWritePairWithRollback(state.ConfigPath, newConfig, secureConfigMode(state.ConfigPath), securityPath, newSecurity, 0600)
 }
 
 func (a *PicoClawAdapter) TestQuickSetup(ctx context.Context, state domain.RuntimeState, input domain.RuntimeQuickSetupInput) (domain.RuntimeModelTestResult, error) {
@@ -415,6 +457,35 @@ func (a *ClaurstAdapter) ReadQuickSetup(ctx context.Context, state domain.Runtim
 		}
 		view.SecretConfigured = key != ""
 	}
+	if config != nil {
+		providerConfigs, providerErr := optionalObject(config, "provider_configs")
+		if providerErr != nil {
+			return view, providerErr
+		}
+		nestedOpenAI, nestedErr := optionalObject(providerConfigs, "openai")
+		if nestedErr != nil {
+			return view, nestedErr
+		}
+		if nestedOpenAI != nil {
+			base, baseErr := stringValue(nestedOpenAI, "api_base")
+			if baseErr != nil {
+				return view, baseErr
+			}
+			if base != "" {
+				view.Values["base_url"] = base
+			}
+			key, keyErr := stringValue(nestedOpenAI, "api_key")
+			if keyErr != nil {
+				return view, keyErr
+			}
+			view.SecretConfigured = view.SecretConfigured || key != ""
+		}
+		key, keyErr := stringValue(config, "api_key")
+		if keyErr != nil {
+			return view, keyErr
+		}
+		view.SecretConfigured = view.SecretConfigured || key != ""
+	}
 	provider, _ := stringValue(root, "provider")
 	configProvider := ""
 	if config != nil {
@@ -457,9 +528,40 @@ func (a *ClaurstAdapter) ApplyQuickSetup(ctx context.Context, state domain.Runti
 	if err != nil {
 		return err
 	}
-	openai["api_base"] = strings.TrimSpace(input.Values["base_url"])
+	baseURL := strings.TrimSpace(input.Values["base_url"])
+	openai["api_base"] = baseURL
 	openai["enabled"] = true
-	secretUpdate(openai, "api_key", input)
+	providerConfigs, err := object(config, "provider_configs")
+	if err != nil {
+		return err
+	}
+	nestedOpenAI, err := object(providerConfigs, "openai")
+	if err != nil {
+		return err
+	}
+	nestedOpenAI["api_base"] = baseURL
+	nestedOpenAI["enabled"] = true
+	effectiveKey, _ := stringValue(config, "api_key")
+	if effectiveKey == "" {
+		effectiveKey, _ = stringValue(nestedOpenAI, "api_key")
+	}
+	if effectiveKey == "" {
+		effectiveKey, _ = stringValue(openai, "api_key")
+	}
+	if input.ClearAPIKey {
+		delete(config, "api_key")
+		delete(nestedOpenAI, "api_key")
+		delete(openai, "api_key")
+	} else {
+		if input.APIKey != "" {
+			effectiveKey = input.APIKey
+		}
+		if effectiveKey != "" {
+			config["api_key"] = effectiveKey
+			nestedOpenAI["api_key"] = effectiveKey
+			openai["api_key"] = effectiveKey
+		}
+	}
 	result, err := marshalJSONObject(root)
 	if err != nil {
 		return err
@@ -481,6 +583,13 @@ func (a *ClaurstAdapter) TestQuickSetup(ctx context.Context, state domain.Runtim
 		config, _ := optionalObject(root, "config")
 		if config != nil {
 			apiKey, _ = stringValue(config, "api_key")
+			if apiKey == "" {
+				providerConfigs, _ := optionalObject(config, "provider_configs")
+				openai, _ := optionalObject(providerConfigs, "openai")
+				if openai != nil {
+					apiKey, _ = stringValue(openai, "api_key")
+				}
+			}
 		}
 		if apiKey == "" {
 			providers, _ := optionalObject(root, "providers")

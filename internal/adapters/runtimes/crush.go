@@ -140,7 +140,7 @@ func (a *CrushAdapter) WriteConfig(ctx context.Context, state domain.RuntimeStat
 	if state.ConfigPath == "" {
 		return fmt.Errorf("config path is not configured")
 	}
-	return os.WriteFile(state.ConfigPath, content, 0644)
+	return atomicWriteFile(state.ConfigPath, content, secureConfigMode(state.ConfigPath))
 }
 
 func (a *CrushAdapter) Execute(ctx context.Context, state domain.RuntimeState, input ports.RuntimeExecutionInput) (ports.RuntimeExecutionResult, error) {

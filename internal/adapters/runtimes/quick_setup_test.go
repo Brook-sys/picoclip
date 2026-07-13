@@ -223,6 +223,27 @@ func TestPicoClawQuickSetupRecognizesBaseSecurityCredential(t *testing.T) {
 	}
 }
 
+func TestPicoClawQuickSetupPreservesBaseSecurityCredentialOnSave(t *testing.T) {
+	dir := t.TempDir()
+	config := filepath.Join(dir, "config.json")
+	security := filepath.Join(dir, ".security.yml")
+	mustWrite(t, config, `{"version":3,"model_list":[{"model_name":"picoclip-default","provider":"openai","model":"old","api_base":"https://old/v1"}]}`, 0600)
+	mustWrite(t, security, "model_list:\n  picoclip-default:\n    api_keys: [base-secret]\n", 0600)
+	a := NewPicoClawAdapter("")
+	state := domain.RuntimeState{ConfigPath: config}
+	view, err := a.ReadQuickSetup(context.Background(), state)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := a.ApplyQuickSetup(context.Background(), state, quickInput(view.Revision, "https://new/v1", "new", "", false)); err != nil {
+		t.Fatal(err)
+	}
+	content, _ := os.ReadFile(security)
+	if !strings.Contains(string(content), "base-secret") || !strings.Contains(string(content), "picoclip-default:0") {
+		t.Fatalf("credential was not migrated: %s", content)
+	}
+}
+
 func TestExistingPathsHonorRuntimeOverrides(t *testing.T) {
 	t.Setenv("PICOCLAW_CONFIG", "/custom/picoclaw.json")
 	t.Setenv("CLAURST_HOME", "/custom/claurst")
@@ -267,6 +288,131 @@ func TestClaurstQuickSetupPreservesAdvancedSettings(t *testing.T) {
 	}
 	if got["config"].(map[string]any)["model"] != "gpt-x" || got["config"].(map[string]any)["other"] != true {
 		t.Fatal("config merge failed")
+	}
+}
+
+func TestAtomicWritePairRollbackRestoresExistenceContentAndMode(t *testing.T) {
+	dir := t.TempDir()
+	first := filepath.Join(dir, "config.json")
+	second := filepath.Join(dir, "blocked")
+	mustWrite(t, first, "old", 0640)
+	if err := os.Mkdir(second, 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := atomicWritePairWithRollback(first, []byte("new"), 0600, second, []byte("security"), 0600); err == nil {
+		t.Fatal("expected second write failure")
+	}
+	content, _ := os.ReadFile(first)
+	info, _ := os.Stat(first)
+	if string(content) != "old" || info.Mode().Perm() != 0640 {
+		t.Fatalf("content=%q mode=%o", content, info.Mode().Perm())
+	}
+
+	missingFirst := filepath.Join(dir, "missing.json")
+	if err := atomicWritePairWithRollback(missingFirst, []byte("new"), 0600, second, []byte("security"), 0600); err == nil {
+		t.Fatal("expected second write failure")
+	}
+	if _, err := os.Stat(missingFirst); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("missing first was not removed: %v", err)
+	}
+}
+
+func TestClaurstQuickSetupCanonicalizesEffectiveProviderConfiguration(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "settings.json")
+	mustWrite(t, path, `{"provider":"openai","config":{"provider":"openai","model":"old","api_key":"effective-key","provider_configs":{"openai":{"api_base":"https://nested/v1","api_key":"nested-key","options":{"nested":true}}}},"providers":{"openai":{"api_base":"https://top/v1","api_key":"top-key","options":{"top":true}}}}`, 0600)
+	a := NewClaurstAdapter("")
+	state := domain.RuntimeState{ConfigPath: path}
+	view, err := a.ReadQuickSetup(context.Background(), state)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if view.Values["base_url"] != "https://nested/v1" || !view.SecretConfigured {
+		t.Fatalf("view=%#v", view)
+	}
+	if err := a.ApplyQuickSetup(context.Background(), state, quickInput(view.Revision, "https://new/v1", "new-model", "", false)); err != nil {
+		t.Fatal(err)
+	}
+	var root map[string]any
+	readJSON(t, path, &root)
+	config := root["config"].(map[string]any)
+	top := root["providers"].(map[string]any)["openai"].(map[string]any)
+	nested := config["provider_configs"].(map[string]any)["openai"].(map[string]any)
+	for name, provider := range map[string]map[string]any{"top": top, "nested": nested} {
+		if provider["api_base"] != "https://new/v1" || provider["api_key"] != "effective-key" {
+			t.Fatalf("%s=%#v", name, provider)
+		}
+	}
+	if config["api_key"] != "effective-key" || top["options"] == nil || nested["options"] == nil {
+		t.Fatalf("config=%#v top=%#v nested=%#v", config, top, nested)
+	}
+
+	view, _ = a.ReadQuickSetup(context.Background(), state)
+	if err := a.ApplyQuickSetup(context.Background(), state, quickInput(view.Revision, "https://new/v1", "new-model", "", true)); err != nil {
+		t.Fatal(err)
+	}
+	readJSON(t, path, &root)
+	config = root["config"].(map[string]any)
+	top = root["providers"].(map[string]any)["openai"].(map[string]any)
+	nested = config["provider_configs"].(map[string]any)["openai"].(map[string]any)
+	if _, ok := config["api_key"]; ok {
+		t.Fatal("config api_key not cleared")
+	}
+	if _, ok := top["api_key"]; ok {
+		t.Fatal("top api_key not cleared")
+	}
+	if _, ok := nested["api_key"]; ok {
+		t.Fatal("nested api_key not cleared")
+	}
+}
+
+func TestAdvancedRuntimeWritesPreserveRestrictiveModes(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		file  string
+		write func(domain.RuntimeState, string, []byte) error
+	}{
+		{"crush", "crush.json", func(s domain.RuntimeState, n string, b []byte) error {
+			return NewCrushAdapter("").WriteConfig(context.Background(), s, n, b)
+		}},
+		{"picoclaw", "config.json", func(s domain.RuntimeState, n string, b []byte) error {
+			return NewPicoClawAdapter("").WriteConfig(context.Background(), s, n, b)
+		}},
+		{"claurst", "settings.json", func(s domain.RuntimeState, n string, b []byte) error {
+			return NewClaurstAdapter("").WriteConfig(context.Background(), s, n, b)
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), tc.file)
+			mustWrite(t, path, `{}`, 0600)
+			if err := tc.write(domain.RuntimeState{ConfigPath: path}, tc.file, []byte(`{"api_key":"secret"}`)); err != nil {
+				t.Fatal(err)
+			}
+			info, _ := os.Stat(path)
+			if info.Mode().Perm() != 0600 {
+				t.Fatalf("mode=%o", info.Mode().Perm())
+			}
+		})
+	}
+}
+
+func TestCrushQuickSetupDeduplicatesRequestedModelAndPreservesRichRecord(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "crush.json")
+	mustWrite(t, path, `{"providers":{"picoclip-openai":{"models":[{"id":"old","name":"Old","temperature":0.1},{"id":"target","name":"Friendly","temperature":0.7}]}}}`, 0600)
+	a := NewCrushAdapter("")
+	state := domain.RuntimeState{ConfigPath: path}
+	view, _ := a.ReadQuickSetup(context.Background(), state)
+	if err := a.ApplyQuickSetup(context.Background(), state, quickInput(view.Revision, "https://x/v1", "target", "", false)); err != nil {
+		t.Fatal(err)
+	}
+	var root map[string]any
+	readJSON(t, path, &root)
+	models := root["providers"].(map[string]any)["picoclip-openai"].(map[string]any)["models"].([]any)
+	if len(models) != 1 {
+		t.Fatalf("models=%#v", models)
+	}
+	model := models[0].(map[string]any)
+	if model["name"] != "Friendly" || model["temperature"] != 0.7 {
+		t.Fatalf("rich model was not preserved: %#v", model)
 	}
 }
 

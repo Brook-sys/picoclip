@@ -219,58 +219,30 @@ func (s *Server) handleWebPostRuntimeConfig(w http.ResponseWriter, r *http.Reque
 	}
 	runtimeID := domain.RuntimeID(r.PathValue("id"))
 	fileName := strings.TrimSpace(r.FormValue("file_name"))
-	content := []byte(r.FormValue("content"))
+	submitted := []byte(r.FormValue("content"))
 	revision := strings.TrimSpace(r.FormValue("revision"))
-	state, err := s.runtimes.State(r.Context(), runtimeID)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-	adapter, ok := s.runtimes.Adapter(runtimeID)
-	if !ok {
-		http.Error(w, "runtime unavailable", http.StatusBadRequest)
-		return
-	}
-	files, err := adapter.ReadConfig(r.Context(), state)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-	allowed := false
-	var original domain.RuntimeConfigFile
-	for _, file := range files {
-		if file.Editable && file.Name == fileName && filepath.Base(fileName) == fileName {
-			allowed = true
-			original = file
-			break
-		}
-	}
-	if !allowed {
+	if filepath.Base(fileName) != fileName {
 		http.Error(w, "unknown runtime config file", http.StatusBadRequest)
 		return
 	}
-	if revision == "" || revision != runtimeConfigRevision(original.Content) {
-		w.Header().Set("HX-Refresh", "true")
-		http.Error(w, "runtime configuration changed; reload before saving", http.StatusConflict)
-		return
-	}
-	if strings.HasSuffix(fileName, ".json") && !json.Valid(content) {
-		http.Error(w, "invalid json", http.StatusBadRequest)
-		return
-	}
-	if strings.HasSuffix(fileName, ".yml") || strings.HasSuffix(fileName, ".yaml") {
-		var parsed any
-		if err := yaml.Unmarshal(content, &parsed); err != nil {
-			http.Error(w, "invalid yaml", http.StatusBadRequest)
+	err := s.runtimes.UpdateConfig(r.Context(), runtimeID, fileName, revision, func(original domain.RuntimeConfigFile) ([]byte, error) {
+		if strings.HasSuffix(fileName, ".json") && !json.Valid(submitted) {
+			return nil, errors.New("invalid json")
+		}
+		if strings.HasSuffix(fileName, ".yml") || strings.HasSuffix(fileName, ".yaml") {
+			var parsed any
+			if err := yaml.Unmarshal(submitted, &parsed); err != nil {
+				return nil, errors.New("invalid yaml")
+			}
+		}
+		return restoreRedactedRuntimeConfig(original, submitted)
+	})
+	if err != nil {
+		if errors.Is(err, domain.ErrConfigurationChanged) {
+			w.Header().Set("HX-Refresh", "true")
+			http.Error(w, "runtime configuration changed; reload before saving", http.StatusConflict)
 			return
 		}
-	}
-	content, err = restoreRedactedRuntimeConfig(original, content)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-	if err := adapter.WriteConfig(r.Context(), state, fileName, content); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
