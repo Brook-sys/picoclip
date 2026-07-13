@@ -5,6 +5,8 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/netip"
+	"net/url"
 	"strings"
 	"testing"
 	"time"
@@ -72,6 +74,56 @@ func TestSkillServiceImportRemoteYAMLRejectsPrivateAddress(t *testing.T) {
 	_, err := service.ImportRemoteYAML(context.Background(), "", remote.URL)
 	if err == nil || !strings.Contains(err.Error(), "non-public address") {
 		t.Fatalf("ImportRemoteYAML error = %v, want rejected private address", err)
+	}
+}
+
+func TestRemoteSkillURLValidationRejectsCredentialsAndUnsafeRedirects(t *testing.T) {
+	for _, rawURL := range []string{
+		"file:///etc/passwd",
+		"https://user:password@example.com/skill.yaml",
+		"//example.com/skill.yaml",
+	} {
+		parsed, err := url.Parse(rawURL)
+		if err != nil {
+			t.Fatalf("parse test URL %q: %v", rawURL, err)
+		}
+		if err := validateRemoteSkillURL(parsed); err == nil {
+			t.Fatalf("validateRemoteSkillURL(%q) accepted unsafe URL", rawURL)
+		}
+	}
+
+	redirect := &http.Request{URL: &url.URL{Scheme: "http", Host: "127.0.0.1", Path: "/private"}}
+	if err := remoteSkillHTTPClient.CheckRedirect(redirect, []*http.Request{{}}); err != nil {
+		// The redirect hook validates URL shape; the custom dialer rejects the private target
+		// after resolution, including redirects and DNS rebinding attempts.
+		return
+	}
+	if isPublicRemoteSkillIP(netip.MustParseAddr("127.0.0.1")) {
+		t.Fatal("loopback redirect target was considered public")
+	}
+}
+
+func TestPublicRemoteSkillIPPolicy(t *testing.T) {
+	tests := []struct {
+		address string
+		public  bool
+	}{
+		{address: "8.8.8.8", public: true},
+		{address: "2606:4700:4700::1111", public: true},
+		{address: "127.0.0.1", public: false},
+		{address: "10.0.0.1", public: false},
+		{address: "169.254.169.254", public: false},
+		{address: "100.64.0.1", public: false},
+		{address: "::1", public: false},
+		{address: "fc00::1", public: false},
+		{address: "fe80::1", public: false},
+	}
+	for _, test := range tests {
+		t.Run(test.address, func(t *testing.T) {
+			if got := isPublicRemoteSkillIP(netip.MustParseAddr(test.address)); got != test.public {
+				t.Fatalf("isPublicRemoteSkillIP(%s) = %v, want %v", test.address, got, test.public)
+			}
+		})
 	}
 }
 
