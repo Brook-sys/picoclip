@@ -347,7 +347,7 @@ func testOpenAICompatibleModel(ctx context.Context, baseURL, apiKey, model strin
 	started := time.Now()
 	// modelTestHTTPClient disables proxies, validates every redirect, resolves DNS in
 	// DialContext, rejects special/private addresses, and dials only the validated IP.
-	response, err := modelTestHTTPClient.Do(req) // lgtm[go/request-forgery]
+	response, err := modelTestHTTPClient.Do(req)
 	latency := time.Since(started)
 	checkedAt := time.Now().UTC()
 	if err != nil {
