@@ -1,7 +1,7 @@
 import { defineConfig, devices } from '@playwright/test';
 
-const baseURL = process.env.BASE_URL || 'http://127.0.0.1:8088';
-const port = new URL(baseURL).port || '8088';
+const baseURL = process.env.BASE_URL || 'http://127.0.0.1:18088';
+const port = new URL(baseURL).port || '18088';
 const reuseExistingServer = process.env.PLAYWRIGHT_REUSE_SERVER === 'true';
 
 export default defineConfig({

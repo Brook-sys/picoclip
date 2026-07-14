@@ -1,7 +1,8 @@
 #!/bin/sh
 set -eu
 
-BASE_URL="${BASE_URL:-http://127.0.0.1:8088}"
+# Keep automated E2E isolated from the developer's persistent PicoClip on 8088.
+BASE_URL="${BASE_URL:-http://127.0.0.1:18088}"
 export BASE_URL
 
 port_from_url() {

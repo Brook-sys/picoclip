@@ -517,7 +517,7 @@ Eventos importantes:
 
 ### Settings
 
-Settings contém configuração operacional e danger zone.
+Settings contém configuração operacional e danger zone. Configuração de runtimes inclui o Runtime Provider Quick Setup. Formulários devem manter configurações avançadas recolhidas, usando `<details>` sem estado `open`, e tratar `409 Conflict` ou revisões de concorrência recarregando a página via `HX-Refresh`. Formulários não devem emitir toasts conflitantes entre atributos HTML e Server Headers.
 
 Regras:
 

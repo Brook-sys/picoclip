@@ -1,9 +1,85 @@
 package runtimes
 
 import (
+	"context"
+	"io"
+	"net/http"
 	"strings"
 	"testing"
 )
+
+type roundTripFunc func(*http.Request) (*http.Response, error)
+
+func (f roundTripFunc) RoundTrip(req *http.Request) (*http.Response, error) { return f(req) }
+
+func TestResolveGitHubReleaseTagUsesPublicLatestRedirect(t *testing.T) {
+	oldClient := githubRedirectHTTPClient
+	t.Cleanup(func() { githubRedirectHTTPClient = oldClient })
+	githubRedirectHTTPClient = &http.Client{
+		Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+			if req.URL.String() != "https://github.com/charmbracelet/crush/releases/latest" {
+				t.Fatalf("unexpected URL %s", req.URL)
+			}
+			return &http.Response{
+				StatusCode: http.StatusFound,
+				Status:     "302 Found",
+				Header:     http.Header{"Location": []string{"https://github.com/charmbracelet/crush/releases/tag/v0.84.1"}},
+				Body:       io.NopCloser(strings.NewReader("")),
+			}, nil
+		}),
+		CheckRedirect: func(_ *http.Request, _ []*http.Request) error { return http.ErrUseLastResponse },
+	}
+
+	tag, err := resolveGitHubReleaseTag(context.Background(), "charmbracelet", "crush", "latest")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if tag != "v0.84.1" {
+		t.Fatalf("tag = %q", tag)
+	}
+}
+
+func TestResolveGitHubReleaseTagUsesExplicitTagWithoutNetwork(t *testing.T) {
+	oldClient := githubRedirectHTTPClient
+	t.Cleanup(func() { githubRedirectHTTPClient = oldClient })
+	githubRedirectHTTPClient = &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		t.Fatalf("unexpected network request to %s", req.URL)
+		return nil, nil
+	})}
+
+	tag, err := resolveGitHubReleaseTag(context.Background(), "charmbracelet", "crush", "v0.84.1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if tag != "v0.84.1" {
+		t.Fatalf("tag = %q", tag)
+	}
+}
+
+func TestFetchGitHubReleaseUsesConfiguredToken(t *testing.T) {
+	t.Setenv("GH_TOKEN", "gh-test-token")
+	oldClient := githubHTTPClient
+	t.Cleanup(func() { githubHTTPClient = oldClient })
+	githubHTTPClient = &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		if got := req.Header.Get("Authorization"); got != "Bearer gh-test-token" {
+			t.Fatalf("authorization = %q", got)
+		}
+		return &http.Response{StatusCode: http.StatusOK, Status: "200 OK", Body: io.NopCloser(strings.NewReader(`{"tag_name":"v1.0.0","assets":[]}`)), Header: make(http.Header)}, nil
+	})}
+	if _, err := fetchGitHubRelease(context.Background(), "owner", "repo", "latest"); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestRuntimeInstallPreservesGitHubRateLimitErrorWhenFallbackFails(t *testing.T) {
+	downloadErr := &githubAPIError{Status: "403 Forbidden", Message: "API rate limit exceeded", Reset: "tomorrow"}
+	err := runtimeInstallError(downloadErr, io.ErrUnexpectedEOF)
+	for _, want := range []string{"API rate limit exceeded", "403 Forbidden", "fallback", "unexpected EOF"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Fatalf("error %q missing %q", err, want)
+		}
+	}
+}
 
 func TestRuntimeAssetNamesIncludeVersionedAndUnversionedForms(t *testing.T) {
 	names := runtimeAssetNames("crush", "v0.79.1")

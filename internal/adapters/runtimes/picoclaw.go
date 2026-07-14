@@ -56,12 +56,13 @@ func (a *PicoClawAdapter) Install(ctx context.Context, mode domain.InstallMode, 
 
 	version, sourceURL, err := installFromGitHubRelease(ctx, "sipeed", "picoclaw", "picoclaw", "picoclaw", versionAlias, binPath)
 	if err != nil {
-		if err := copyExistingBinary(a.FallbackBinary, binPath); err != nil {
-			return domain.RuntimeState{}, fmt.Errorf("failed to download release and fallback failed: %w", err)
+		downloadErr := err
+		if fallbackErr := copyExistingBinary(a.FallbackBinary, binPath); fallbackErr != nil {
+			return domain.RuntimeState{}, runtimeInstallError(downloadErr, fallbackErr)
 		}
 	}
 
-	if err := writeFileIfMissing(configPath, []byte("{\n  \"agents\": {\n    \"defaults\": {\n      \"workspace\": \""+filepath.ToSlash(filepath.Join(homePath, "workspace"))+"\",\n      \"restrict_to_workspace\": true\n    }\n  },\n  \"tools\": {\n    \"exec\": {\n      \"enabled\": true,\n      \"enable_deny_patterns\": true\n    },\n    \"mcp\": {\n      \"enabled\": false,\n      \"servers\": {}\n    }\n  }\n}\n"), 0644); err != nil {
+	if err := writeFileIfMissing(configPath, []byte("{\n  \"version\": 3,\n  \"agents\": {\n    \"defaults\": {\n      \"workspace\": \""+filepath.ToSlash(filepath.Join(homePath, "workspace"))+"\",\n      \"restrict_to_workspace\": true\n    }\n  },\n  \"tools\": {\n    \"exec\": {\n      \"enabled\": true,\n      \"enable_deny_patterns\": true\n    },\n    \"mcp\": {\n      \"enabled\": false,\n      \"servers\": {}\n    }\n  }\n}\n"), 0644); err != nil {
 		return domain.RuntimeState{}, err
 	}
 	_ = writeFileIfMissing(filepath.Join(filepath.Dir(configPath), ".security.yml"), []byte("# Sensitive PicoClaw values managed by PicoClip.\n"), 0600)
@@ -144,12 +145,10 @@ func (a *PicoClawAdapter) WriteConfig(ctx context.Context, state domain.RuntimeS
 		return fmt.Errorf("config path is not configured")
 	}
 	path := state.ConfigPath
-	mode := os.FileMode(0644)
 	if fileName == ".security.yml" {
 		path = filepath.Join(filepath.Dir(state.ConfigPath), ".security.yml")
-		mode = 0600
 	}
-	return os.WriteFile(path, content, mode)
+	return atomicWriteFile(path, content, secureConfigMode(path))
 }
 
 func (a *PicoClawAdapter) Execute(ctx context.Context, state domain.RuntimeState, input ports.RuntimeExecutionInput) (ports.RuntimeExecutionResult, error) {

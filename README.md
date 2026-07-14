@@ -73,6 +73,8 @@ PicoClip aims to fail visibly and recover conservatively. Current reliability fe
 
 See [Robustness, Recovery, and Failure Learning](docs/ROBUSTNESS.md) for the detailed operational model.
 
+Runtime providers can be configured from Settings with the adapter-aware [Runtime Provider Quick Setup](docs/RUNTIME_PROVIDER_QUICK_SETUP.md), while the full native configuration remains available in the advanced editor.
+
 ## Quick start
 
 PicoClip is distributed as a single binary. It does not require an external database or heavy runtime services.

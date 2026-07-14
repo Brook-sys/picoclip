@@ -73,6 +73,8 @@ PicoClip tenta falhar de forma visível e recuperar de forma conservadora. Recur
 
 Veja [Robustez, Recovery e Aprendizado com Falhas](docs/ROBUSTNESS.pt-BR.md) para o modelo operacional detalhado.
 
+Os provedores de runtimes podem ser configurados a partir de Settings com a interface amigável do [Runtime Provider Quick Setup](docs/RUNTIME_PROVIDER_QUICK_SETUP.md), mantendo a configuração nativa completa disponível no editor avançado.
+
 ## Como iniciar rapidamente
 
 PicoClip é distribuído como um binário único. Ele não exige banco de dados externo nem serviços pesados em tempo de execução.

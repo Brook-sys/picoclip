@@ -175,28 +175,63 @@ templ RuntimeConfiguredCard(r RuntimeCardView) {
 	</div>
 }
 
+templ RuntimeQuickSetup(r RuntimeCardView) {
+	if r.QuickSetupSupported {
+		<section class="runtime-quick-setup">
+			<div class="runtime-quick-setup-header">
+				<div>
+					<strong>Quick Setup</strong>
+					<p>{ r.QuickSetupSchema.Description }</p>
+				</div>
+				if r.QuickSetup.Configured {
+					<span class="pc-badge pc-badge-good">Configured</span>
+				}
+			</div>
+			if r.QuickSetupError != "" {
+				<div class="runtime-quick-setup-error">{ r.QuickSetupError }</div>
+			} else {
+				<form id={ "runtime-quick-setup-" + string(r.ID) } hx-post={ "/runtimes/" + string(r.ID) + "/quick-setup" } hx-target="body" hx-swap="outerHTML" class="runtime-quick-setup-form">
+					<input type="hidden" name="profile_id" value={ r.QuickSetupSchema.ProfileID } />
+					<input type="hidden" name="revision" value={ r.QuickSetup.Revision } />
+					<label>Base URL<input class="pc-input" type="url" name="base_url" required value={ r.QuickSetup.Values["base_url"] } placeholder="https://provider.example/v1" /></label>
+					<label>API key<input class="pc-input" type="password" name="api_key" autocomplete="new-password" placeholder="Leave blank to keep the current key" /></label>
+					if r.QuickSetup.SecretConfigured {
+						<label class="runtime-secret-state"><input type="checkbox" name="clear_api_key" value="true" /> Remove configured API key</label>
+					}
+					<label>Model<input class="pc-input" type="text" name="model" required value={ r.QuickSetup.Values["model"] } placeholder="model-id" /></label>
+					<p class="form-help">Test Model uses the values currently entered without saving them. It sends a small real request that may consume tokens.</p>
+					<div id={ "runtime-model-test-" + string(r.ID) }></div>
+					<div class="runtime-action-bar">
+						<button class="pc-btn pc-btn-secondary" type="button" hx-post={ "/runtimes/" + string(r.ID) + "/test-model" } hx-include={ "#runtime-quick-setup-" + string(r.ID) } hx-target={ "#runtime-model-test-" + string(r.ID) } hx-swap="innerHTML" hx-confirm="This sends a real request to the entered provider and may consume tokens. Continue?" data-loading-text="Testing model...">@Icon("zap", 16) Test Model</button>
+						<button class="pc-btn pc-btn-primary" type="submit">@Icon("check", 16) Save Quick Setup</button>
+					</div>
+				</form>
+			}
+		</section>
+	}
+}
+
 templ RuntimeConfigEditors(r RuntimeCardView) {
 	if len(r.ConfigFiles) > 0 {
-		for _, file := range r.ConfigFiles {
-			<form hx-post={ "/runtimes/" + string(r.ID) + "/config" } hx-target="body" hx-swap="outerHTML" class="runtime-config-editor" data-success="Runtime config saved.">
-				<div class="runtime-config-header">
-					<strong>{ file.Name }</strong>
-					if file.Sensitive {
-						<span class="pc-badge pc-badge-bad">Sensitive</span>
-					}
-				</div>
-				<input type="hidden" name="file_name" value={ file.Name } />
-				<textarea name="content" spellcheck="false">{ string(file.Content) }</textarea>
-				<button class="pc-btn pc-btn-secondary" type="submit">Save { file.Name }</button>
-			</form>
-		}
-	} else if r.State.ConfigPath != "" {
-		<form hx-post={ "/runtimes/" + string(r.ID) + "/config" } hx-target="body" hx-swap="outerHTML" class="runtime-config-editor" data-success="Runtime config saved.">
-			<div class="runtime-config-header"><strong>config.json</strong></div>
-			<input type="hidden" name="file_name" value="config.json" />
-			<textarea name="content" spellcheck="false"></textarea>
-			<button class="pc-btn pc-btn-secondary" type="submit">Save Config</button>
-		</form>
+		<details class="runtime-advanced-config">
+			<summary>Advanced configuration</summary>
+			<div class="runtime-advanced-config-body">
+				for _, file := range r.ConfigFiles {
+					<form hx-post={ "/runtimes/" + string(r.ID) + "/config" } hx-target="body" hx-swap="outerHTML" class="runtime-config-editor" data-success="Runtime config saved.">
+						<div class="runtime-config-header">
+							<strong>{ file.Name }</strong>
+							if file.Sensitive {
+								<span class="pc-badge pc-badge-bad">Sensitive</span>
+							}
+						</div>
+						<input type="hidden" name="file_name" value={ file.Name } />
+						<input type="hidden" name="revision" value={ file.Revision } />
+						<textarea name="content" spellcheck="false">{ string(file.Content) }</textarea>
+						<button class="pc-btn pc-btn-secondary" type="submit">Save { file.Name }</button>
+					</form>
+				}
+			</div>
+		</details>
 	}
 }
 
@@ -331,6 +366,7 @@ templ SettingsPage(view SettingsView) {
 								<div class="runtime-list-body">
 									if r.Configured {
 									@RuntimeConfiguredCard(r)
+									@RuntimeQuickSetup(r)
 									@RuntimeConfigEditors(r)
 								} else {
 									<form hx-post={ "/runtimes/" + string(r.ID) + "/install" } hx-target="body" hx-swap="outerHTML" data-success="Runtime installed." data-error="Runtime install failed." class="stacked">

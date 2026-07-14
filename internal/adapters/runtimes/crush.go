@@ -56,8 +56,9 @@ func (a *CrushAdapter) Install(ctx context.Context, mode domain.InstallMode, des
 
 	version, sourceURL, err := installFromGitHubRelease(ctx, "charmbracelet", "crush", "crush", "crush", versionAlias, binPath)
 	if err != nil {
-		if err := copyExistingBinary(a.FallbackBinary, binPath); err != nil {
-			return domain.RuntimeState{}, fmt.Errorf("failed to download release and fallback failed: %w", err)
+		downloadErr := err
+		if fallbackErr := copyExistingBinary(a.FallbackBinary, binPath); fallbackErr != nil {
+			return domain.RuntimeState{}, runtimeInstallError(downloadErr, fallbackErr)
 		}
 	}
 
@@ -140,7 +141,7 @@ func (a *CrushAdapter) WriteConfig(ctx context.Context, state domain.RuntimeStat
 	if state.ConfigPath == "" {
 		return fmt.Errorf("config path is not configured")
 	}
-	return os.WriteFile(state.ConfigPath, content, 0644)
+	return atomicWriteFile(state.ConfigPath, content, secureConfigMode(state.ConfigPath))
 }
 
 func (a *CrushAdapter) Execute(ctx context.Context, state domain.RuntimeState, input ports.RuntimeExecutionInput) (ports.RuntimeExecutionResult, error) {

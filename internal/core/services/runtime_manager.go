@@ -2,10 +2,14 @@ package services
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
+	"sync"
 	"time"
 
 	"picoclip/internal/core/domain"
@@ -22,11 +26,12 @@ type RuntimeManifest struct {
 }
 
 type RuntimeManager struct {
-	storage  ports.Storage
-	baseDir  string
-	clock    ports.Clock
-	adapters map[domain.RuntimeID]ports.RuntimeAdapter
-	catalog  []RuntimeManifest
+	storage    ports.Storage
+	baseDir    string
+	clock      ports.Clock
+	adapters   map[domain.RuntimeID]ports.RuntimeAdapter
+	catalog    []RuntimeManifest
+	mutationMu sync.Mutex
 }
 
 type RuntimeAITestResult struct {
@@ -97,6 +102,14 @@ func (m *RuntimeManager) ConfigureExisting(ctx context.Context, id domain.Runtim
 		SettingsJSON: "{}",
 		MetadataJSON: "{}",
 	}
+	if resolver, ok := adapter.(ports.RuntimeExistingPathsResolver); ok {
+		resolved := resolver.ResolveExistingPaths(binPath)
+		state.BinPath = resolved.BinPath
+		state.ConfigPath = resolved.ConfigPath
+		state.HomePath = resolved.HomePath
+		state.DataPath = resolved.DataPath
+		state.LogsPath = resolved.LogsPath
+	}
 	if err := adapter.Resolve(ctx, state); err != nil {
 		return domain.RuntimeState{}, err
 	}
@@ -104,6 +117,117 @@ func (m *RuntimeManager) ConfigureExisting(ctx context.Context, id domain.Runtim
 		return domain.RuntimeState{}, err
 	}
 	return state, nil
+}
+
+func (m *RuntimeManager) QuickSetup(ctx context.Context, id domain.RuntimeID) (domain.RuntimeQuickSetupSchema, domain.RuntimeQuickSetupView, error) {
+	state, err := m.State(ctx, id)
+	if err != nil {
+		return domain.RuntimeQuickSetupSchema{}, domain.RuntimeQuickSetupView{}, err
+	}
+	adapter, ok := m.Adapter(id)
+	if !ok {
+		return domain.RuntimeQuickSetupSchema{}, domain.RuntimeQuickSetupView{}, domain.ErrDriverUnavailable
+	}
+	configurator, ok := adapter.(ports.RuntimeQuickConfigurator)
+	if !ok {
+		return domain.RuntimeQuickSetupSchema{}, domain.RuntimeQuickSetupView{}, domain.ErrQuickSetupUnsupported
+	}
+	view, err := configurator.ReadQuickSetup(ctx, state)
+	return configurator.QuickSetupSchema(), view, err
+}
+
+func (m *RuntimeManager) ApplyQuickSetup(ctx context.Context, id domain.RuntimeID, input domain.RuntimeQuickSetupInput) (domain.RuntimeQuickSetupView, error) {
+	m.mutationMu.Lock()
+	defer m.mutationMu.Unlock()
+	state, err := m.State(ctx, id)
+	if err != nil {
+		return domain.RuntimeQuickSetupView{}, err
+	}
+	adapter, ok := m.Adapter(id)
+	if !ok {
+		return domain.RuntimeQuickSetupView{}, domain.ErrDriverUnavailable
+	}
+	configurator, ok := adapter.(ports.RuntimeQuickConfigurator)
+	if !ok {
+		return domain.RuntimeQuickSetupView{}, domain.ErrQuickSetupUnsupported
+	}
+	if input.ProfileID != configurator.QuickSetupSchema().ProfileID {
+		return domain.RuntimeQuickSetupView{}, fmt.Errorf("%w: unsupported quick setup profile", domain.ErrInvalidInput)
+	}
+	if err := configurator.ApplyQuickSetup(ctx, state, input); err != nil {
+		return domain.RuntimeQuickSetupView{}, err
+	}
+	metadata := map[string]any{}
+	if state.MetadataJSON != "" && state.MetadataJSON != "{}" {
+		_ = json.Unmarshal([]byte(state.MetadataJSON), &metadata)
+	}
+	delete(metadata, "last_ai_test")
+	if raw, marshalErr := json.Marshal(metadata); marshalErr == nil {
+		state.MetadataJSON = string(raw)
+	}
+	state.UpdatedAt = m.clock.Now()
+	if err := m.storage.Runtimes().Save(ctx, state); err != nil {
+		return domain.RuntimeQuickSetupView{}, err
+	}
+	_, _ = m.Test(ctx, id)
+	return configurator.ReadQuickSetup(ctx, state)
+}
+
+func (m *RuntimeManager) TestQuickSetup(ctx context.Context, id domain.RuntimeID, input domain.RuntimeQuickSetupInput) (domain.RuntimeModelTestResult, error) {
+	state, err := m.State(ctx, id)
+	if err != nil {
+		return domain.RuntimeModelTestResult{}, err
+	}
+	adapter, ok := m.Adapter(id)
+	if !ok {
+		return domain.RuntimeModelTestResult{}, domain.ErrDriverUnavailable
+	}
+	configurator, ok := adapter.(ports.RuntimeQuickConfigurator)
+	if !ok {
+		return domain.RuntimeModelTestResult{}, domain.ErrQuickSetupUnsupported
+	}
+	if input.ProfileID != configurator.QuickSetupSchema().ProfileID {
+		return domain.RuntimeModelTestResult{}, fmt.Errorf("%w: unsupported quick setup profile", domain.ErrInvalidInput)
+	}
+	return configurator.TestQuickSetup(ctx, state, input)
+}
+
+func (m *RuntimeManager) UpdateConfig(ctx context.Context, id domain.RuntimeID, fileName, revision string, update func(domain.RuntimeConfigFile) ([]byte, error)) error {
+	m.mutationMu.Lock()
+	defer m.mutationMu.Unlock()
+	state, err := m.State(ctx, id)
+	if err != nil {
+		return err
+	}
+	adapter, ok := m.Adapter(id)
+	if !ok {
+		return domain.ErrDriverUnavailable
+	}
+	files, err := adapter.ReadConfig(ctx, state)
+	if err != nil {
+		return err
+	}
+	var original domain.RuntimeConfigFile
+	found := false
+	for _, file := range files {
+		if file.Editable && file.Name == fileName {
+			original = file
+			found = true
+			break
+		}
+	}
+	if !found {
+		return fmt.Errorf("%w: unknown runtime config file", domain.ErrInvalidInput)
+	}
+	current := fmt.Sprintf("%x", sha256.Sum256(original.Content))
+	if revision == "" || revision != current {
+		return domain.ErrConfigurationChanged
+	}
+	content, err := update(original)
+	if err != nil {
+		return err
+	}
+	return adapter.WriteConfig(ctx, state, fileName, content)
 }
 
 func (m *RuntimeManager) Install(ctx context.Context, id domain.RuntimeID, mode domain.InstallMode, versionAlias string) (domain.RuntimeState, error) {
@@ -117,6 +241,14 @@ func (m *RuntimeManager) Install(ctx context.Context, id domain.RuntimeID, mode 
 	state, err := adapter.Install(ctx, mode, filepath.Join(m.baseDir, string(id)), versionAlias)
 	if err != nil {
 		return domain.RuntimeState{}, err
+	}
+	health := adapter.Health(ctx, state)
+	if health.Status == "error" {
+		message := "runtime binary failed its health check"
+		if len(health.Errors) > 0 && strings.TrimSpace(health.Errors[0]) != "" {
+			message = health.Errors[0]
+		}
+		return domain.RuntimeState{}, fmt.Errorf("runtime install validation failed: %s", message)
 	}
 	state.ID = "runtime_" + string(id)
 	state.RuntimeID = id

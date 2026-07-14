@@ -50,6 +50,7 @@ type RuntimeConfigFile struct {
 	Content   []byte `json:"content"`
 	Editable  bool   `json:"editable"`
 	Sensitive bool   `json:"sensitive"`
+	Revision  string `json:"revision,omitempty"`
 }
 
 type DiagnosticCheck struct {
