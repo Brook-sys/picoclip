@@ -4,13 +4,17 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
+	"net/netip"
 	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
 
 	"gopkg.in/yaml.v3"
@@ -89,6 +93,89 @@ func TestModelQuickSetupRejectsPrivateEndpoint(t *testing.T) {
 	result, err := testOpenAICompatibleModel(context.Background(), provider.URL, "secret", "model")
 	if err == nil || result.Status != "" || !strings.Contains(err.Error(), "public") {
 		t.Fatalf("result=%#v err=%v", result, err)
+	}
+}
+
+func TestPublicModelTestURLValidation(t *testing.T) {
+	for _, rawURL := range []string{
+		"file:///etc/passwd",
+		"https://user:password@example.com/v1",
+		"http://example.com:22/v1",
+		"https://example.com:8443/v1",
+	} {
+		parsed, err := url.Parse(rawURL)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := validatePublicModelTestURL(parsed); err == nil {
+			t.Fatalf("accepted unsafe model test URL %q", rawURL)
+		}
+	}
+	for _, rawURL := range []string{"http://example.com/v1", "https://example.com/v1"} {
+		parsed, _ := url.Parse(rawURL)
+		if err := validatePublicModelTestURL(parsed); err != nil {
+			t.Fatalf("validatePublicModelTestURL(%q): %v", rawURL, err)
+		}
+	}
+}
+
+func TestPublicModelTestIPPolicy(t *testing.T) {
+	tests := map[string]bool{
+		"8.8.8.8": true, "2606:4700:4700::1111": true,
+		"127.0.0.1": false, "10.0.0.1": false, "169.254.169.254": false,
+		"100.64.0.1": false, "0.0.0.1": false, "192.0.2.1": false,
+		"198.18.0.1": false, "198.51.100.1": false, "203.0.113.1": false,
+		"240.0.0.1": false, "::1": false, "fc00::1": false,
+		"fe80::1": false, "2001:db8::1": false, "100::1": false,
+	}
+	for address, want := range tests {
+		if got := isPublicModelTestIP(netip.MustParseAddr(address)); got != want {
+			t.Fatalf("isPublicModelTestIP(%s)=%v want %v", address, got, want)
+		}
+	}
+}
+
+func TestModelTestHTTPClientRejectsRedirectToPrivateAddress(t *testing.T) {
+	lookup := func(_ context.Context, _, host string) ([]netip.Addr, error) {
+		switch host {
+		case "public.example.test":
+			return []netip.Addr{netip.MustParseAddr("8.8.8.8")}, nil
+		case "private.example.test":
+			return []netip.Addr{netip.MustParseAddr("127.0.0.1")}, nil
+		default:
+			return nil, fmt.Errorf("unexpected DNS lookup for %q", host)
+		}
+	}
+	publicClient, publicServer := net.Pipe()
+	t.Cleanup(func() { _ = publicClient.Close(); _ = publicServer.Close() })
+	go func() {
+		defer publicServer.Close()
+		buffer := make([]byte, 4096)
+		_, _ = publicServer.Read(buffer)
+		_, _ = io.WriteString(publicServer, "HTTP/1.1 302 Found\r\nLocation: http://private.example.test/v1\r\nContent-Length: 0\r\n\r\n")
+	}()
+	var privateDialed atomic.Bool
+	dial := func(_ context.Context, _, address string) (net.Conn, error) {
+		switch address {
+		case "8.8.8.8:80":
+			return publicClient, nil
+		case "127.0.0.1:80":
+			privateDialed.Store(true)
+		}
+		return nil, fmt.Errorf("unexpected dial address %q", address)
+	}
+	client := newModelTestHTTPClient(lookup, dial)
+	t.Cleanup(client.CloseIdleConnections)
+	request, _ := http.NewRequest(http.MethodPost, "http://public.example.test/v1", strings.NewReader("{}"))
+	response, err := client.Do(request)
+	if response != nil {
+		response.Body.Close()
+	}
+	if err == nil || !strings.Contains(err.Error(), "public") {
+		t.Fatalf("client.Do error=%v", err)
+	}
+	if privateDialed.Load() {
+		t.Fatal("private redirect target was dialed")
 	}
 }
 
