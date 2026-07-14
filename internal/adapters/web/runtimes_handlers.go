@@ -58,7 +58,13 @@ func (s *Server) runtimeCards(r *http.Request) []RuntimeCardView {
 		tested, testedAt, functional, checks, savedHealth := runtimeHealthSummary(state)
 		aiTested, aiTestedAt, aiOK, aiMessage, aiOutput := runtimeAITestSummary(state)
 		if configured {
-			if tested {
+			if freshHealth, err := s.runtimes.Test(r.Context(), manifest.ID); err == nil {
+				health = freshHealth
+				tested = true
+				testedAt = "just now"
+				functional = freshHealth.Status == "ok"
+				checks = freshHealth.Checks
+			} else if tested {
 				health = savedHealth
 			}
 			if adapter, ok := s.runtimes.Adapter(manifest.ID); ok {
@@ -67,7 +73,7 @@ func (s *Server) runtimeCards(r *http.Request) []RuntimeCardView {
 					configFiles[i].Revision = runtimeConfigRevision(configFiles[i].Content)
 					configFiles[i].Content = redactRuntimeConfig(configFiles[i])
 				}
-				if _, ok := adapter.(ports.RuntimeQuickConfigurator); ok {
+				if _, ok := adapter.(ports.RuntimeQuickConfigurator); ok && functional {
 					quickSupported = true
 					var err error
 					quickSchema, quickSetup, err = s.runtimes.QuickSetup(r.Context(), manifest.ID)
@@ -177,10 +183,14 @@ func (s *Server) handleWebPostRuntimeInstall(w http.ResponseWriter, r *http.Requ
 	}
 	versionAlias := strings.TrimSpace(r.FormValue("version_alias"))
 	if _, err := s.runtimes.Install(r.Context(), runtimeID, mode, versionAlias); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		message := "Runtime install failed: " + err.Error()
+		trigger, _ := json.Marshal(map[string]any{"picoclip-toast": map[string]string{"message": message, "type": "error"}})
+		w.Header().Set("HX-Trigger", string(trigger))
+		s.handleWebSettings(w, r)
 		return
 	}
 	_, _ = s.runtimes.Test(r.Context(), runtimeID)
+	w.Header().Set("HX-Trigger", `{"picoclip-toast":{"message":"Runtime installed and verified.","type":"success"}}`)
 	s.handleWebSettings(w, r)
 }
 
@@ -303,8 +313,14 @@ func (s *Server) handleWebPostRuntimeTestModel(w http.ResponseWriter, r *http.Re
 
 func (s *Server) handleWebPostRuntimeTest(w http.ResponseWriter, r *http.Request) {
 	runtimeID := domain.RuntimeID(r.PathValue("id"))
-	if _, err := s.runtimes.Test(r.Context(), runtimeID); err != nil {
-		w.Header().Set("HX-Trigger", `{"picoclip-toast":{"message":"CLI check failed.","type":"error"}}`)
+	health, err := s.runtimes.Test(r.Context(), runtimeID)
+	if err != nil || health.Status != "ok" {
+		message := "CLI check failed."
+		if len(health.Errors) > 0 && strings.TrimSpace(health.Errors[0]) != "" {
+			message += " " + health.Errors[0]
+		}
+		trigger, _ := json.Marshal(map[string]any{"picoclip-toast": map[string]string{"message": message, "type": "error"}})
+		w.Header().Set("HX-Trigger", string(trigger))
 		s.handleWebSettings(w, r)
 		return
 	}

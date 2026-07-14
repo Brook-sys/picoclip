@@ -162,6 +162,13 @@ templ RuntimeConfiguredCard(r RuntimeCardView) {
 			</div>
 		}
 		<div class="runtime-action-bar">
+			if r.Tested && !r.Functional && r.State.Mode == domain.InstallModeExclusive {
+				<form hx-post={ "/runtimes/" + string(r.ID) + "/install" } hx-target="body" hx-swap="outerHTML" data-success="Runtime repaired." data-error="Runtime repair failed.">
+					<input type="hidden" name="mode" value="exclusive" />
+					<input type="hidden" name="version_alias" value="latest" />
+					<button class="pc-btn pc-btn-primary" type="submit" data-loading-text="Repairing runtime...">@Icon("refresh-cw", 16) Repair runtime</button>
+				</form>
+			}
 			<form hx-post={ "/runtimes/" + string(r.ID) + "/test" } data-no-toast="true" hx-target="body" hx-swap="outerHTML">
 				<button class="pc-btn pc-btn-secondary" type="submit" data-loading-text="Testing CLI...">@Icon("play", 16) Test CLI</button>
 			</form>
@@ -179,12 +186,17 @@ templ RuntimeQuickSetup(r RuntimeCardView) {
 	if r.QuickSetupSupported {
 		<section class="runtime-quick-setup">
 			<div class="runtime-quick-setup-header">
-				<div>
-					<strong>Quick Setup</strong>
-					<p>{ r.QuickSetupSchema.Description }</p>
+				<div class="runtime-quick-setup-heading">
+					<span class="runtime-quick-setup-icon">@Icon("sparkles", 18)</span>
+					<div>
+						<strong>Quick Setup</strong>
+						<p>{ r.QuickSetupSchema.Description }</p>
+					</div>
 				</div>
 				if r.QuickSetup.Configured {
 					<span class="pc-badge pc-badge-good">Configured</span>
+				} else {
+					<span class="pc-badge">Setup required</span>
 				}
 			</div>
 			if r.QuickSetupError != "" {
@@ -193,15 +205,23 @@ templ RuntimeQuickSetup(r RuntimeCardView) {
 				<form id={ "runtime-quick-setup-" + string(r.ID) } hx-post={ "/runtimes/" + string(r.ID) + "/quick-setup" } hx-target="body" hx-swap="outerHTML" class="runtime-quick-setup-form">
 					<input type="hidden" name="profile_id" value={ r.QuickSetupSchema.ProfileID } />
 					<input type="hidden" name="revision" value={ r.QuickSetup.Revision } />
-					<label>Base URL<input class="pc-input" type="url" name="base_url" required value={ r.QuickSetup.Values["base_url"] } placeholder="https://provider.example/v1" /></label>
-					<label>API key<input class="pc-input" type="password" name="api_key" autocomplete="new-password" placeholder="Leave blank to keep the current key" /></label>
-					if r.QuickSetup.SecretConfigured {
-						<label class="runtime-secret-state"><input type="checkbox" name="clear_api_key" value="true" /> Remove configured API key</label>
-					}
-					<label>Model<input class="pc-input" type="text" name="model" required value={ r.QuickSetup.Values["model"] } placeholder="model-id" /></label>
-					<p class="form-help">Test Model uses the values currently entered without saving them. It sends a small real request that may consume tokens.</p>
-					<div id={ "runtime-model-test-" + string(r.ID) }></div>
-					<div class="runtime-action-bar">
+					<div class="runtime-quick-setup-section runtime-quick-setup-endpoint">
+						<div class="runtime-quick-setup-section-title"><span>1</span><div><strong>Provider endpoint</strong><small>Connect the runtime to an OpenAI-compatible API.</small></div></div>
+						<label>Base URL <span class="runtime-required">Required</span><input class="pc-input" type="url" name="base_url" required value={ r.QuickSetup.Values["base_url"] } placeholder="https://provider.example/v1" /><small>The complete API base path, usually ending in /v1.</small></label>
+					</div>
+					<div class="runtime-quick-setup-section runtime-quick-setup-credentials">
+						<div class="runtime-quick-setup-section-title"><span>2</span><div><strong>Credentials & model</strong><small>Choose the upstream model and optional access key.</small></div></div>
+						<div class="runtime-quick-setup-field-grid">
+							<label>API key<input class="pc-input" type="password" name="api_key" autocomplete="new-password" placeholder="Leave blank to keep the current key" /><small>Stored in the runtime config and never rendered back.</small></label>
+							<label>Model <span class="runtime-required">Required</span><input class="pc-input" type="text" name="model" required value={ r.QuickSetup.Values["model"] } placeholder="model-id" /><small>The exact model identifier exposed by the provider.</small></label>
+						</div>
+						if r.QuickSetup.SecretConfigured {
+							<label class="runtime-secret-state"><input type="checkbox" name="clear_api_key" value="true" /> Remove the currently configured API key</label>
+						}
+					</div>
+					<div class="runtime-quick-setup-test-note">@Icon("info", 16)<p><strong>Test before saving</strong><span>Test Model uses the values above without saving. It sends one small real request and may consume tokens.</span></p></div>
+					<div id={ "runtime-model-test-" + string(r.ID) } class="runtime-model-test-result"></div>
+					<div class="runtime-quick-setup-actions">
 						<button class="pc-btn pc-btn-secondary" type="button" hx-post={ "/runtimes/" + string(r.ID) + "/test-model" } hx-include={ "#runtime-quick-setup-" + string(r.ID) } hx-target={ "#runtime-model-test-" + string(r.ID) } hx-swap="innerHTML" hx-confirm="This sends a real request to the entered provider and may consume tokens. Continue?" data-loading-text="Testing model...">@Icon("zap", 16) Test Model</button>
 						<button class="pc-btn pc-btn-primary" type="submit">@Icon("check", 16) Save Quick Setup</button>
 					</div>
@@ -348,7 +368,7 @@ templ SettingsPage(view SettingsView) {
 					
 					<div class="settings-runtime-grid">
 						for _, r := range view.Runtimes {
-							<div class="pc-card runtime-list-card">
+							<div class={ "pc-card runtime-list-card", templ.KV("runtime-list-card-configured", r.Configured) }>
 								if !r.Configured {
 									@RuntimeBanner(string(r.ID), r.Name)
 									@RuntimeCompatibilityNotice(string(r.ID))

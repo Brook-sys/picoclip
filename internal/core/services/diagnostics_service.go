@@ -47,6 +47,9 @@ func (s *DiagnosticsService) Report(ctx context.Context) domain.DiagnosticsRepor
 		GeneratedAt:   now,
 	}
 	report.Checks = append(report.Checks, s.pathCheck("database_parent_writable", filepath.Dir(s.databasePath), true, now))
+	if s.storageType == "sqlite" && s.databasePath != "" {
+		report.Checks = append(report.Checks, s.fileWritableCheck("database_file_writable", s.databasePath, now))
+	}
 	report.Checks = append(report.Checks, s.pathCheck("workspace_path_writable", s.workspacePath, true, now))
 	report.Checks = append(report.Checks, s.pathCheck("runtime_path_writable", s.runtimePath, true, now))
 
@@ -171,6 +174,17 @@ func diagnosticItemTime(item domain.RecoveryLivenessDiagnosticsItem) time.Time {
 		return item.DueAt
 	}
 	return item.CreatedAt
+}
+
+func (s *DiagnosticsService) fileWritableCheck(name string, path string, now time.Time) domain.DiagnosticCheck {
+	file, err := os.OpenFile(path, os.O_WRONLY|os.O_APPEND, 0)
+	if err != nil {
+		return domain.DiagnosticCheck{Name: name, Status: "error", Message: err.Error(), CheckedAt: now}
+	}
+	if err := file.Close(); err != nil {
+		return domain.DiagnosticCheck{Name: name, Status: "error", Message: err.Error(), CheckedAt: now}
+	}
+	return domain.DiagnosticCheck{Name: name, Status: "ok", Message: path, CheckedAt: now}
 }
 
 func (s *DiagnosticsService) pathCheck(name string, path string, shouldCreate bool, now time.Time) domain.DiagnosticCheck {
