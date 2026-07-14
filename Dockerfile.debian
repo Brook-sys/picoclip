@@ -24,17 +24,16 @@ FROM debian:bookworm-slim
 LABEL org.opencontainers.image.description="Debian/glibc PicoClip image variant for running Claurst. Use this instead of the Alpine image when Claurst is required."
 
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends ca-certificates tzdata wget \
+    && apt-get install -y --no-install-recommends ca-certificates gosu tzdata wget \
     && rm -rf /var/lib/apt/lists/* \
     && groupadd --system picoclip \
     && useradd --system --gid picoclip --home-dir /app --shell /usr/sbin/nologin picoclip
 
 WORKDIR /app
 COPY --from=builder /out/picoclip /usr/local/bin/picoclip
+COPY --chmod=0755 scripts/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 
 RUN mkdir -p /app/data /app/workspaces && chown -R picoclip:picoclip /app
-
-USER picoclip
 
 ENV BIND=0.0.0.0 \
     PORT=8080 \
@@ -47,4 +46,4 @@ VOLUME ["/app/data", "/app/workspaces"]
 
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 CMD wget -qO- "http://127.0.0.1:${PORT}/" >/dev/null || exit 1
 
-ENTRYPOINT ["picoclip"]
+ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh", "picoclip"]
