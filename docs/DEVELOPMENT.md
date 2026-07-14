@@ -111,6 +111,7 @@ make run
 make dev
 make seed
 make test-go
+make test-docker-entrypoint
 make test-e2e
 make test-e2e-headed
 make check-docs
@@ -237,9 +238,10 @@ make check
 2. `templ generate`;
 3. `gofmt -w cmd internal`;
 4. `go test ./...`;
-5. `go vet ./...`;
-6. `go build -o picoclip cmd/picoclip/main.go`;
-7. Playwright E2E.
+5. teste do entrypoint Docker contra volume legado com ownership incompatível;
+6. `go vet ./...`;
+7. `go build -o picoclip cmd/picoclip/main.go`;
+8. Playwright E2E.
 
 Use `make check` antes de considerar uma mudança relevante concluída, especialmente se ela toca UI, APIs, scheduler, storage, runtimes ou documentação com comandos. Para escolher o mínimo proporcional por tipo de mudança, consulte a matriz em [Documentation Policy](DOCUMENTATION_POLICY.md#matriz-de-validação-mínima-por-tipo-de-mudança).
 

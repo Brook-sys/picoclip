@@ -156,6 +156,8 @@ http://127.0.0.1:8088
 
 Você também pode usar `podman run` com os mesmos argumentos.
 
+O container inicia como root somente pelo tempo necessário para reconciliar a propriedade das raízes persistentes fixas `/app/data` e `/app/workspaces`, e então executa o PicoClip como o usuário sem privilégios `picoclip`. Os paths configurados de banco/runtimes devem permanecer sob `/app/data`, e os workspaces sob `/app/workspaces`. Isso corrige automaticamente volumes nomeados criados por imagens antigas com outro UID, inclusive arquivos de configuração de runtime com modo `0600`. O processo não remove nem recria o banco, runtimes instalados ou conteúdo dos workspaces.
+
 ### Opção 3: Rodar pelo código fonte
 
 Requisitos:

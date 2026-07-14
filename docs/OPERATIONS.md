@@ -119,6 +119,35 @@ curl -s 'http://127.0.0.1:8088/api/tasks'
 | `PICOCLAW_PATH` | `picoclaw` | PicoClaw não encontrado. |
 | `CLAURST_PATH` | `claurst` | Claurst não encontrado. |
 
+## Runbook: Docker retorna `permission denied` em runtimes
+
+Sintomas:
+
+- instalar Crush falha ao criar `/app/data/runtimes/crush`;
+- Quick Setup do PicoClaw falha ao ler `config/.security.yml`;
+- o banco continua acessível, mas novos arquivos sob o volume persistente não podem ser criados ou lidos.
+
+Imagens atuais iniciam como root apenas durante o entrypoint para reconciliar a propriedade das raízes persistentes fixas `/app/data` e `/app/workspaces`. Os valores de `PICOCLIP_DB_PATH` e `PICOCLIP_RUNTIMES` precisam permanecer sob `/app/data`; `PICOCLIP_WORKSPACES` precisa permanecer sob `/app/workspaces`. Em seguida, o processo principal roda como `picoclip`. O ajuste preserva banco, runtimes e workspaces existentes; ele altera somente owner/group quando necessário e não segue links simbólicos durante a reconciliação.
+
+Para aplicar a recuperação, faça pull e recreate da imagem, preservando os mesmos volumes:
+
+```sh
+docker compose pull
+docker compose up -d --force-recreate
+```
+
+Depois valide os dois fluxos afetados:
+
+```sh
+curl -s http://127.0.0.1:8088/api/runtimes
+curl -sS -X POST \
+  -H 'Content-Type: application/x-www-form-urlencoded' \
+  --data 'mode=exclusive&version_alias=latest' \
+  http://127.0.0.1:8088/runtimes/crush/install
+```
+
+Se o deployment sobrescrever o usuário do container com `user:`/`--user`, o entrypoint não terá permissão para reparar um volume legado. Remova temporariamente esse override durante o recreate ou corrija a propriedade no host de forma explícita.
+
 ## Checklist de saúde local
 
 Use este checklist quando o sistema parecer instável ou antes de uma sessão longa de desenvolvimento.

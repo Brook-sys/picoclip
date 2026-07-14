@@ -9,7 +9,7 @@ DEV_BIN := $(TMP_DIR)/$(APP)
 AIR := ./bin/air
 TEMPL := ./bin/templ
 
-.PHONY: help tools templ-generate build build-dev run dev seed test test-go test-coverage test-e2e test-e2e-headed vet fmt lint check check-docs clean kill-8088
+.PHONY: help tools templ-generate build build-dev run dev seed test test-go test-coverage test-docker-entrypoint test-e2e test-e2e-headed vet fmt lint check check-docs clean kill-8088
 
 help:
 	@printf '%s\n' \
@@ -23,6 +23,7 @@ help:
 	  '  make build          Build ./picoclip' \
 	  '  make test-go        Run Go tests' \
 	  '  make test-coverage  Run Go tests with coverage report' \
+	  '  make test-docker-entrypoint  Test legacy Docker volume permission recovery' \
 	  '  make test-e2e       Run Playwright E2E tests' \
 	  '  make check-docs     Validate Markdown links and anchors' \
 	  '  make check          Run full validation' \
@@ -75,6 +76,9 @@ test-go:
 test-coverage:
 	go test -coverprofile=coverage.out ./... && go tool cover -func=coverage.out
 
+test-docker-entrypoint:
+	./scripts/test-docker-entrypoint.sh
+
 test-e2e:
 	BASE_URL=$(BASE_URL) ./scripts/run-e2e.sh
 
@@ -83,7 +87,7 @@ test-e2e-headed:
 
 test: test-go
 
-check: check-docs templ-generate fmt test-go vet build test-e2e
+check: check-docs templ-generate fmt test-go test-docker-entrypoint vet build test-e2e
 
 kill-8088:
 	-fuser -k 8088/tcp

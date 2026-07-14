@@ -21,14 +21,13 @@ FROM alpine:3.24
 
 LABEL org.opencontainers.image.description="Default Alpine/musl PicoClip image. Claurst official Linux binaries require glibc; use the Debian image variant when Claurst is required."
 
-RUN apk add --no-cache ca-certificates tzdata && addgroup -S picoclip && adduser -S -G picoclip picoclip
+RUN apk add --no-cache ca-certificates setpriv tzdata && addgroup -S picoclip && adduser -S -G picoclip picoclip
 
 WORKDIR /app
 COPY --from=builder /out/picoclip /usr/local/bin/picoclip
+COPY --chmod=0755 scripts/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 
 RUN mkdir -p /app/data /app/workspaces && chown -R picoclip:picoclip /app
-
-USER picoclip
 
 ENV BIND=0.0.0.0 \
     PORT=8080 \
@@ -41,4 +40,4 @@ VOLUME ["/app/data", "/app/workspaces"]
 
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 CMD wget -qO- "http://127.0.0.1:${PORT}/" >/dev/null || exit 1
 
-ENTRYPOINT ["picoclip"]
+ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh", "picoclip"]
