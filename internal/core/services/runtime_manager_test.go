@@ -22,6 +22,35 @@ type fakeRuntimeAdapter struct {
 	installState domain.RuntimeState
 }
 
+type failingRuntimeSaveStorage struct {
+	ports.Storage
+	runtimes ports.RuntimeRepository
+}
+
+func (s failingRuntimeSaveStorage) Runtimes() ports.RuntimeRepository { return s.runtimes }
+
+type failingRuntimeSaveRepository struct {
+	ports.RuntimeRepository
+	err error
+}
+
+func (r failingRuntimeSaveRepository) Save(context.Context, domain.RuntimeState) error { return r.err }
+
+type filesystemInstallAdapter struct {
+	fakeRuntimeAdapter
+}
+
+func (a filesystemInstallAdapter) Install(_ context.Context, _ domain.InstallMode, destDir, _ string) (domain.RuntimeState, error) {
+	binPath := filepath.Join(destDir, "bin", string(a.id))
+	if err := os.MkdirAll(filepath.Dir(binPath), 0755); err != nil {
+		return domain.RuntimeState{}, err
+	}
+	if err := os.WriteFile(binPath, []byte("#!/bin/sh\nexit 0\n"), 0755); err != nil {
+		return domain.RuntimeState{}, err
+	}
+	return domain.RuntimeState{BinPath: binPath}, nil
+}
+
 func (a fakeRuntimeAdapter) ID() domain.RuntimeID                        { return a.id }
 func (a fakeRuntimeAdapter) Name() string                                { return "fake" }
 func (a fakeRuntimeAdapter) Kind() domain.RuntimeKind                    { return "fake" }
@@ -47,6 +76,66 @@ func (a fakeRuntimeAdapter) Execute(ctx context.Context, state domain.RuntimeSta
 }
 func (a fakeRuntimeAdapter) Cancel(ctx context.Context, state domain.RuntimeState, run domain.Run) error {
 	return nil
+}
+
+func TestRuntimeManagerInstallPreservesPreexistingExclusiveDirectoryWhenStateSaveFails(t *testing.T) {
+	ctx := context.Background()
+	baseStorage := memory.NewStorage()
+	storage := failingRuntimeSaveStorage{
+		Storage: baseStorage,
+		runtimes: failingRuntimeSaveRepository{
+			RuntimeRepository: baseStorage.Runtimes(),
+			err:               errors.New("database is readonly"),
+		},
+	}
+	baseDir := t.TempDir()
+	installDir := filepath.Join(baseDir, "crush")
+	if err := os.MkdirAll(installDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	marker := filepath.Join(installDir, "keep-me")
+	if err := os.WriteFile(marker, []byte("user data"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	manager := NewRuntimeManager(storage, baseDir, SystemClock{})
+	manager.Register(filesystemInstallAdapter{fakeRuntimeAdapter{
+		id:     "crush",
+		health: domain.RuntimeHealth{Status: "ok", Version: "test"},
+	}})
+
+	_, err := manager.Install(ctx, "crush", domain.InstallModeExclusive, "latest")
+	if err == nil || !strings.Contains(err.Error(), "database is readonly") {
+		t.Fatalf("expected save failure, got %v", err)
+	}
+	if content, readErr := os.ReadFile(marker); readErr != nil || string(content) != "user data" {
+		t.Fatalf("preexisting runtime data must survive failed install, content=%q err=%v", content, readErr)
+	}
+}
+
+func TestRuntimeManagerInstallRollsBackExclusiveFilesWhenStateSaveFails(t *testing.T) {
+	ctx := context.Background()
+	baseStorage := memory.NewStorage()
+	storage := failingRuntimeSaveStorage{
+		Storage: baseStorage,
+		runtimes: failingRuntimeSaveRepository{
+			RuntimeRepository: baseStorage.Runtimes(),
+			err:               errors.New("database is readonly"),
+		},
+	}
+	baseDir := t.TempDir()
+	manager := NewRuntimeManager(storage, baseDir, SystemClock{})
+	manager.Register(filesystemInstallAdapter{fakeRuntimeAdapter{
+		id:     "crush",
+		health: domain.RuntimeHealth{Status: "ok", Version: "test"},
+	}})
+
+	_, err := manager.Install(ctx, "crush", domain.InstallModeExclusive, "latest")
+	if err == nil || !strings.Contains(err.Error(), "database is readonly") {
+		t.Fatalf("expected save failure, got %v", err)
+	}
+	if _, statErr := os.Stat(filepath.Join(baseDir, "crush")); !os.IsNotExist(statErr) {
+		t.Fatalf("exclusive install files must be rolled back after persistence failure, stat err=%v", statErr)
+	}
 }
 
 func TestRuntimeManagerInstallRejectsUnhealthyBinaryBeforeSaving(t *testing.T) {

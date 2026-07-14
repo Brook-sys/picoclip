@@ -352,7 +352,9 @@ Sintomas:
 - evento `driver.missing`;
 - run falha imediatamente;
 - settings mostra adapter ausente;
-- binário não encontrado.
+- binário não encontrado;
+- runtime continua registrado depois que sua pasta foi removida externamente;
+- `Test CLI` falha porque o binário/config não existe mais.
 
 Passos:
 
@@ -370,9 +372,12 @@ Passos:
    curl -s http://127.0.0.1:8088/api/runtimes
    ```
 
-3. Use Settings > Adapters para instalar/testar runtime.
-4. Se estiver no Alpine e Claurst exigir glibc, considere ambiente Debian/glibc para esse runtime.
-5. Documente qualquer requisito novo em [Development Guide](DEVELOPMENT.md) e [Project Map](PROJECT_MAP.md) se for estrutural.
+3. Abra Settings > Runtimes. A página executa um health check físico dos runtimes registrados; estado salvo anteriormente não mantém o card verde se o binário sumiu.
+4. Use **Test CLI** para ver a falha exata. O botão só informa sucesso quando `health.status=ok`.
+5. Para instalação exclusiva cujo diretório foi removido, use **Repair runtime**. Quick Setup permanece oculto até o CLI voltar a ser funcional.
+6. Se a instalação falhar depois de criar arquivos mas antes de salvar um novo estado, PicoClip remove a instalação exclusiva nova para não deixar uma árvore parcial. Um reparo de runtime já registrado não apaga configurações anteriores automaticamente.
+7. Se estiver no Alpine e Claurst exigir glibc, considere ambiente Debian/glibc para esse runtime.
+8. Documente qualquer requisito novo em [Development Guide](DEVELOPMENT.md) e [Project Map](PROJECT_MAP.md) se for estrutural.
 
 ## Runbook: SQLite ou dados inconsistentes
 
@@ -382,6 +387,7 @@ Sintomas:
 - DB path inesperado;
 - migration falha;
 - restore parcial;
+- instalação de runtime retorna `attempt to write a readonly database` mesmo quando o diretório pai aparece gravável;
 - task/run existe em estado impossível.
 
 Passos:
@@ -394,15 +400,16 @@ Passos:
    ```
 
 2. Confirme se não está em `PICOCLIP_STORAGE=memory`.
-3. Leia [Storage Architecture](STORAGE.md).
-4. Para mudanças em schema/repository, rode:
+3. Consulte `/api/diagnostics`: para SQLite, `database_parent_writable` e `database_file_writable` precisam estar `ok`. O diretório pai gravável não garante que o arquivo existente aceite escrita.
+4. Leia [Storage Architecture](STORAGE.md).
+5. Para mudanças em schema/repository, rode:
 
    ```sh
    go test ./internal/adapters/storage/... -count=1
    ```
 
-5. Para estado de task/run inconsistente, veja Activity e latest run antes de editar qualquer dado manualmente.
-6. Prefira export/restore pela UI Settings > Danger Zone em vez de manipulação manual do DB.
+6. Para estado de task/run inconsistente, veja Activity e latest run antes de editar qualquer dado manualmente.
+7. Prefira export/restore pela UI Settings > Danger Zone em vez de manipulação manual do DB.
 
 ## Backup, restore e reset
 

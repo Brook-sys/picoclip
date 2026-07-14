@@ -28,7 +28,7 @@ func TestRuntimeQuickSetupSettingsRedactsSecretAndPrecedesAdvanced(t *testing.T)
 	body, _ := io.ReadAll(res.Body)
 	res.Body.Close()
 	html := string(body)
-	for _, expected := range []string{"Quick Setup", "Base URL", "API key", "Model", "Test Model", "Save Quick Setup", "Advanced configuration", `type="password"`, `autocomplete="new-password"`, "Configured"} {
+	for _, expected := range []string{"Quick Setup", "Base URL", "API key", "Model", "Test Model", "Save Quick Setup", "Advanced configuration", `type="password"`, `autocomplete="new-password"`, "Configured", "runtime-quick-setup-heading", "runtime-quick-setup-section", "runtime-quick-setup-actions", "Provider endpoint", "Credentials & model"} {
 		if !strings.Contains(html, expected) {
 			t.Fatalf("missing %q", expected)
 		}
@@ -170,10 +170,14 @@ func newRuntimeQuickSetupServer(t *testing.T) (*httptest.Server, string) {
 	_ = skills.InstallBuiltins(ctx)
 	dir := t.TempDir()
 	config := filepath.Join(dir, "crush.json")
+	binPath := filepath.Join(dir, "crush")
+	if err := os.WriteFile(binPath, []byte("#!/bin/sh\nprintf 'crush v-test\\n'\n"), 0755); err != nil {
+		t.Fatal(err)
+	}
 	if err := os.WriteFile(config, []byte(`{"providers":{"picoclip-openai":{"type":"openai-compat","base_url":"https://old.example/v1","api_key":"stored-secret","models":[{"id":"old-model","name":"old-model"}]}},"models":{"large":{"model":"old-model","provider":"picoclip-openai"},"small":{"model":"old-model","provider":"picoclip-openai"}}}`), 0644); err != nil {
 		t.Fatal(err)
 	}
-	if err := storage.Runtimes().Save(ctx, domain.RuntimeState{ID: "runtime_crush", RuntimeID: "crush", Enabled: true, ConfigPath: config, SettingsJSON: "{}", MetadataJSON: "{}"}); err != nil {
+	if err := storage.Runtimes().Save(ctx, domain.RuntimeState{ID: "runtime_crush", RuntimeID: "crush", Enabled: true, BinPath: binPath, ConfigPath: config, SettingsJSON: "{}", MetadataJSON: "{}"}); err != nil {
 		t.Fatal(err)
 	}
 	diagnostics := services.NewDiagnosticsService(storage, manager, services.DiagnosticsConfig{StorageType: "memory"})

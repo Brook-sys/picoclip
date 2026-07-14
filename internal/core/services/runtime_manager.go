@@ -238,12 +238,24 @@ func (m *RuntimeManager) Install(ctx context.Context, id domain.RuntimeID, mode 
 	if mode != domain.InstallModeExclusive && mode != domain.InstallModeGlobal {
 		return domain.RuntimeState{}, errors.New("unsupported install mode")
 	}
-	state, err := adapter.Install(ctx, mode, filepath.Join(m.baseDir, string(id)), versionAlias)
+	installDir := filepath.Join(m.baseDir, string(id))
+	_, dirErr := os.Stat(installDir)
+	directoryDidNotExist := errors.Is(dirErr, os.ErrNotExist)
+	_, existingErr := m.State(ctx, id)
+	newExclusiveInstall := mode == domain.InstallModeExclusive && directoryDidNotExist && errors.Is(existingErr, domain.ErrNotFound)
+	rollbackNewInstall := func() {
+		if newExclusiveInstall {
+			_ = os.RemoveAll(installDir)
+		}
+	}
+	state, err := adapter.Install(ctx, mode, installDir, versionAlias)
 	if err != nil {
+		rollbackNewInstall()
 		return domain.RuntimeState{}, err
 	}
 	health := adapter.Health(ctx, state)
 	if health.Status == "error" {
+		rollbackNewInstall()
 		message := "runtime binary failed its health check"
 		if len(health.Errors) > 0 && strings.TrimSpace(health.Errors[0]) != "" {
 			message = health.Errors[0]
@@ -265,6 +277,7 @@ func (m *RuntimeManager) Install(ctx context.Context, id domain.RuntimeID, mode 
 		state.MetadataJSON = "{}"
 	}
 	if err := m.storage.Runtimes().Save(ctx, state); err != nil {
+		rollbackNewInstall()
 		return domain.RuntimeState{}, err
 	}
 	return state, nil
