@@ -4,7 +4,7 @@ go 1.25.10
 
 require (
 	github.com/a-h/templ v0.3.1020
-	google.golang.org/grpc v1.82.0
+	google.golang.org/grpc v1.82.1
 	google.golang.org/protobuf v1.36.11
 	gopkg.in/yaml.v3 v3.0.1
 	modernc.org/sqlite v1.53.0
